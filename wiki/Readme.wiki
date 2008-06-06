@@ -19,3 +19,10 @@ Future functionality
    * plugin functionality
    * transfer position data to the server and back
    * geotag photos taken with device
+
+Currently there is no downloadable installation package,
+svn checkout the source instead and put neccessary script files
+to your phone's memory card (E:\Python and E:\Python\lib).
+
+Unsigned SIS-package (UID from the test-range) and some 
+siginig instructions should be available here soon.
