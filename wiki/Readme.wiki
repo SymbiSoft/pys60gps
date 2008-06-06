@@ -1,0 +1,21 @@
+#summary Initial information about pys60gps
+
+= Introduction =
+
+Pys60gps is aimed to be a gps screen in a s60-mobile phone.
+
+= Details =
+
+Current functionality
+  * show plain gps-data on the screen
+  * save position history (track)
+  * show saved track on the screen
+  * send saved track to the other device via bluetooth
+  * add a POI/waypoint
+  * show POIs on the screen
+  * show current speed and some speed history in a graph
+
+Future functionality
+   * plugin functionality
+   * transfer position data to the server and back
+   * geotag photos taken with device
