@@ -26,5 +26,21 @@ ln -s ../plugins plugins
 for py in ../lib/*.py;
   do ln -s $py .
 done
+popd
 
+# Check if ensyble is found in path
+# and created unsigned (selfsigned?) sis package
+
+ENSYMBLE=$(which ensymble)
+if [ -z ${ENSYMBLE} ];
+then
+  echo Did not found ensymble from the path.
+  echo Download ensymble from here:
+  echo http://www.nbl.fi/~nbl928/ensymble.html
+  echo and put it somewhere into your PATH e.g. ~/bin/.
+  exit 1;
+fi;
+
+# TODO: 
+${ENSYMBLE} py2sis sis pys60gps.sis
 
