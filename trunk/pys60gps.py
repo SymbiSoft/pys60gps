@@ -29,15 +29,12 @@ class GuiApp:
         self.read_position_running = False
         # Data-repository
         self.data = {}
-        # GSM-cellid
-        self.gsm_location = {}
-        #self.gsm_location_history = []
-        self.data["gsm_location"] = []
+        self.data["gsm_location"] = [] # GSM-cellid history list (location.gsm_location())
         # GPS-position
-        self.pos = {} # TODO: rename to gps_position
-        self.pos_history = [] # TODO: rename to gps_position_history
+        self.pos = {} # Contains always the latest position-record
+        self.pos_history = []
         self.pos_history_debug = []
-        self.data["position"] = []
+        self.data["position"] = [] # Position history list (positioning.position())
         self.data["position_debug"] = []
         # temporary solution to handle speed data (to be removed/changed)
         self.speed_history = []
@@ -119,7 +116,7 @@ class GuiApp:
         Read gsm_location/cellid changes and save them to the gsm history list.
         """
         # Take the latest position and append gsm data into it if neccessary
-        pos = self.pos # TODO: take this from self.data["position"][-1]
+        pos = self.pos 
         l = location.gsm_location()
         if e32.in_emulator(): # Do some random cell changes if in emulator
             import random
@@ -238,13 +235,13 @@ class BaseView:
     Base class for all tabbed views
     """
 
-    def __init__(self, PrevView):
+    def __init__(self, parent):
         """
         __init__ must be defined in derived class.
         """
         raise "__init__() method has not been defined!"
         self.name = "BaseView"
-        self.PrevView = PrevView
+        self.parent = parent
         self.tabs = []
         self.current_tab = 0
         self.tabs.append((u"Some", SomeTab(self)))
@@ -272,14 +269,14 @@ class BaseView:
     def close(self):
         appuifw.app.set_tabs([u"Back to normal"], lambda x: None)
         # Activate previous (calling) view
-        self.PrevView.activate()
+        self.parent.activate()
 ################### BASE VIEW END #########################
 
 ############## List TAB START ##############
 class BaseInfoTab:
-    def __init__(self, PrevView, **kwargs):
+    def __init__(self, parent, **kwargs):
         self.t = e32.Ao_timer()
-        self.PrevView = PrevView
+        self.parent = parent
         self.active = False
         self.fontheight = 15
         self.lineheight = 17
@@ -325,13 +322,13 @@ class BaseInfoTab:
     def handle_close(self):
         self.active = False
         self.t.cancel()
-        self.PrevView.close()
+        self.parent.close()
 
 ############## Sysinfo VIEW START ##############
 class SysinfoView(BaseView):
-    def __init__(self, PrevView):
+    def __init__(self, parent):
         self.name = "SysinfoView"
-        self.PrevView = PrevView
+        self.parent = parent
         self.init_ram = sysinfo.free_ram()
         self.tabs = []
         self.tabs.append((u"Gsm", GsmTab(self)))
@@ -349,7 +346,7 @@ class SysinfoView(BaseView):
             pass
         appuifw.app.set_tabs([u"Back to normal"], lambda x: None)
         # Activate previous (calling) view
-        self.PrevView.activate()
+        self.parent.activate()
 
 class SysInfoTab(BaseInfoTab):
     def _get_lines(self):
@@ -383,7 +380,7 @@ class MemTab(BaseInfoTab):
         drives = sysinfo.free_drivespace()
         for d in drives.keys():
             lines.append(u"%s %d kB" % (d, drives[d]/1024))
-        lines.append(u"Init RAM: %d kB" % (self.PrevView.init_ram/1024))
+        lines.append(u"Init RAM: %d kB" % (self.parent.init_ram/1024))
         lines.append(u"Free RAM: %d kB" % (sysinfo.free_ram()/1024))
         lines.append(u"Total RAM: %d kB" % (sysinfo.total_ram()/1024))
         return lines
@@ -391,8 +388,8 @@ class MemTab(BaseInfoTab):
 class GsmTab(BaseInfoTab):
     """Show a few last gsm-cellid's."""
     def _get_lines(self):
-        lines = [u"GSM-cells: %d lines" % len(self.PrevView.PrevView.data["gsm_location"])]
-        last = self.PrevView.PrevView.data["gsm_location"][-13:]
+        lines = [u"GSM-cells: %d lines" % len(self.parent.parent.data["gsm_location"])]
+        last = self.parent.parent.data["gsm_location"][-13:]
         last.reverse()
         for l in last:
             lines.append(u"%s" % time.strftime("%H:%M:%S ", time.localtime(l["systime"]))
@@ -402,9 +399,9 @@ class GsmTab(BaseInfoTab):
 
 ############## GPS VIEW START ##############
 class GpsView(BaseView):
-    def __init__(self, PrevView):
+    def __init__(self, parent):
         self.name = "GpsView"
-        self.PrevView = PrevView
+        self.parent = parent
         self.tabs = []
         self.tabs.append((u"Gps", GpsInfoTab(self)))
         self.tabs.append((u"Track", GpsTrackTab(self)))
@@ -421,13 +418,13 @@ class GpsView(BaseView):
             pass
         appuifw.app.set_tabs([u"Back to normal"], lambda x: None)
         # Activate previous (caller) view
-        self.PrevView.activate()
+        self.parent.activate()
 
 class GpsInfoTab(BaseInfoTab):
 
     def _get_lines(self):
         lines = []
-        pos = self.PrevView.PrevView.pos
+        pos = self.parent.parent.pos
         try:
             p = pos["position"]
             c = pos["course"]
@@ -516,7 +513,7 @@ class GpsTrackTab(BaseInfoTab):
         trkpts = []
         for p in self.pois:
             wpts.append(self._make_gpx_trkpt(p, "wpt"))
-        for p in self.PrevView.PrevView.pos_history:
+        for p in self.parent.parent.pos_history:
             trkpts.append(self._make_gpx_trkpt(p))
         if p:
             last_time = time.strftime(u"%Y%m%dT%H%M%SZ", time.localtime(p["satellites"]["time"]))
@@ -570,7 +567,7 @@ class GpsTrackTab(BaseInfoTab):
         """
         import json
         # TODO: jsonize only one pos per time, otherwise out of memory
-        data = json.write(self.PrevView.PrevView.pos_history_debug)
+        data = json.write(self.parent.parent.pos_history_debug)
         name = appuifw.query(u"Name", "text", u"")
         if name is None:
             name = u"latest" # TODO: strftimestamp here
@@ -614,11 +611,11 @@ class GpsTrackTab(BaseInfoTab):
         """
         Saves a point to the "pois" list.
         """
-        if not self.PrevView.PrevView.pos: # empty position, no gps connected yet
+        if not self.parent.parent.pos: # empty position, no gps connected yet
             appuifw.note(u"No GPS", 'error')
             return
         
-        pos = self.PrevView.PrevView.pos
+        pos = self.parent.parent.pos
         # Default name is gps timestamp (UTC) with timezone info (time.altzone)
         ts = unicode(time.strftime(u"%H:%M:%S ", time.localtime(pos["satellites"]["time"] - time.altzone)))
         # print pos
@@ -662,6 +659,14 @@ class GpsTrackTab(BaseInfoTab):
             p["y"] = y
             p1 = {"e":p["position"]["e"], "n":p["position"]["n"], 'x':x, 'y':y, "text":p["text"]}
             pois.append(p1)
+        for p in kwargs["gsm"]: # TODO: make a function for this
+            x = int((-p0["position"]["e"] + p["position"]["e"]) / kwargs["meters_per_px"])
+            y = int((p0["position"]["n"] - p["position"]["n"]) / kwargs["meters_per_px"])
+            # TODO: Update current p instead creating new one
+            p["x"] = x
+            p["y"] = y
+            p1 = {"e":p["position"]["e"], "n":p["position"]["n"], 'x':x, 'y':y, "text":p["gsm"]["cellid"][3]}
+            pois.append(p1)
         return lines, track, pois
 
     # TODO finish this
@@ -691,16 +696,16 @@ class GpsTrackTab(BaseInfoTab):
         self.canvas.clear()
         #self.blit_lines(lines, 0xcccccc) # debugging, contains UTM and canvas XY coordinates
         # Print some information about track
-        # Ugh, this self.PrevView.PrevView. -notation is very ugly
-        mdist = self.PrevView.PrevView.min_trackpoint_distance
+        # Ugh, this self.parent.parent. -notation is very ugly
+        mdist = self.parent.parent.min_trackpoint_distance
         helpfont = (u"Series 60 Sans", 12)
         self.canvas.text((2,15), u"%d m between points" % mdist, font=helpfont, fill=0x999999)
         self.canvas.text((2,27), u"%d/%d points in history" % 
-             (len(self.PrevView.PrevView.pos_history), self.PrevView.PrevView.max_trackpoints), font=helpfont, fill=0x999999)
+             (len(self.parent.parent.pos_history), self.parent.parent.max_trackpoints), font=helpfont, fill=0x999999)
         
         self.canvas.text((2,39), u"Press joystick to save a POI", font=helpfont, fill=0x999999)
         self.canvas.text((2,51), u"Press * or # to zoom", font=helpfont, fill=0x999999)
-        self.canvas.text((2,63), u"Debug %s" % self.PrevView.PrevView.track_debug, font=helpfont, fill=0x999999)
+        self.canvas.text((2,63), u"Debug %s" % self.parent.parent.track_debug, font=helpfont, fill=0x999999)
         # Draw scale bar
         self.draw_scalebar(self.canvas)
         # Draw crosshair
@@ -726,7 +731,7 @@ class GpsTrackTab(BaseInfoTab):
                 print t
                 raise
         self.t = e32.Ao_timer()
-        if self.active and self.PrevView.PrevView.focus:
+        if self.active and self.parent.parent.focus:
             self.t.after(0.5, self.update)
         else:
             self.t.cancel()
@@ -753,7 +758,7 @@ class GpsTrackTab(BaseInfoTab):
         pois = [] # Points Of Interests
         # TODO: Check this
         try:
-            points = self.PrevView.PrevView.pos_history # This self.PrevView.PrevView notation is ugly
+            points = self.parent.parent.pos_history # This self.parent.parent notation is ugly
         except:
             lines.append(u"GPS-data not available")
             lines.append(u"Use main screens GPS-menu")
@@ -763,9 +768,10 @@ class GpsTrackTab(BaseInfoTab):
         if len(points) > 0:
             lines, track, pois = self.calc_xy(canvas_size=(240,240),
                              meters_per_px=self.meters_per_px,
-                             center=(self.PrevView.PrevView.pos), # Latest point to the center of canvas
-                             track=self.PrevView.PrevView.pos_history,
-                             pois=self.pois
+                             center=(self.parent.parent.pos), # Latest point to the center of canvas
+                             track=self.parent.parent.pos_history,
+                             pois=self.pois,
+                             gsm=self.parent.parent.data["gsm_location"]
                             )
         lines.append(u"Track length: %d" % len(track))
         return lines, track, pois
@@ -778,8 +784,8 @@ class GpsSpeedTab(BaseInfoTab):
         TODO: This really needs some cleanup.
         """
         self.canvas.clear()
-        if self.PrevView.PrevView.pos:
-            pos = self.PrevView.PrevView.pos
+        if self.parent.parent.pos:
+            pos = self.parent.parent.pos
         else:
             self.canvas.text(([10, 130]), u"No GPS", font=(u"Series 60 Sans", 30), fill=0xff0000)
             return
@@ -798,7 +804,7 @@ class GpsSpeedTab(BaseInfoTab):
         speed_50 = 90
         speed_100 = 40
         i = 0
-        for p in self.PrevView.PrevView.speed_history:
+        for p in self.parent.parent.speed_history:
             speed_min = speed_0 - p["speedmin"] * 3.6
             speed_max = speed_0 - 1 - p["speedmax"] * 3.6 # at least 1 px height
             self.canvas.line([i, speed_min, i, speed_max], outline=0x0000ff, width=3)
@@ -810,7 +816,7 @@ class GpsSpeedTab(BaseInfoTab):
         self.canvas.line([0, speed_100, 200, speed_100], outline=0x999999, width=1)
         self.canvas.text(([5, speed_100+5]), u"100 km/h", font=(u"Series 60 Sans", 10), fill=0x333333)
         #i = 0
-        #for p in self.PrevView.PrevView.pos_history:
+        #for p in self.parent.parent.pos_history:
         #    speed_kmh = p["course"]["speed"] * 3.6
         #    self.canvas.point([i, int(speed_0-speed_kmh)], outline=0xff0000, width=2)
         #    i = i + 2
@@ -827,7 +833,7 @@ class GpsSpeedTab(BaseInfoTab):
         #pois = self.pois # [] # Points Of Interests
         # TODO: Check this
         try:
-            points = self.PrevView.PrevView.pos_history # This self.PrevView.PrevView notation is ugly
+            points = self.parent.parent.pos_history # This self.parent.parent notation is ugly
         except:
             lines.append(u"GPS-data not available")
             lines.append(u"Use main screens GPS-menu")
@@ -837,8 +843,8 @@ class GpsSpeedTab(BaseInfoTab):
         if len(points) > 0:
             lines, track, pois = self.calc_xy(canvas_size=(240,240),
                              meters_per_px=self.meters_per_px,
-                             center=(self.PrevView.PrevView.pos), # Latest point to the center of canvas
-                             track=self.PrevView.PrevView.pos_history,
+                             center=(self.parent.parent.pos), # Latest point to the center of canvas
+                             track=self.parent.parent.pos_history,
                              pois=self.pois
                             )
         lines.append(u"Track length: %d" % len(track))
@@ -848,17 +854,17 @@ class GpsSpeedTab(BaseInfoTab):
 
 ############## List VIEW START ##############
 class ListView(BaseView):
-    def __init__(self, PrevView):
+    def __init__(self, parent):
         self.name = "ListView"
-        self.PrevView = PrevView
+        self.parent = parent
         self.tabs = []
         self.tabs.append((u"Single", SingleListTab(self)))
         self.tabs.append((u"Double", DoubleListTab(self)))
         self.current_tab = 0
 
 class SingleListTab:
-    def __init__(self, PrevView):
-        self.PrevView = PrevView
+    def __init__(self, parent):
+        self.parent = parent
         self.list = [(u"1st (the first)"),
                      (u"2nd (the second)"),
                      (u"3rd (the third)")]
@@ -912,11 +918,11 @@ class SingleListTab:
 
     def handle_close(self):
         self.active = False
-        self.PrevView.close()
+        self.parent.close()
 
 class DoubleListTab:
-    def __init__(self, PrevView):
-        self.PrevView = PrevView
+    def __init__(self, parent):
+        self.parent = parent
         self.list = [(u"1st", u"the first"),
                      (u"2nd", u"the second"),
                      (u"3rd", u"the third"),
@@ -939,7 +945,7 @@ class DoubleListTab:
 
     def handle_close(self):
         self.active = False
-        self.PrevView.close()
+        self.parent.close()
 
 
 ############## List VIEW END ###############
@@ -948,11 +954,11 @@ class DoubleListTab:
 class TextView:
     """Base class for all Text views"""
 
-    def __init__(self, PrevView):
+    def __init__(self, parent):
         """__init__ must be defined in derived class.
         Set all tabs here."""
         self.name = "BaseView"
-        self.PrevView = PrevView
+        self.parent = parent
         self.menu = [(u"Choose font", self.choose_font),
                      (u"Choose color", self.choose_color),
                      (u"Choose style", self.choose_style),
@@ -1028,7 +1034,7 @@ class TextView:
 
     def handle_close(self):
         # Activate previous (calling) view
-        self.PrevView.activate()
+        self.parent.activate()
 ################### BASE VIEW END #########################
 
 oldbody = appuifw.app.body
