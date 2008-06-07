@@ -27,13 +27,18 @@ class GuiApp:
         self.focus = True
         appuifw.app.focus = self.focus_callback # Set up focus callback
         self.read_position_running = False
+        # Data-repository
+        self.data = {}
         # GSM-cellid
         self.gsm_location = {}
-        self.gsm_location_history = []
+        #self.gsm_location_history = []
+        self.data["gsm_location"] = []
         # GPS-position
         self.pos = {} # TODO: rename to gps_position
         self.pos_history = [] # TODO: rename to gps_position_history
         self.pos_history_debug = []
+        self.data["position"] = []
+        self.data["position_debug"] = []
         # temporary solution to handle speed data (to be removed/changed)
         self.speed_history = []
         self.max_speed_history_points = 100
@@ -69,7 +74,7 @@ class GuiApp:
             (u"Max trackpoints (%d)" % self.max_trackpoints, 
                   lambda:self.set_max_trackpoints(appuifw.query(u"Max points","number", self.max_trackpoints))),
             (u"Set trackpoint dist (%d)" % self.min_trackpoint_distance, 
-                  lambda:self.set_trackpoint_distance(appuifw.query(u"Trackpoint ist","number", self.min_trackpoint_distance))),
+                  lambda:self.set_trackpoint_distance(appuifw.query(u"Trackpoint dist","number", self.min_trackpoint_distance))),
             set_trackpoint_distance_menu,
             (u"Toggle debug",self.toggle_debug),
             (u"Reboot",self.reboot),
@@ -111,31 +116,39 @@ class GuiApp:
 
     def read_gsm_location(self):
         """
-        Read gsm_location and it is not None) ave it into local variable.
-        If it has changed save it also history list.
+        Read gsm_location/cellid changes and save them to the gsm history list.
         """
+        # Take the latest position and append gsm data into it if neccessary
+        pos = self.pos # TODO: take this from self.data["position"][-1]
         l = location.gsm_location()
+        if e32.in_emulator(): # Do some random cell changes if in emulator
+            import random
+            if random.random() < 0.05:
+                l = ('244','123','29000',random.randint(1,2**24))
+        # NOTE: gsm_location() may return None in certain circumstances
         if l is not None and len(l) == 4:
-            # TODO: add latitude + longitude here
-            # TODO: add UTM coordinates here too?
-            self.gsm_location = {'gsm_location': l,
-                                 'mcc':l[0],
-                                 'mnc':l[1],
-                                 'lac':l[2],
-                                 'cellid':l[3],
-                                 'systime':time.time(),
-                                }
-            if len(self.gsm_location_history) > 0 and l != self.gsm_location_history[-1]['gsm_location']:
-                self.gsm_location_history.append(self.gsm_location)
-                # print "nro %d" % len(l), l
-            elif len(self.gsm_location_history) == 0: # Empty history, append the 1st record
-                self.gsm_location_history.append(self.gsm_location)
-                # print "Eka ", l
-            if len(self.gsm_location_history) > 100:
-                self.gsm_location_history.pop()
-                self.gsm_location_history.pop()
-        #else:
-        #    l = ('123','123','123','123')
+            gsm_location = {'cellid': l}
+            try: # This needs some capability (ReadDeviceData?)
+                gsm_location["signal_bars"] = sysinfo.signal_bars()
+                gsm_location["signal_dbm"] = sysinfo.signal_dbm()
+            except:
+                gsm_location["signal_bars"] = None
+                gsm_location["signal_dbm"] = None
+            # Append gsm_location if current differs from the last saved...
+            if len(self.data["gsm_location"]) > 0 and l != self.data["gsm_location"][-1]['gsm']['cellid']:
+                pos["gsm"] = gsm_location
+                self.data["gsm_location"].append(pos)
+            elif len(self.data["gsm_location"]) == 0: # ...or the history is empty: append the 1st record
+                pos["gsm"] = gsm_location
+                self.data["gsm_location"].append(pos)
+            # TODO: if the distance to the latest point exceeds 
+            # some configurable limit (e.g. 1000 meters), then append a new point too
+            
+            # Remove the oldest records if the length exceeds limit
+            # TODO: make limit configurable
+            if len(self.data["gsm_location"]) > 100:
+                self.data["gsm_location"].pop()
+                self.data["gsm_location"].pop()
 
     def read_position(self, pos):
         """
@@ -145,6 +158,9 @@ class GuiApp:
         """
         if self.track_debug:
             self.pos_history_debug.append(pos)
+            # TODO:
+            # self.data["position_debug"].append(pos)
+        pos["systime"] = time.time()
         if str(pos["position"]["latitude"]) != "NaN":
             # Calculate UTM coordinates for future use
             (z, pos["position"]["e"], pos["position"]["n"]) = LatLongUTMconversion.LLtoUTM(23, pos["position"]["latitude"],
@@ -304,7 +320,7 @@ class BaseInfoTab:
         start = 0
         for l in lines:
             start = start + self.lineheight
-            self.canvas.text((10,start), l, font=self.font, fill=color)
+            self.canvas.text((3,start), l, font=self.font, fill=color)
 
     def handle_close(self):
         self.active = False
@@ -361,6 +377,7 @@ class E32InfoTab(BaseInfoTab):
         return lines
 
 class MemTab(BaseInfoTab):
+    """Show some information about memory."""
     def _get_lines(self):
         lines = [u"Free drivespace:"]
         drives = sysinfo.free_drivespace()
@@ -372,15 +389,15 @@ class MemTab(BaseInfoTab):
         return lines
 
 class GsmTab(BaseInfoTab):
+    """Show a few last gsm-cellid's."""
     def _get_lines(self):
-        lines = [u"GSM-cells: %d lines" % len(self.PrevView.PrevView.gsm_location_history)]
-        for l in self.PrevView.PrevView.gsm_location_history[-9:]:
-            lines.append(u"%s" % time.strftime("%Y-%m-%d %H:%M:%S ", time.localtime(l['systime']))
-                       + u"%s,%s,%s;%s" % (l['gsm_location']))
+        lines = [u"GSM-cells: %d lines" % len(self.PrevView.PrevView.data["gsm_location"])]
+        last = self.PrevView.PrevView.data["gsm_location"][-13:]
+        last.reverse()
+        for l in last:
+            lines.append(u"%s" % time.strftime("%H:%M:%S ", time.localtime(l["systime"]))
+                       + u"%s,%s,%s,%s" % (l['gsm']["cellid"]))
         return lines
-
-
-
 ############## Sysinfo VIEW END ###############
 
 ############## GPS VIEW START ##############
