@@ -117,6 +117,7 @@ class GuiApp:
         """
         # Take the latest position and append gsm data into it if neccessary
         pos = self.pos 
+        if not pos: return
         l = location.gsm_location()
         if e32.in_emulator(): # Do some random cell changes if in emulator
             import random
@@ -149,6 +150,7 @@ class GuiApp:
 
     def read_position(self, pos):
         """
+        positioning.position() callback.
         Save the latest position object to the self.pos.
         Keep latest n position objects in the pos_history list.
         TODO: Save the track data (to a file) for future use.
@@ -162,7 +164,6 @@ class GuiApp:
             # Calculate UTM coordinates for future use
             (z, pos["position"]["e"], pos["position"]["n"]) = LatLongUTMconversion.LLtoUTM(23, pos["position"]["latitude"],
                                                                                                pos["position"]["longitude"])
-            # print pos["position"]["e"], pos["position"]["n"]
             # Calculate distance between the current pos and the latest history pos
             if len(self.pos_history) > 0:
                 dist = Calculate.distance(self.pos_history[-1]["position"]["latitude"],
@@ -178,13 +179,14 @@ class GuiApp:
             # TODO: if there is a need to save new history point.
             if dist > self.min_trackpoint_distance:
                 self.pos_history.append(pos)
-        # Read gsm-cell changes
-        self.read_gsm_location()
         # If pos_history is too big remove some of the oldest points
         if len(self.pos_history) > self.max_trackpoints:
             self.pos_history.pop(0)
             self.pos_history.pop(0) # pop twice to reduce the number of points
         self.pos = pos
+        # Read gsm-cell changes
+        self.read_gsm_location()
+
         # Experimental speed history, to be rewritten
         speed_key = (u'%d'%time.time())[:-1]
          # If speed_history is empty add the first item or key has changed (every 10th second)
@@ -392,8 +394,12 @@ class GsmTab(BaseInfoTab):
         last = self.parent.parent.data["gsm_location"][-13:]
         last.reverse()
         for l in last:
-            lines.append(u"%s" % time.strftime("%H:%M:%S ", time.localtime(l["systime"]))
-                       + u"%s,%s,%s,%s" % (l['gsm']["cellid"]))
+            try:
+                lines.append(u"%s" % time.strftime("%H:%M:%S ", time.localtime(l["systime"]))
+                           + u"%s,%s,%s,%s" % (l['gsm']["cellid"]))
+            except:
+                lines.append(u"Error in gsm data")
+                # print l
         return lines
 ############## Sysinfo VIEW END ###############
 
@@ -643,6 +649,7 @@ class GpsTrackTab(BaseInfoTab):
         p0["y"] = int(kwargs["canvas_size"][1]/2)
         for p in kwargs["track"]: # TODO: make a function for this
             # FIXME: this crashes if there is no fix
+            if not p["position"].has_key("e"): continue
             x = int((-p0["position"]["e"] + p["position"]["e"]) / kwargs["meters_per_px"])
             y = int((p0["position"]["n"] - p["position"]["n"]) / kwargs["meters_per_px"])
             # TODO: Update current p instead creating new one
@@ -652,6 +659,7 @@ class GpsTrackTab(BaseInfoTab):
             track.append(p1)
             lines.append(u"%d %d %d %d" % (p["position"]["n"], p["position"]["e"], x, y))
         for p in kwargs["pois"]: # TODO: make a function for this
+            if not p["position"].has_key("e"): continue
             x = int((-p0["position"]["e"] + p["position"]["e"]) / kwargs["meters_per_px"])
             y = int((p0["position"]["n"] - p["position"]["n"]) / kwargs["meters_per_px"])
             # TODO: Update current p instead creating new one
@@ -660,6 +668,7 @@ class GpsTrackTab(BaseInfoTab):
             p1 = {"e":p["position"]["e"], "n":p["position"]["n"], 'x':x, 'y':y, "text":p["text"]}
             pois.append(p1)
         for p in kwargs["gsm"]: # TODO: make a function for this
+            if not p["position"].has_key("e"): continue
             x = int((-p0["position"]["e"] + p["position"]["e"]) / kwargs["meters_per_px"])
             y = int((p0["position"]["n"] - p["position"]["n"]) / kwargs["meters_per_px"])
             # TODO: Update current p instead creating new one
