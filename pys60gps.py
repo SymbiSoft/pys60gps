@@ -75,7 +75,7 @@ class GuiApp:
         set_trackpoint_distance_menu=(u"Trackpoint dist (broken)", tuple(tp_menu_entries))
         appuifw.app.menu = [
             (u"Select",self.handle_select),
-            (u"GPS",self.start_read_position),
+            (u"GPS",self.start_read_position), # TODO: add GPS on/off to the menu
             (u"Max trackpoints (%d)" % self.max_trackpoints, 
                   lambda:self.set_max_trackpoints(appuifw.query(u"Max points","number", self.max_trackpoints))),
             (u"Set trackpoint dist (%d)" % self.min_trackpoint_distance, 
@@ -146,7 +146,7 @@ class GuiApp:
         l = location.gsm_location()
         if e32.in_emulator(): # Do some random cell changes if in emulator
             import random
-            if random.random() < 0.05:
+            if random.random() < 0.25:
                 l = ('244','123','29000',random.randint(1,2**24))
         # NOTE: gsm_location() may return None in certain circumstances
         if l is not None and len(l) == 4:
@@ -505,6 +505,7 @@ class GpsTrackTab(BaseInfoTab):
     """
     meters_per_px = 5
     pois = []
+    # Are zoom_levels below 1.0 needeed?
     zoom_levels = [1,2,3,5,8,12,16,20,30,50,80,100,150,250,400,600,1000,2000,5000,10000]
     zoom_index = 3
             
@@ -537,6 +538,7 @@ class GpsTrackTab(BaseInfoTab):
         self.canvas.bind(key_codes.EKeyStar, lambda: self.change_meters_per_px(-1))
         self.canvas.bind(key_codes.EKeySelect, self.save_poi)
         appuifw.app.menu.insert(0, (u"Send track via bluetooth", self.send_track))
+        appuifw.app.menu.insert(0, (u"Send cellids via bluetooth", self.send_cellids))
         appuifw.app.menu.insert(0, (u"Send debug track via bluetooth", self.send_debug))
         appuifw.app.menu.insert(0, (u"Set meters/pixel", 
                                     lambda:self.set_meters_per_px(appuifw.query(u"Meters","number", self.meters_per_px))))
@@ -588,6 +590,37 @@ class GpsTrackTab(BaseInfoTab):
             name,
             type,
            )
+
+    def send_cellids(self):
+        trkpts = []
+        p = None
+        gsm = self.Main.data["gsm_location"]
+        if len(gsm) == 1: # Save the first point 
+            trkpts.append(self._make_xml_cellpt(gsm[0], gsm[0]))
+        for i in range(1,len(gsm)-1): # Save points 1..last-1
+            trkpts.append(self._make_xml_cellpt(gsm[i-1], gsm[i]))
+        #if len(gsm) >= 2: # Save the last points
+        #    trkpts.append(self._make_xml_cellpt(gsm[-1], gsm[-1]))
+        filename = u"c:\\data\\cellids.txt"
+        f = open(filename, "wt")
+        data = u"\n".join(trkpts).encode('utf-8')
+        f.write(data)
+        f.close()
+        self.Main.send_file_over_bluetooth(filename)
+
+    def _make_xml_cellpt(self, p, p2):
+        """Temporary function to help to make cellpoints"""
+        att = {}
+        att["lat"] = u"%.6f" % (p["position"]["latitude"])
+        att["lon"] = u"%.6f" % (p["position"]["longitude"])
+        att["alt"] = u"%.1f" % (p["position"]["altitude"])
+        att["time"] = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", time.localtime(p["satellites"]["time"]))
+        att["cellfrom"] = u"%s,%s,%s,%s" % (p["gsm"]["cellid"])
+        att["cellto"] = u"%s,%s,%s,%s" % (p2["gsm"]["cellid"])
+        #att["signalto"] = u"%s,%s,%s,%s" % (p["gsm"][""])
+        #att["signalfrom"] = u"%s,%s,%s,%s" % (p2["gsm"][""])
+        #att["speed"] = u"%.1f" % (p["position"]["altitude"])
+        return """<cellpt lat="%(lat)s" lon="%(lon)s" alt="%(alt)s" time="%(time)s" cellfrom="%(cellfrom)s" cellto="%(cellto)s"></cellpt>""" % att
 
     def send_debug(self):
         """
