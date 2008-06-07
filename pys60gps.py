@@ -28,21 +28,28 @@ class GuiApp:
         self.focus = True
         appuifw.app.focus = self.focus_callback # Set up focus callback
         self.read_position_running = False
+        # Configuration/settings
+        self.config = {} # TODO: read these from a configuration file
+         # TODO: self.config = self.read_config()
+        self.config["max_speed_history_points"] = 100
+        self.config["min_trackpoint_distance"] = 100 # meters
+        self.config["max_trackpoints"] = 200
+        self.config["track_debug"] = False
         # Data-repository
         self.data = {}
         self.data["gsm_location"] = [] # GSM-cellid history list (location.gsm_location())
         # GPS-position
         self.pos = {} # Contains always the latest position-record
-        self.pos_history = []
-        self.pos_history_debug = []
+        self.pos_history = [] # TODO: REMOVE
+        self.pos_history_debug = [] # TODO: REMOVE
         self.data["position"] = [] # Position history list (positioning.position())
         self.data["position_debug"] = []
         # temporary solution to handle speed data (to be removed/changed)
         self.speed_history = []
-        self.max_speed_history_points = 100
-        self.min_trackpoint_distance = 100 # meters
-        self.max_trackpoints = 200
-        self.track_debug = False
+        self.max_speed_history_points = 100 # TODO: REMOVE
+        self.min_trackpoint_distance = 100 # TODO: REMOVE
+        self.max_trackpoints = 200 # TODO: REMOVE
+        self.track_debug = False # TODO: REMOVE
         # Put all menu entries and views as tuples into a sequence
         self.menu_entries = []
         self.menu_entries.append(((u"GPS"), GpsView(self)))
@@ -170,7 +177,7 @@ class GuiApp:
         """
         positioning.position() callback.
         Save the latest position object to the self.pos.
-        Keep latest n position objects in the pos_history list.
+        Keep latest n position objects in the data["position"] list.
         TODO: Save the track data (to a file) for future use.
         """
         if self.track_debug:
@@ -183,24 +190,24 @@ class GuiApp:
             (z, pos["position"]["e"], pos["position"]["n"]) = LatLongUTMconversion.LLtoUTM(23, pos["position"]["latitude"],
                                                                                                pos["position"]["longitude"])
             # Calculate distance between the current pos and the latest history pos
-            if len(self.pos_history) > 0:
-                dist = Calculate.distance(self.pos_history[-1]["position"]["latitude"],
-                                          self.pos_history[-1]["position"]["longitude"],
+            if len(self.data["position"]) > 0:
+                dist = Calculate.distance(self.data["position"][-1]["position"]["latitude"],
+                                          self.data["position"][-1]["position"]["longitude"],
                                           pos["position"]["latitude"],
                                           pos["position"]["longitude"],
                                          )
             else:
-                self.pos_history.append(pos)
+                self.data["position"].append(pos)
                 dist = 0
             # If the dinstance exceeds the treshold, save the position object to the history list
             # TODO: Use Calculate.estimatediff() or something similar to conclude 
             # TODO: if there is a need to save new history point.
             if dist > self.min_trackpoint_distance:
-                self.pos_history.append(pos)
-        # If pos_history is too big remove some of the oldest points
-        if len(self.pos_history) > self.max_trackpoints:
-            self.pos_history.pop(0)
-            self.pos_history.pop(0) # pop twice to reduce the number of points
+                self.data["position"].append(pos)
+        # If data["position"] is too big remove some of the oldest points
+        if len(self.data["position"]) > self.max_trackpoints:
+            self.data["position"].pop(0)
+            self.data["position"].pop(0) # pop twice to reduce the number of points
         self.pos = pos
         # Read gsm-cell changes
         self.read_gsm_location()
@@ -544,7 +551,7 @@ class GpsTrackTab(BaseInfoTab):
         trkpts = []
         for p in self.pois:
             wpts.append(self._make_gpx_trkpt(p, "wpt"))
-        for p in self.Main.pos_history:
+        for p in self.Main.data["position"]:
             trkpts.append(self._make_gpx_trkpt(p))
         if p:
             last_time = time.strftime(u"%Y%m%dT%H%M%SZ", time.localtime(p["satellites"]["time"]))
@@ -622,6 +629,7 @@ class GpsTrackTab(BaseInfoTab):
         """
         Saves a point to the "pois" list.
         """
+        # TODO: put POIs to the global data dictionary
         if not self.Main.pos: # empty position, no gps connected yet
             appuifw.note(u"No GPS", 'error')
             return
@@ -715,7 +723,7 @@ class GpsTrackTab(BaseInfoTab):
         helpfont = (u"Series 60 Sans", 12)
         self.canvas.text((2,15), u"%d m between points" % mdist, font=helpfont, fill=0x999999)
         self.canvas.text((2,27), u"%d/%d points in history" % 
-             (len(self.Main.pos_history), self.Main.max_trackpoints), font=helpfont, fill=0x999999)
+             (len(self.Main.data["position"]), self.Main.max_trackpoints), font=helpfont, fill=0x999999)
         
         self.canvas.text((2,39), u"Press joystick to save a POI", font=helpfont, fill=0x999999)
         self.canvas.text((2,51), u"Press * or # to zoom", font=helpfont, fill=0x999999)
@@ -772,7 +780,7 @@ class GpsTrackTab(BaseInfoTab):
         pois = [] # Points Of Interests
         # TODO: Check this
         try:
-            points = self.Main.pos_history # This self.Main notation is ugly
+            points = self.Main.data["position"] # This self.Main notation is ugly
         except:
             lines.append(u"GPS-data not available")
             lines.append(u"Use main screens GPS-menu")
@@ -783,7 +791,7 @@ class GpsTrackTab(BaseInfoTab):
             lines, track, pois = self.calc_xy(canvas_size=(240,240),
                              meters_per_px=self.meters_per_px,
                              center=(self.Main.pos), # Latest point to the center of canvas
-                             track=self.Main.pos_history,
+                             track=self.Main.data["position"],
                              pois=self.pois,
                              gsm=self.Main.data["gsm_location"]
                             )
@@ -830,7 +838,7 @@ class GpsSpeedTab(BaseInfoTab):
         self.canvas.line([0, speed_100, 200, speed_100], outline=0x999999, width=1)
         self.canvas.text(([5, speed_100+5]), u"100 km/h", font=(u"Series 60 Sans", 10), fill=0x333333)
         #i = 0
-        #for p in self.Main.pos_history:
+        #for p in self.Main.data["position"]:
         #    speed_kmh = p["course"]["speed"] * 3.6
         #    self.canvas.point([i, int(speed_0-speed_kmh)], outline=0xff0000, width=2)
         #    i = i + 2
@@ -847,7 +855,7 @@ class GpsSpeedTab(BaseInfoTab):
         #pois = self.pois # [] # Points Of Interests
         # TODO: Check this
         try:
-            points = self.Main.pos_history # This self.Main notation is ugly
+            points = self.Main.data["position"] # This self.Main notation is ugly
         except:
             lines.append(u"GPS-data not available")
             lines.append(u"Use main screens GPS-menu")
@@ -858,7 +866,7 @@ class GpsSpeedTab(BaseInfoTab):
             lines, track, pois = self.calc_xy(canvas_size=(240,240),
                              meters_per_px=self.meters_per_px,
                              center=(self.Main.pos), # Latest point to the center of canvas
-                             track=self.Main.pos_history,
+                             track=self.Main.data["position"],
                              pois=self.pois
                             )
         lines.append(u"Track length: %d" % len(track))
