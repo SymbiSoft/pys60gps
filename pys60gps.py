@@ -1,5 +1,5 @@
 # -*- coding: iso-8859-15 -*-
-# $Id: gui_test.py 712 2008-06-02 20:33:54Z arista $
+# $Id$
 
 # TODO: import topwindow and splashscreen here
 import sys
@@ -18,7 +18,7 @@ import LatLongUTMconversion
 import Calculate
 
 class GuiApp:
-    __version__ = u'$Id: gui_test.py 712 2008-06-02 20:33:54Z arista $'
+    __version__ = u'$Id$'
 
     def __init__(self):
         self.Main = self # This is the base of all views, tabs etc.
