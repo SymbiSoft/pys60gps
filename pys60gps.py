@@ -21,6 +21,7 @@ class GuiApp:
     __version__ = u'$Id: gui_test.py 712 2008-06-02 20:33:54Z arista $'
 
     def __init__(self):
+        self.Main = self # This is the base of all views, tabs etc.
         self.lock = e32.Ao_lock()
         appuifw.app.exit_key_handler = self.exit_key_handler
         self.running = True
@@ -81,7 +82,7 @@ class GuiApp:
         appuifw.app.screen = 'normal'
 
     def focus_callback(self, bg):
-        """Callback for """
+        """Callback for appuifw.app.focus"""
         self.focus = bg
 
     def set_trackpoint_distance(self, distance):
@@ -94,6 +95,23 @@ class GuiApp:
 
     def toggle_debug(self):
         self.track_debug = not self.track_debug # Toggle true <-> false
+
+    def send_file_over_bluetooth(self, filename):
+        """
+        Send a file over bluetooth. 
+        filename is the full path to the file.
+        """
+        if e32.in_emulator():
+            appuifw.note(u"Bluetooth is not supported in emulator", 'error')
+            return # Emulator crashes after this
+        try:
+            bt_addr, services = socket.bt_obex_discover()
+            service = services.values()[0]
+            # Upload the file
+            socket.bt_obex_send_file(bt_addr, service, filename)
+            appuifw.note(u"File '%s' sent")
+        except Exception, error:
+            appuifw.note(unicode(error), 'error')
 
     def start_read_position(self):
         """
@@ -244,6 +262,7 @@ class BaseView:
         raise "__init__() method has not been defined!"
         self.name = "BaseView"
         self.parent = parent
+        self.Main = parent.Main
         self.tabs = []
         self.current_tab = 0
         self.tabs.append((u"Some", SomeTab(self)))
@@ -279,11 +298,11 @@ class BaseInfoTab:
     def __init__(self, parent, **kwargs):
         self.t = e32.Ao_timer()
         self.parent = parent
+        self.Main = parent.Main
         self.active = False
         self.fontheight = 15
         self.lineheight = 17
         self.font = (u"Series 60 Sans", self.fontheight)
-        #self.init_ram
 
     def _get_lines(self):
         raise "_get_lines() must be implemented"
@@ -301,6 +320,10 @@ class BaseInfoTab:
         self.update()
 
     def activate_extra(self):
+        """
+        Override this in deriving class 
+        if you want to do some extra stuff during activate().
+        """
         pass
 
     def update(self, dummy=(0, 0, 0, 0)):
@@ -331,6 +354,7 @@ class SysinfoView(BaseView):
     def __init__(self, parent):
         self.name = "SysinfoView"
         self.parent = parent
+        self.Main = parent.Main
         self.init_ram = sysinfo.free_ram()
         self.tabs = []
         self.tabs.append((u"Gsm", GsmTab(self)))
@@ -390,8 +414,8 @@ class MemTab(BaseInfoTab):
 class GsmTab(BaseInfoTab):
     """Show a few last gsm-cellid's."""
     def _get_lines(self):
-        lines = [u"GSM-cells: %d lines" % len(self.parent.parent.data["gsm_location"])]
-        last = self.parent.parent.data["gsm_location"][-13:]
+        lines = [u"GSM-cells: %d lines" % len(self.Main.data["gsm_location"])]
+        last = self.Main.data["gsm_location"][-13:]
         last.reverse()
         for l in last:
             try:
@@ -408,6 +432,7 @@ class GpsView(BaseView):
     def __init__(self, parent):
         self.name = "GpsView"
         self.parent = parent
+        self.Main = parent.Main
         self.tabs = []
         self.tabs.append((u"Gps", GpsInfoTab(self)))
         self.tabs.append((u"Track", GpsTrackTab(self)))
@@ -430,7 +455,7 @@ class GpsInfoTab(BaseInfoTab):
 
     def _get_lines(self):
         lines = []
-        pos = self.parent.parent.pos
+        pos = self.Main.pos
         try:
             p = pos["position"]
             c = pos["course"]
@@ -519,7 +544,7 @@ class GpsTrackTab(BaseInfoTab):
         trkpts = []
         for p in self.pois:
             wpts.append(self._make_gpx_trkpt(p, "wpt"))
-        for p in self.parent.parent.pos_history:
+        for p in self.Main.pos_history:
             trkpts.append(self._make_gpx_trkpt(p))
         if p:
             last_time = time.strftime(u"%Y%m%dT%H%M%SZ", time.localtime(p["satellites"]["time"]))
@@ -537,17 +562,7 @@ class GpsTrackTab(BaseInfoTab):
        u"\n".join(trkpts).encode('utf-8'))
         f.write(data)
         f.close()
-        if e32.in_emulator():
-            return # Emulator crashes after this
-        try:
-            bt_addr,services = socket.bt_obex_discover()
-            service = services.values()[0]
-            # Upload the track file
-            socket.bt_obex_send_file(bt_addr, service, filename)
-            appuifw.note(u'Trackfile sent')
-        except Exception, error:
-            print error
-            appuifw.note(unicode(error), 'error')
+        self.Main.send_file_over_bluetooth(filename)
 
     def _make_gpx_trkpt(self, p, type = "trkpt"):
         """Temporary function to help to make trkpt:s"""
@@ -573,7 +588,7 @@ class GpsTrackTab(BaseInfoTab):
         """
         import json
         # TODO: jsonize only one pos per time, otherwise out of memory
-        data = json.write(self.parent.parent.pos_history_debug)
+        data = json.write(self.Main.pos_history_debug)
         name = appuifw.query(u"Name", "text", u"")
         if name is None:
             name = u"latest" # TODO: strftimestamp here
@@ -581,17 +596,7 @@ class GpsTrackTab(BaseInfoTab):
         f = open(filename, "wt")
         f.write(data)
         f.close()
-        if e32.in_emulator():
-            return # Emulator crashes after this
-        try:
-            bt_addr,services = socket.bt_obex_discover()
-            service = services.values()[0]
-            # Upload the track file
-            socket.bt_obex_send_file(bt_addr, service, filename)
-            appuifw.note(u'Debug sent')
-        except Exception, error:
-            print error
-            appuifw.note(unicode(error), 'error')
+        self.Main.send_file_over_bluetooth(filename)
 
     def _make_gpx_trkpt(self, p, type = "trkpt"):
         """Temporary function to help to make trkpt:s"""
@@ -617,11 +622,11 @@ class GpsTrackTab(BaseInfoTab):
         """
         Saves a point to the "pois" list.
         """
-        if not self.parent.parent.pos: # empty position, no gps connected yet
+        if not self.Main.pos: # empty position, no gps connected yet
             appuifw.note(u"No GPS", 'error')
             return
         
-        pos = self.parent.parent.pos
+        pos = self.Main.pos
         # Default name is gps timestamp (UTC) with timezone info (time.altzone)
         ts = unicode(time.strftime(u"%H:%M:%S ", time.localtime(pos["satellites"]["time"] - time.altzone)))
         # print pos
@@ -705,16 +710,16 @@ class GpsTrackTab(BaseInfoTab):
         self.canvas.clear()
         #self.blit_lines(lines, 0xcccccc) # debugging, contains UTM and canvas XY coordinates
         # Print some information about track
-        # Ugh, this self.parent.parent. -notation is very ugly
-        mdist = self.parent.parent.min_trackpoint_distance
+        # Ugh, this self.Main. -notation is very ugly
+        mdist = self.Main.min_trackpoint_distance
         helpfont = (u"Series 60 Sans", 12)
         self.canvas.text((2,15), u"%d m between points" % mdist, font=helpfont, fill=0x999999)
         self.canvas.text((2,27), u"%d/%d points in history" % 
-             (len(self.parent.parent.pos_history), self.parent.parent.max_trackpoints), font=helpfont, fill=0x999999)
+             (len(self.Main.pos_history), self.Main.max_trackpoints), font=helpfont, fill=0x999999)
         
         self.canvas.text((2,39), u"Press joystick to save a POI", font=helpfont, fill=0x999999)
         self.canvas.text((2,51), u"Press * or # to zoom", font=helpfont, fill=0x999999)
-        self.canvas.text((2,63), u"Debug %s" % self.parent.parent.track_debug, font=helpfont, fill=0x999999)
+        self.canvas.text((2,63), u"Debug %s" % self.Main.track_debug, font=helpfont, fill=0x999999)
         # Draw scale bar
         self.draw_scalebar(self.canvas)
         # Draw crosshair
@@ -740,7 +745,7 @@ class GpsTrackTab(BaseInfoTab):
                 print t
                 raise
         self.t = e32.Ao_timer()
-        if self.active and self.parent.parent.focus:
+        if self.active and self.Main.focus:
             self.t.after(0.5, self.update)
         else:
             self.t.cancel()
@@ -767,7 +772,7 @@ class GpsTrackTab(BaseInfoTab):
         pois = [] # Points Of Interests
         # TODO: Check this
         try:
-            points = self.parent.parent.pos_history # This self.parent.parent notation is ugly
+            points = self.Main.pos_history # This self.Main notation is ugly
         except:
             lines.append(u"GPS-data not available")
             lines.append(u"Use main screens GPS-menu")
@@ -777,10 +782,10 @@ class GpsTrackTab(BaseInfoTab):
         if len(points) > 0:
             lines, track, pois = self.calc_xy(canvas_size=(240,240),
                              meters_per_px=self.meters_per_px,
-                             center=(self.parent.parent.pos), # Latest point to the center of canvas
-                             track=self.parent.parent.pos_history,
+                             center=(self.Main.pos), # Latest point to the center of canvas
+                             track=self.Main.pos_history,
                              pois=self.pois,
-                             gsm=self.parent.parent.data["gsm_location"]
+                             gsm=self.Main.data["gsm_location"]
                             )
         lines.append(u"Track length: %d" % len(track))
         return lines, track, pois
@@ -793,8 +798,8 @@ class GpsSpeedTab(BaseInfoTab):
         TODO: This really needs some cleanup.
         """
         self.canvas.clear()
-        if self.parent.parent.pos:
-            pos = self.parent.parent.pos
+        if self.Main.pos:
+            pos = self.Main.pos
         else:
             self.canvas.text(([10, 130]), u"No GPS", font=(u"Series 60 Sans", 30), fill=0xff0000)
             return
@@ -813,7 +818,7 @@ class GpsSpeedTab(BaseInfoTab):
         speed_50 = 90
         speed_100 = 40
         i = 0
-        for p in self.parent.parent.speed_history:
+        for p in self.Main.speed_history:
             speed_min = speed_0 - p["speedmin"] * 3.6
             speed_max = speed_0 - 1 - p["speedmax"] * 3.6 # at least 1 px height
             self.canvas.line([i, speed_min, i, speed_max], outline=0x0000ff, width=3)
@@ -825,7 +830,7 @@ class GpsSpeedTab(BaseInfoTab):
         self.canvas.line([0, speed_100, 200, speed_100], outline=0x999999, width=1)
         self.canvas.text(([5, speed_100+5]), u"100 km/h", font=(u"Series 60 Sans", 10), fill=0x333333)
         #i = 0
-        #for p in self.parent.parent.pos_history:
+        #for p in self.Main.pos_history:
         #    speed_kmh = p["course"]["speed"] * 3.6
         #    self.canvas.point([i, int(speed_0-speed_kmh)], outline=0xff0000, width=2)
         #    i = i + 2
@@ -842,7 +847,7 @@ class GpsSpeedTab(BaseInfoTab):
         #pois = self.pois # [] # Points Of Interests
         # TODO: Check this
         try:
-            points = self.parent.parent.pos_history # This self.parent.parent notation is ugly
+            points = self.Main.pos_history # This self.Main notation is ugly
         except:
             lines.append(u"GPS-data not available")
             lines.append(u"Use main screens GPS-menu")
@@ -852,8 +857,8 @@ class GpsSpeedTab(BaseInfoTab):
         if len(points) > 0:
             lines, track, pois = self.calc_xy(canvas_size=(240,240),
                              meters_per_px=self.meters_per_px,
-                             center=(self.parent.parent.pos), # Latest point to the center of canvas
-                             track=self.parent.parent.pos_history,
+                             center=(self.Main.pos), # Latest point to the center of canvas
+                             track=self.Main.pos_history,
                              pois=self.pois
                             )
         lines.append(u"Track length: %d" % len(track))
@@ -866,6 +871,7 @@ class ListView(BaseView):
     def __init__(self, parent):
         self.name = "ListView"
         self.parent = parent
+        self.Main = parent.Main
         self.tabs = []
         self.tabs.append((u"Single", SingleListTab(self)))
         self.tabs.append((u"Double", DoubleListTab(self)))
@@ -874,6 +880,7 @@ class ListView(BaseView):
 class SingleListTab:
     def __init__(self, parent):
         self.parent = parent
+        self.Main = parent.Main
         self.list = [(u"1st (the first)"),
                      (u"2nd (the second)"),
                      (u"3rd (the third)")]
@@ -932,6 +939,7 @@ class SingleListTab:
 class DoubleListTab:
     def __init__(self, parent):
         self.parent = parent
+        self.Main = parent.Main
         self.list = [(u"1st", u"the first"),
                      (u"2nd", u"the second"),
                      (u"3rd", u"the third"),
@@ -968,6 +976,7 @@ class TextView:
         Set all tabs here."""
         self.name = "BaseView"
         self.parent = parent
+        self.Main = parent.Main
         self.menu = [(u"Choose font", self.choose_font),
                      (u"Choose color", self.choose_color),
                      (u"Choose style", self.choose_style),
