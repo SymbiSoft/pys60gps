@@ -597,7 +597,7 @@ class GpsTrackTab(BaseInfoTab):
         gsm = self.Main.data["gsm_location"]
         if len(gsm) == 1: # Save the first point 
             trkpts.append(self._make_xml_cellpt(gsm[0], gsm[0]))
-        for i in range(1,len(gsm)-1): # Save points 1..last-1
+        for i in range(1,len(gsm)): # Save points 1..last-1
             trkpts.append(self._make_xml_cellpt(gsm[i-1], gsm[i]))
         #if len(gsm) >= 2: # Save the last points
         #    trkpts.append(self._make_xml_cellpt(gsm[-1], gsm[-1]))
@@ -617,10 +617,10 @@ class GpsTrackTab(BaseInfoTab):
         att["time"] = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", time.localtime(p["satellites"]["time"]))
         att["cellfrom"] = u"%s,%s,%s,%s" % (p["gsm"]["cellid"])
         att["cellto"] = u"%s,%s,%s,%s" % (p2["gsm"]["cellid"])
-        #att["signalto"] = u"%s,%s,%s,%s" % (p["gsm"][""])
-        #att["signalfrom"] = u"%s,%s,%s,%s" % (p2["gsm"][""])
-        #att["speed"] = u"%.1f" % (p["position"]["altitude"])
-        return """<cellpt lat="%(lat)s" lon="%(lon)s" alt="%(alt)s" time="%(time)s" cellfrom="%(cellfrom)s" cellto="%(cellto)s"></cellpt>""" % att
+        att["signalfrom"] = u"%.1f" % (p["gsm"]["signal_dbm"])
+        att["signalto"] = u"%.1f" % (p2["gsm"]["signal_dbm"])
+        att["speed_kmh"] = u"%.1f" % (p["course"]["speed"] * 3.6)
+        return """<cellpt lat="%(lat)s" lon="%(lon)s" alt="%(alt)s" speed_kmph="%(speed_kmh)s" time="%(time)s" cellfrom="%(cellfrom)s" cellto="%(cellto)s  signalfrom="%(signalfrom)s" signalto="%(signalto)s"></cellpt>""" % att
 
     def send_debug(self):
         """
