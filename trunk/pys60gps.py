@@ -817,23 +817,24 @@ class GpsTrackTab(BaseInfoTab):
                 raise
         ##############################################        
         # Testing the point estimation 
-        p0 = self.Main.data["position"][-1] # use the latest saved point in history
-        p = self.Main.pos_estimate
-        err_radius = self.Main.config["estimated_error_radius"] # meters
-        ell_r = err_radius / self.meters_per_px 
-        #self._calculate_canvas_xy(self.canvas, self.meters_per_px, p0, p)
-        self._calculate_canvas_xy(self.canvas, self.meters_per_px, self.Main.pos, p)
-        self.canvas.ellipse([(p["x"]+center_x-ell_r,p["y"]+center_y-ell_r),
-                             (p["x"]+center_x+ell_r,p["y"]+center_y+ell_r)], outline=0x9999ff)
-        self.canvas.text(([10, 200]), 
-                           u"Heading %.1f, Speed %.1f" % (p0['course']['heading'], p0['course']['speed']), 
-                           font=(u"Series 60 Sans", 10), fill=0x000000)
-        self.canvas.text(([10, 210]), 
-                           u"P0 %.5f %.5f" % (p0["position"]["latitude"], p0["position"]["longitude"]), 
-                           font=(u"Series 60 Sans", 10), fill=0x000000)
-        self.canvas.text(([10, 220]), 
-                           u"P1 %.5f %.5f" % (p["position"]["latitude"], p["position"]["longitude"]), 
-                           font=(u"Series 60 Sans", 10), fill=0x000000)
+        if len(self.Main.data["position"]) > 0: 
+            p0 = self.Main.data["position"][-1] # use the latest saved point in history
+            p = self.Main.pos_estimate
+            err_radius = self.Main.config["estimated_error_radius"] # meters
+            ell_r = err_radius / self.meters_per_px 
+            #self._calculate_canvas_xy(self.canvas, self.meters_per_px, p0, p)
+            self._calculate_canvas_xy(self.canvas, self.meters_per_px, self.Main.pos, p)
+            self.canvas.ellipse([(p["x"]+center_x-ell_r,p["y"]+center_y-ell_r),
+                                 (p["x"]+center_x+ell_r,p["y"]+center_y+ell_r)], outline=0x9999ff)
+            self.canvas.text(([10, 200]), 
+                               u"Heading %.1f, Speed %.1f" % (p0['course']['heading'], p0['course']['speed']), 
+                               font=(u"Series 60 Sans", 10), fill=0x000000)
+            self.canvas.text(([10, 210]), 
+                               u"P0 %.5f %.5f" % (p0["position"]["latitude"], p0["position"]["longitude"]), 
+                               font=(u"Series 60 Sans", 10), fill=0x000000)
+            self.canvas.text(([10, 220]), 
+                               u"P1 %.5f %.5f" % (p["position"]["latitude"], p["position"]["longitude"]), 
+                               font=(u"Series 60 Sans", 10), fill=0x000000)
         ###########################################
         self.t = e32.Ao_timer()
         if self.active and self.Main.focus:
