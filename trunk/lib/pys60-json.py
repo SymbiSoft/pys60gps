@@ -332,10 +332,13 @@ class JsonWriter(object):
 	    	obj = obj.encode('utf-8')
             self._append(obj)
             self._append('"')
+        # TODO: add NaN handling somewhere.
         elif ty is types.IntType or ty is types.LongType:
             self._append(str(obj))
         elif ty is types.FloatType:
-            self._append("%f" % obj)
+            # Symbian locale is broken and e.g. 1234567890.123
+            # is formatted "1 234 567 890.123" in finnish phone
+            self._append(("%f" % obj).replace(" ", ""))
         elif obj is True:
             self._append("true")
         elif obj is False:
