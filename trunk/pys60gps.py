@@ -33,6 +33,7 @@ class GuiApp:
          # TODO: self.config = self.read_config()
         self.config["max_speed_history_points"] = 100
         self.config["min_trackpoint_distance"] = 100 # meters
+        self.config["estimated_error_radius"] = 30 # meters
         self.config["max_trackpoints"] = 200
         self.config["track_debug"] = False
         # Data-repository
@@ -44,6 +45,7 @@ class GuiApp:
         self.pos_history_debug = [] # TODO: REMOVE
         self.data["position"] = [] # Position history list (positioning.position())
         self.data["position_debug"] = []
+        self.pos_estimate = {} # Contains estimated location, calculated from the latest history point
         # temporary solution to handle speed data (to be removed/changed)
         self.speed_history = []
         self.max_speed_history_points = 100 # TODO: REMOVE
@@ -80,6 +82,8 @@ class GuiApp:
                   lambda:self.set_max_trackpoints(appuifw.query(u"Max points","number", self.max_trackpoints))),
             (u"Set trackpoint dist (%d)" % self.min_trackpoint_distance, 
                   lambda:self.set_trackpoint_distance(appuifw.query(u"Trackpoint dist","number", self.min_trackpoint_distance))),
+            (u"Set estimation error (%d)" % self.config["estimated_error_radius"], 
+                  lambda:self.set_estimate_error(appuifw.query(u"Estimate error","number", self.config["estimated_error_radius"]))),
             set_trackpoint_distance_menu,
             (u"Toggle debug",self.toggle_debug),
             (u"Reboot",self.reboot),
@@ -95,10 +99,17 @@ class GuiApp:
     def set_trackpoint_distance(self, distance):
         if distance is not None:
             self.min_trackpoint_distance = distance
+            self.config["min_trackpoint_distance"] = distance
 
     def set_max_trackpoints(self, max):
         if max and max > 0:
             self.max_trackpoints = max
+            self.config["max_trackpoints"] = max
+
+    def set_estimate_error(self, meters):
+        if meters and meters >= 0:
+            self.config["estimated_error_radius"] = meters
+
 
     def toggle_debug(self):
         self.track_debug = not self.track_debug # Toggle true <-> false
@@ -146,7 +157,7 @@ class GuiApp:
         l = location.gsm_location()
         if e32.in_emulator(): # Do some random cell changes if in emulator
             import random
-            if random.random() < 0.25:
+            if random.random() < 0.05:
                 l = ('244','123','29000',random.randint(1,2**24))
         # NOTE: gsm_location() may return None in certain circumstances
         if l is not None and len(l) == 4:
@@ -190,19 +201,37 @@ class GuiApp:
             (z, pos["position"]["e"], pos["position"]["n"]) = LatLongUTMconversion.LLtoUTM(23, pos["position"]["latitude"],
                                                                                                pos["position"]["longitude"])
             # Calculate distance between the current pos and the latest history pos
+            dist = 0
+            dist_estimate = 0
             if len(self.data["position"]) > 0:
-                dist = Calculate.distance(self.data["position"][-1]["position"]["latitude"],
-                                          self.data["position"][-1]["position"]["longitude"],
+                p0 = self.data["position"][-1] # use the latest saved point in history
+                # Distance between current and the latest saved position
+                dist = Calculate.distance(p0["position"]["latitude"],
+                                          p0["position"]["longitude"],
                                           pos["position"]["latitude"],
                                           pos["position"]["longitude"],
                                          )
-            else:
+                # Project a location estimation point using speed and heading from the latest saved point
+                p = {}
+                timediff = time.time() - p0['systime']
+                dist_project = p0['course']['speed'] * timediff # speed * seconds = distance in meters
+                lat, lon = Calculate.newlatlon(p0["position"]["latitude"], p0["position"]["longitude"], 
+                                               dist_project, p0['course']['heading'])
+                p["position"] = {}
+                p["position"]["latitude"] = lat
+                p["position"]["longitude"] = lon
+                (z, p["position"]["e"], p["position"]["n"]) = LatLongUTMconversion.LLtoUTM(23, p["position"]["latitude"],
+                                                                                               p["position"]["longitude"])
+                self.pos_estimate = p
+                dist_estimate = Calculate.distance(p["position"]["latitude"],
+                                          p["position"]["longitude"],
+                                          pos["position"]["latitude"],
+                                          pos["position"]["longitude"],
+                                         )
+            else: # Always append the first point with fix
                 self.data["position"].append(pos)
-                dist = 0
             # If the dinstance exceeds the treshold, save the position object to the history list
-            # TODO: Use Calculate.estimatediff() or something similar to conclude 
-            # TODO: if there is a need to save new history point.
-            if dist > self.min_trackpoint_distance:
+            if dist > self.min_trackpoint_distance or dist_estimate > self.config["estimated_error_radius"]:
                 self.data["position"].append(pos)
         # If data["position"] is too big remove some of the oldest points
         if len(self.data["position"]) > self.max_trackpoints:
@@ -724,15 +753,16 @@ class GpsTrackTab(BaseInfoTab):
             pois.append(p1)
         return lines, track, pois
 
-    # TODO finish this
-    def _update_canvas_xy(self, meters_per_px, centerpoint, pointlist):
-        p0 = centerpoint
-        for p in pointlist:
-            x = int((-p0["position"]["e"] + p["position"]["e"]) / meters_per_px)
-            y = int((p0["position"]["n"] - p["position"]["n"]) / meters_per_px)
-            p["x"] = x
-            p["y"] = y
-            p1 = {"e":p["position"]["e"], "n":p["position"]["n"], 'x':x, 'y':y, "text":p["text"]}
+    def _calculate_canvas_xy(self, image, meters_per_px, p0, p):
+        """
+        Calculcate x- and y-coordiates for point p.
+        p0 is the center point of the image.
+        """
+        # is image neccessary?
+        if not p["position"].has_key("e"): raise "p has no UTM coordinate"
+        if not p0["position"].has_key("e"): raise "p0 has no UTM coordinate"
+        p["x"] = int((-p0["position"]["e"] + p["position"]["e"]) / meters_per_px)
+        p["y"] = int((p0["position"]["n"] - p["position"]["n"]) / meters_per_px)
 
     def update(self, dummy=(0, 0, 0, 0)):
         """
@@ -745,13 +775,13 @@ class GpsTrackTab(BaseInfoTab):
         center_x = 120
         center_y = 120
         self.t.cancel()
+        # TODO: cleanup here!
         lines, track, pois = self._get_lines()
         #lines = lines[-10:] # pick only last lines
         #lines.reverse() 
         self.canvas.clear()
         #self.blit_lines(lines, 0xcccccc) # debugging, contains UTM and canvas XY coordinates
         # Print some information about track
-        # Ugh, this self.Main. -notation is very ugly
         mdist = self.Main.min_trackpoint_distance
         helpfont = (u"Series 60 Sans", 12)
         self.canvas.text((2,15), u"%d m between points" % mdist, font=helpfont, fill=0x999999)
@@ -785,6 +815,26 @@ class GpsTrackTab(BaseInfoTab):
             except:
                 print t
                 raise
+        ##############################################        
+        # Testing the point estimation 
+        p0 = self.Main.data["position"][-1] # use the latest saved point in history
+        p = self.Main.pos_estimate
+        err_radius = self.Main.config["estimated_error_radius"] # meters
+        ell_r = err_radius / self.meters_per_px 
+        #self._calculate_canvas_xy(self.canvas, self.meters_per_px, p0, p)
+        self._calculate_canvas_xy(self.canvas, self.meters_per_px, self.Main.pos, p)
+        self.canvas.ellipse([(p["x"]+center_x-ell_r,p["y"]+center_y-ell_r),
+                             (p["x"]+center_x+ell_r,p["y"]+center_y+ell_r)], outline=0x9999ff)
+        self.canvas.text(([10, 200]), 
+                           u"Heading %.1f, Speed %.1f" % (p0['course']['heading'], p0['course']['speed']), 
+                           font=(u"Series 60 Sans", 10), fill=0x000000)
+        self.canvas.text(([10, 210]), 
+                           u"P0 %.5f %.5f" % (p0["position"]["latitude"], p0["position"]["longitude"]), 
+                           font=(u"Series 60 Sans", 10), fill=0x000000)
+        self.canvas.text(([10, 220]), 
+                           u"P1 %.5f %.5f" % (p["position"]["latitude"], p["position"]["longitude"]), 
+                           font=(u"Series 60 Sans", 10), fill=0x000000)
+        ###########################################
         self.t = e32.Ao_timer()
         if self.active and self.Main.focus:
             self.t.after(0.5, self.update)
@@ -813,7 +863,7 @@ class GpsTrackTab(BaseInfoTab):
         pois = [] # Points Of Interests
         # TODO: Check this
         try:
-            points = self.Main.data["position"] # This self.Main notation is ugly
+            points = self.Main.data["position"]
         except:
             lines.append(u"GPS-data not available")
             lines.append(u"Use main screens GPS-menu")
@@ -888,7 +938,7 @@ class GpsSpeedTab(BaseInfoTab):
         #pois = self.pois # [] # Points Of Interests
         # TODO: Check this
         try:
-            points = self.Main.data["position"] # This self.Main notation is ugly
+            points = self.Main.data["position"]
         except:
             lines.append(u"GPS-data not available")
             lines.append(u"Use main screens GPS-menu")
