@@ -1,5 +1,5 @@
 # -*- coding: iso-8859-15 -*-
-# $Id: Calculate.py 509 2007-07-16 06:05:37Z arista $
+# $Id$
 
 import math
 
