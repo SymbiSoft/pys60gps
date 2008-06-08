@@ -69,7 +69,7 @@ def newlatlon(lat, lon, dist, bear):
     # Mean latitude
     midlat = lat + (latdiff / 2.0)
     # Longitude difference in degrees
-    londiff = (dist / nauticalmile * math.sin(bearrad) / math.cos(midlat)) / 60
+    londiff = (dist / nauticalmile * math.sin(bearrad) / math.cos(deg2rad(midlat))) / 60
     return (lat + latdiff, lon + londiff)
 
 def estimatediff(lat1, lon1, speedkmph, secs, bear, lat2, lon2):
@@ -90,7 +90,6 @@ def test():
     lat1 = 60.0
     lon1 = 25.0
     lat2, lon2 = newlatlon(lat1, lon1, 111, 0)
-    print test_error(lat1, lon1, 36, 11, 10, lat2, lon2)
     print distance(lat1, lon1, lat2, lon2)
     dist1 = 1852/4.0 # meters
     bear1 = 0
