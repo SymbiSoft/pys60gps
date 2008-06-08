@@ -32,9 +32,9 @@ class GuiApp:
         self.config = {} # TODO: read these from a configuration file
          # TODO: self.config = self.read_config()
         self.config["max_speed_history_points"] = 100
-        self.config["min_trackpoint_distance"] = 100 # meters
+        self.config["min_trackpoint_distance"] = 300 # meters
         self.config["estimated_error_radius"] = 30 # meters
-        self.config["max_trackpoints"] = 200
+        self.config["max_trackpoints"] = 500
         self.config["track_debug"] = False
         # Data-repository
         self.data = {}
@@ -49,8 +49,8 @@ class GuiApp:
         # temporary solution to handle speed data (to be removed/changed)
         self.speed_history = []
         self.max_speed_history_points = 100 # TODO: REMOVE
-        self.min_trackpoint_distance = 100 # TODO: REMOVE
-        self.max_trackpoints = 200 # TODO: REMOVE
+        self.min_trackpoint_distance = 300 # TODO: REMOVE
+        self.max_trackpoints = 500 # TODO: REMOVE
         self.track_debug = False # TODO: REMOVE
         # Put all menu entries and views as tuples into a sequence
         self.menu_entries = []
@@ -223,6 +223,8 @@ class GuiApp:
                 (z, p["position"]["e"], p["position"]["n"]) = LatLongUTMconversion.LLtoUTM(23, p["position"]["latitude"],
                                                                                                p["position"]["longitude"])
                 self.pos_estimate = p
+                # This calculates the distance between current point and estimation.
+                # Perhaps ellips could be more optime?
                 dist_estimate = Calculate.distance(p["position"]["latitude"],
                                           p["position"]["longitude"],
                                           pos["position"]["latitude"],
@@ -233,6 +235,7 @@ class GuiApp:
             # If the dinstance exceeds the treshold, save the position object to the history list
             if dist > self.min_trackpoint_distance or dist_estimate > self.config["estimated_error_radius"]:
                 self.data["position"].append(pos)
+            
         # If data["position"] is too big remove some of the oldest points
         if len(self.data["position"]) > self.max_trackpoints:
             self.data["position"].pop(0)
@@ -628,8 +631,6 @@ class GpsTrackTab(BaseInfoTab):
             trkpts.append(self._make_xml_cellpt(gsm[0], gsm[0]))
         for i in range(1,len(gsm)): # Save points 1..last-1
             trkpts.append(self._make_xml_cellpt(gsm[i-1], gsm[i]))
-        #if len(gsm) >= 2: # Save the last points
-        #    trkpts.append(self._make_xml_cellpt(gsm[-1], gsm[-1]))
         filename = u"c:\\data\\cellids.txt"
         f = open(filename, "wt")
         data = u"\n".join(trkpts).encode('utf-8')
@@ -648,14 +649,18 @@ class GpsTrackTab(BaseInfoTab):
         att["cellto"] = u"%s,%s,%s,%s" % (p2["gsm"]["cellid"])
         att["signalfrom"] = u"%.1f" % (p["gsm"]["signal_dbm"])
         att["signalto"] = u"%.1f" % (p2["gsm"]["signal_dbm"])
-        att["speed_kmh"] = u"%.1f" % (p["course"]["speed"] * 3.6)
-        return """<cellpt lat="%(lat)s" lon="%(lon)s" alt="%(alt)s" speed_kmph="%(speed_kmh)s" time="%(time)s" cellfrom="%(cellfrom)s" cellto="%(cellto)s  signalfrom="%(signalfrom)s" signalto="%(signalto)s"></cellpt>""" % att
+        att["speed_kmh"] = u"%.2f" % (p["course"]["speed"] * 3.6)
+        att["heading"] = u"%.2f" % (p["course"]["heading"])
+        att["dop"] = u"%.2f;%.2f;0" % (p["satellites"]["horizontal_dop"], p["satellites"]["vertical_dop"])
+        cellpt = "<cellpt " + " ".join([ '%s="%s"' % (k, att[k]) for k in att.keys() ]) + "></cellpt>"
+        return cellpt
+        # return """<cellpt lat="%(lat)s" lon="%(lon)s" alt="%(alt)s" speed_kmph="%(speed_kmh)s" heading="%(heading)s" time="%(time)s" cellfrom="%(cellfrom)s" cellto="%(cellto)s  signalfrom="%(signalfrom)s" signalto="%(signalto)s" dop="%(dop)s"></cellpt>""" % att
 
     def send_debug(self):
         """
         Send saved position data to the other bluetooth device.
         """
-        import json
+        import pys60_json as json
         # TODO: jsonize only one pos per time, otherwise out of memory
         data = json.write(self.Main.pos_history_debug)
         name = appuifw.query(u"Name", "text", u"")
@@ -666,26 +671,6 @@ class GpsTrackTab(BaseInfoTab):
         f.write(data)
         f.close()
         self.Main.send_file_over_bluetooth(filename)
-
-    def _make_gpx_trkpt(self, p, type = "trkpt"):
-        """Temporary function to help to make trkpt:s"""
-        if p.has_key("text"):
-            name = u"\n <name>%s</name>" % p["text"]
-        else: 
-            name = u""
-        return """<%s lat="%.6f" lon="%.6f">
- <ele>%.1f</ele>
- <time>%s</time>%s
-</%s>""" % (type,
-            p["position"]["latitude"],
-            p["position"]["longitude"],
-            p["position"]["altitude"],
-            time.strftime(u"%Y-%m-%dT%H:%M:%SZ", time.localtime(p["satellites"]["time"])),
-            name,
-            type,
-           )
-
-
 
     def save_poi(self):
         """
@@ -818,23 +803,30 @@ class GpsTrackTab(BaseInfoTab):
         ##############################################        
         # Testing the point estimation 
         if len(self.Main.data["position"]) > 0: 
+            pc = self.Main.pos
             p0 = self.Main.data["position"][-1] # use the latest saved point in history
             p = self.Main.pos_estimate
             err_radius = self.Main.config["estimated_error_radius"] # meters
             ell_r = err_radius / self.meters_per_px 
-            #self._calculate_canvas_xy(self.canvas, self.meters_per_px, p0, p)
             self._calculate_canvas_xy(self.canvas, self.meters_per_px, self.Main.pos, p)
             self.canvas.ellipse([(p["x"]+center_x-ell_r,p["y"]+center_y-ell_r),
                                  (p["x"]+center_x+ell_r,p["y"]+center_y+ell_r)], outline=0x9999ff)
-            self.canvas.text(([10, 200]), 
-                               u"Heading %.1f, Speed %.1f" % (p0['course']['heading'], p0['course']['speed']), 
-                               font=(u"Series 60 Sans", 10), fill=0x000000)
-            self.canvas.text(([10, 210]), 
-                               u"P0 %.5f %.5f" % (p0["position"]["latitude"], p0["position"]["longitude"]), 
-                               font=(u"Series 60 Sans", 10), fill=0x000000)
+            # Draw accurancy circle
+            acc_radius = pc["position"]["horizontal_accuracy"]
+            if acc_radius > 0:
+                acc_r = acc_radius / self.meters_per_px 
+                self.canvas.ellipse([(center_x-acc_r,center_y-acc_r),
+                                     (center_x+acc_r,center_y+acc_r)], outline=0xccffcc)
+
             self.canvas.text(([10, 220]), 
-                               u"P1 %.5f %.5f" % (p["position"]["latitude"], p["position"]["longitude"]), 
-                               font=(u"Series 60 Sans", 10), fill=0x000000)
+                               u"%.1f km/h %.1f°" % (pc['course']['speed']*3.6, pc['course']['heading']), 
+                               font=(u"Series 60 Sans", 20), fill=0x000000)
+            #self.canvas.text(([10, 210]), 
+            #                   u"P0 %.5f %.5f" % (p0["position"]["latitude"], p0["position"]["longitude"]), 
+            #                   font=(u"Series 60 Sans", 10), fill=0x000000)
+            #self.canvas.text(([10, 220]), 
+            #                   u"P1 %.5f %.5f" % (p["position"]["latitude"], p["position"]["longitude"]), 
+            #                   font=(u"Series 60 Sans", 10), fill=0x000000)
         ###########################################
         self.t = e32.Ao_timer()
         if self.active and self.Main.focus:
