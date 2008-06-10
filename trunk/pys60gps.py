@@ -33,9 +33,13 @@ class GpsApp:
          # TODO: self.config = self.read_config()
         self.config["max_speed_history_points"] = 100
         self.config["min_trackpoint_distance"] = 300 # meters
-        self.config["estimated_error_radius"] = 30 # meters
+        self.config["estimated_error_radius"] = 20 # meters
         self.config["max_trackpoints"] = 500
         self.config["track_debug"] = False
+        # Create a directory to contain all gathered and downloaded data
+        self.datadir = u"c:\\data\\Pys60Gps"
+        if not os.path.exists(self.datadir):
+            os.makedirs(self.datadir)
         # Data-repository
         self.data = {}
         self.data["gsm_location"] = [] # GSM-cellid history list (location.gsm_location())
@@ -489,6 +493,21 @@ class GpsView(BaseView):
 
 class GpsInfoTab(BaseInfoTab):
 
+    def update(self, dummy=(0, 0, 0, 0)):
+        self.t.cancel()
+        lines = self._get_lines()
+        self.canvas.clear()
+        if self.Main.pos and time.time() - self.Main.pos["systime"] < 3:
+            textcolor = 0x000000
+        else: # use gray font color if position is too old (3 sec)
+            textcolor = 0xb0b0b0
+        self.blit_lines(lines, color=textcolor)
+        self.t = e32.Ao_timer()
+        if self.active:
+            self.t.after(0.5, self.update)
+        else:
+            self.t.cancel()
+
     def _get_lines(self):
         lines = []
         pos = self.Main.pos
@@ -587,10 +606,11 @@ class GpsTrackTab(BaseInfoTab):
         if p:
             last_time = time.strftime(u"%Y%m%dT%H%M%SZ", time.localtime(p["satellites"]["time"]))
             # TODO: use directory "c:\\data\\Pys60Gps" instead
-            filename = u"c:\\data\\trackpoints-%s.gpx" % last_time
+            filename = u"trackpoints-%s.gpx" % last_time
             last_isotime = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", time.localtime(p["satellites"]["time"]))
         else:
-            filename = u"c:\\data\\trackpoints-notime.gpx"
+            filename = u"trackpoints-notime.gpx"
+        filename = os.path.join(self.Main.datadir, filename)
         f = open(filename, "wt")
         data = """<?xml version='1.0'?><gpx creator="Pys60Gps" version="0.1" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpslog="http://FIXME.FI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="FIXME FIXME FIXME http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd"><metadata> <time>%s</time></metadata>%s
 <trk><trkseg>%s
@@ -633,10 +653,11 @@ class GpsTrackTab(BaseInfoTab):
         if lengsm > 0:
             last_time = time.strftime(u"%Y%m%dT%H%M%SZ", time.localtime(gsm[i]["satellites"]["time"]))
             # TODO: use directory "c:\\data\\Pys60Gps" instead
-            filename = u"c:\\data\\cellids-%s.txt" % last_time
-            #last_isotime = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", time.localtime(gsm[i]["satellites"]["time"]))
+            filename = u"cellids-%s.txt" % last_time
         else:
-            filename = u"c:\\data\\cellids-notime.txt"
+            filename = u"cellids-notime.txt"
+        filename = os.path.join(self.Main.datadir, filename)
+
         # TODO: Try/except here
         f = open(filename, "wt")
         data = u"\n".join(trkpts).encode('utf-8')
@@ -669,12 +690,16 @@ class GpsTrackTab(BaseInfoTab):
         Send saved position data to the other bluetooth device.
         """
         import pys60_json as json
-        # TODO: jsonize only one pos per time, otherwise out of memory
-        data = json.write(self.Main.pos_history_debug)
+        # jsonize only one pos per time, otherwise out of memory or takes very long time
+        points = []
+        for p in self.Main.pos_history_debug:
+            points.append(json.write(p))
+        data = "\n".join(points)
         name = appuifw.query(u"Name", "text", u"")
         if name is None:
             name = u"latest" # TODO: strftimestamp here
-        filename = u"c:\\data\\pos-%s.json" % name
+        filename = u"pos-%s.json" % name
+        filename = os.path.join(self.Main.datadir, filename)
         f = open(filename, "wt")
         f.write(data)
         f.close()
@@ -752,8 +777,10 @@ class GpsTrackTab(BaseInfoTab):
         p0 is the center point of the image.
         """
         # is image neccessary?
-        if not p["position"].has_key("e"): return
-        if not p0["position"].has_key("e"): return
+        #if not p.has_key("position") or not p["position"].has_key("e"): return
+        #if not p0.has_key("position") or p0["position"].has_key("e"): return
+        if not p.has_key("position") or not p["position"].has_key("e"): return
+        if not p0.has_key("position") or not p0["position"].has_key("e"): return
         p["x"] = int((-p0["position"]["e"] + p["position"]["e"]) / meters_per_px)
         p["y"] = int((p0["position"]["n"] - p["position"]["n"]) / meters_per_px)
 
@@ -772,44 +799,36 @@ class GpsTrackTab(BaseInfoTab):
         lines, track, pois = self._get_lines()
         #lines = lines[-10:] # pick only last lines
         #lines.reverse() 
-        self.canvas.clear()
+        # TODO: use double buffering instead of drawing straight to the canvas
+        self.ui = graphics.Image.new(self.canvas.size)
+        self.ui.clear()
         #self.blit_lines(lines, 0xcccccc) # debugging, contains UTM and canvas XY coordinates
         # Print some information about track
         mdist = self.Main.min_trackpoint_distance
         helpfont = (u"Series 60 Sans", 12)
-        self.canvas.text((2,15), u"%d m between points" % mdist, font=helpfont, fill=0x999999)
-        self.canvas.text((2,27), u"%d/%d points in history" % 
-             (len(self.Main.data["position"]), self.Main.max_trackpoints), font=helpfont, fill=0x999999)
-        
-        self.canvas.text((2,39), u"Press joystick to save a POI", font=helpfont, fill=0x999999)
-        self.canvas.text((2,51), u"Press * or # to zoom", font=helpfont, fill=0x999999)
-        self.canvas.text((2,63), u"Debug %s" % self.Main.track_debug, font=helpfont, fill=0x999999)
-        # Draw scale bar
-        self.draw_scalebar(self.canvas)
         # Draw crosshair
-        self.canvas.line([center_x-ch_l, center_y, center_x+ch_l, center_y], outline=0x0000ff, width=1)
-        self.canvas.line([center_x, center_y-ch_l, center_x, center_y+ch_l], outline=0x0000ff, width=1)
+        self.ui.line([center_x-ch_l, center_y, center_x+ch_l, center_y], outline=0x0000ff, width=1)
+        self.ui.line([center_x, center_y-ch_l, center_x, center_y+ch_l], outline=0x0000ff, width=1)
         # Test polygon
-        # self.canvas.polygon([15,15,100,100,100,15,50,10], outline=0x0000ff, width=4)
+        # self.ui.polygon([15,15,100,100,100,15,50,10], outline=0x0000ff, width=4)
         # Draw track if it exists
         if len(track) > 0:
             p = track[0]
+        #for i in range(len(track)-1, -1, -1): # draw trackpoints backwards
+        #    t = track[i]
         for t in track:
-            self.canvas.point([t["x"]+center_x, t["y"]+center_y], outline=0xff0000, width=5)
-            self.canvas.line([t["x"]+center_x, t["y"]+center_y, 
+            self.ui.point([t["x"]+center_x, t["y"]+center_y], outline=0xff0000, width=5)
+            self.ui.line([t["x"]+center_x, t["y"]+center_y, 
                               p["x"]+center_x, p["y"]+center_y], outline=0x00ff00, width=2)
             p = t
         # Draw POIs if there are any
         for t in pois:
-            try:
-                self.canvas.point([t["x"]+center_x, t["y"]+center_y], outline=0x0000ff, width=5)
-                self.canvas.ellipse([(t["x"]+center_x-poi_r,t["y"]+center_y-poi_r),
+            if t.has_key("x"):
+                self.ui.point([t["x"]+center_x, t["y"]+center_y], outline=0x0000ff, width=5)
+                self.ui.ellipse([(t["x"]+center_x-poi_r,t["y"]+center_y-poi_r),
                                      (t["x"]+center_x+poi_r,t["y"]+center_y+poi_r)], outline=0x0000ff)
-                self.canvas.text(([t["x"]+130, t["y"]+125]), 
-                                   u"%s" % t["text"], font=(u"Series 60 Sans", 10), fill=0x000000)
-            except:
-                print t
-                raise
+                # There is a bug in image.text (fixed in 1.4.4?), so text must be drawn straight to the canvas
+                # self.ui.text(([t["x"]+130, t["y"]+125]), u"%s" % t["text"], font=(u"Series 60 Sans", 10), fill=0x000000)
         ##############################################        
         # Testing the point estimation 
         if len(self.Main.data["position"]) > 0: 
@@ -818,26 +837,54 @@ class GpsTrackTab(BaseInfoTab):
             p = self.Main.pos_estimate
             err_radius = self.Main.config["estimated_error_radius"] # meters
             ell_r = err_radius / self.meters_per_px 
-            self._calculate_canvas_xy(self.canvas, self.meters_per_px, self.Main.pos, p)
-            self.canvas.ellipse([(p["x"]+center_x-ell_r,p["y"]+center_y-ell_r),
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, self.Main.pos, p)
+            if p.has_key("x"):
+                self.ui.ellipse([(p["x"]+center_x-ell_r,p["y"]+center_y-ell_r),
                                  (p["x"]+center_x+ell_r,p["y"]+center_y+ell_r)], outline=0x9999ff)
             # Draw accurancy circle
             acc_radius = pc["position"]["horizontal_accuracy"]
             if acc_radius > 0:
                 acc_r = acc_radius / self.meters_per_px 
-                self.canvas.ellipse([(center_x-acc_r,center_y-acc_r),
+                self.ui.ellipse([(center_x-acc_r,center_y-acc_r),
                                      (center_x+acc_r,center_y+acc_r)], outline=0xccffcc)
-
-            self.canvas.text(([10, 220]), 
-                               u"%.1f km/h %.1f°" % (pc['course']['speed']*3.6, pc['course']['heading']), 
-                               font=(u"Series 60 Sans", 20), fill=0x000000)
-            #self.canvas.text(([10, 210]), 
-            #                   u"P0 %.5f %.5f" % (p0["position"]["latitude"], p0["position"]["longitude"]), 
-            #                   font=(u"Series 60 Sans", 10), fill=0x000000)
-            #self.canvas.text(([10, 220]), 
-            #                   u"P1 %.5f %.5f" % (p["position"]["latitude"], p["position"]["longitude"]), 
-            #                   font=(u"Series 60 Sans", 10), fill=0x000000)
+            # see kludge part below:
+            #self.ui.text(([10, 220]), u"%.1f km/h %.1f°" % (pc['course']['speed']*3.6, pc['course']['heading']), 
+            #                          font=(u"Series 60 Sans", 20), fill=0x000000)
         ###########################################
+        # Draw scale bar
+        # see kludge part below
+        # self.draw_scalebar(self.ui)
+
+        # KLUDGE: image.text() workarounds, remove when the bug is fixed! (1.4.4?)
+        self.canvas.blit(self.ui)
+        self.canvas.text((2,15), u"%d m between points" % mdist, font=helpfont, fill=0x999999)
+        self.canvas.text((2,27), u"%d/%d points in history" % 
+             (len(self.Main.data["position"]), self.Main.max_trackpoints), font=helpfont, fill=0x999999)
+        
+        self.canvas.text((2,39), u"Press joystick to save a POI", font=helpfont, fill=0x999999)
+        self.canvas.text((2,51), u"Press * or # to zoom", font=helpfont, fill=0x999999)
+        self.canvas.text((2,63), u"Debug %s" % self.Main.track_debug, font=helpfont, fill=0x999999)
+        for t in pois: # TODO: Remove this when image.text is fixed
+            if t.has_key("x"):
+                self.canvas.text(([t["x"]+130, t["y"]+125]), u"%s" % t["text"], font=(u"Series 60 Sans", 10), fill=0x000000)
+        scale_bar_width = 50 # pixels
+        scale_bar_x = 150    # x location
+        scale_bar_y = 20     # y location
+        scale_value = scale_bar_width * self.meters_per_px
+        if scale_value > 1000: 
+            scale_text = u"%.1f km" % (scale_value / 1000.0)
+        else:
+            scale_text = u"%d m" % (scale_value)
+        self.canvas.text((scale_bar_x + 5, 18), scale_text, font=(u"Series 60 Sans", 10), fill=0x333333)
+        self.canvas.text((scale_bar_x + 5, 32), u"%d m/px" % self.meters_per_px, font=(u"Series 60 Sans", 10), fill=0x333333)
+        self.canvas.line([scale_bar_x, 20, scale_bar_x + scale_bar_width, 20], outline=0x0000ff, width=1)
+        self.canvas.line([scale_bar_x, 15, scale_bar_x, 25], outline=0x0000ff, width=1)
+        self.canvas.line([scale_bar_x + scale_bar_width, 15, scale_bar_x + scale_bar_width, 25], outline=0x0000ff, width=1)
+        if len(self.Main.data["position"]) > 0: 
+            self.canvas.text(([10, 220]), u"%.1f km/h %.1f°" % (pc['course']['speed']*3.6, pc['course']['heading']), 
+                                      font=(u"Series 60 Sans", 20), fill=0x000000)
+        # KLUDGE part ends
+
         self.t = e32.Ao_timer()
         if self.active and self.Main.focus:
             self.t.after(0.5, self.update)
@@ -854,11 +901,11 @@ class GpsTrackTab(BaseInfoTab):
             scale_text = u"%.1f km" % (scale_value / 1000.0)
         else:
             scale_text = u"%d m" % (scale_value)
-        self.canvas.text((scale_bar_x + 5, 18), scale_text, font=(u"Series 60 Sans", 10), fill=0x333333)
-        self.canvas.text((scale_bar_x + 5, 32), u"%d m/px" % self.meters_per_px, font=(u"Series 60 Sans", 10), fill=0x333333)
-        self.canvas.line([scale_bar_x, 20, scale_bar_x + scale_bar_width, 20], outline=0x0000ff, width=1)
-        self.canvas.line([scale_bar_x, 15, scale_bar_x, 25], outline=0x0000ff, width=1)
-        self.canvas.line([scale_bar_x + scale_bar_width, 15, scale_bar_x + scale_bar_width, 25], outline=0x0000ff, width=1)
+        canvas.text((scale_bar_x + 5, 18), scale_text, font=(u"Series 60 Sans", 10), fill=0x333333)
+        canvas.text((scale_bar_x + 5, 32), u"%d m/px" % self.meters_per_px, font=(u"Series 60 Sans", 10), fill=0x333333)
+        canvas.line([scale_bar_x, 20, scale_bar_x + scale_bar_width, 20], outline=0x0000ff, width=1)
+        canvas.line([scale_bar_x, 15, scale_bar_x, 25], outline=0x0000ff, width=1)
+        canvas.line([scale_bar_x + scale_bar_width, 15, scale_bar_x + scale_bar_width, 25], outline=0x0000ff, width=1)
         
     def _get_lines(self):
         lines = []
