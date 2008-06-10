@@ -17,7 +17,7 @@ import graphics
 import LatLongUTMconversion
 import Calculate
 
-class GuiApp:
+class GpsApp:
     __version__ = u'$Id$'
 
     def __init__(self):
@@ -48,7 +48,6 @@ class GuiApp:
         self.pos_estimate = {} # Contains estimated location, calculated from the latest history point
         # temporary solution to handle speed data (to be removed/changed)
         self.speed_history = []
-        self.max_speed_history_points = 100 # TODO: REMOVE
         self.min_trackpoint_distance = 300 # TODO: REMOVE
         self.max_trackpoints = 500 # TODO: REMOVE
         self.track_debug = False # TODO: REMOVE
@@ -56,8 +55,6 @@ class GuiApp:
         self.menu_entries = []
         self.menu_entries.append(((u"GPS"), GpsView(self)))
         self.menu_entries.append(((u"Sysinfo"), SysinfoView(self)))
-        self.menu_entries.append(((u"List View"), ListView(self)))
-        self.menu_entries.append(((u"Text View"), TextView(self)))
         # Create main menu from that sequence
         self.main_menu = [item[0] for item in self.menu_entries]
         # Create list of views from that sequence
@@ -258,7 +255,7 @@ class GuiApp:
                 self.speed_history[-1]["speedmin"] = pos["course"]["speed"]
             if pos["course"]["speed"] > self.speed_history[-1]["speedmax"]:
                 self.speed_history[-1]["speedmax"] = pos["course"]["speed"]
-        if len(self.speed_history) >= self.max_speed_history_points:
+        if len(self.speed_history) >= self.config["max_speed_history_points"]:
             x = self.speed_history.pop(0)
 
     def run(self):
@@ -627,15 +624,26 @@ class GpsTrackTab(BaseInfoTab):
         trkpts = []
         p = None
         gsm = self.Main.data["gsm_location"]
-        if len(gsm) == 1: # Save the first point 
+        lengsm = len(gsm) # Save the length 
+        i = 0
+        if lengsm == 1: # Save the first point 
             trkpts.append(self._make_xml_cellpt(gsm[0], gsm[0]))
-        for i in range(1,len(gsm)): # Save points 1..last-1
+        for i in range(1,lengsm): # Save points 1..last
             trkpts.append(self._make_xml_cellpt(gsm[i-1], gsm[i]))
-        filename = u"c:\\data\\cellids.txt"
+        if lengsm > 0:
+            last_time = time.strftime(u"%Y%m%dT%H%M%SZ", time.localtime(gsm[i]["satellites"]["time"]))
+            # TODO: use directory "c:\\data\\Pys60Gps" instead
+            filename = u"c:\\data\\cellids-%s.txt" % last_time
+            #last_isotime = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", time.localtime(gsm[i]["satellites"]["time"]))
+        else:
+            filename = u"c:\\data\\cellids-notime.txt"
+        # TODO: Try/except here
         f = open(filename, "wt")
         data = u"\n".join(trkpts).encode('utf-8')
         f.write(data)
         f.close()
+        # If writing to a file was successful (we are here) remove all saved cellpoints from the list
+        self.Main.data["gsm_location"] = self.Main.data["gsm_location"][lengsm:] 
         self.Main.send_file_over_bluetooth(filename)
 
     def _make_xml_cellpt(self, p, p2):
@@ -744,8 +752,8 @@ class GpsTrackTab(BaseInfoTab):
         p0 is the center point of the image.
         """
         # is image neccessary?
-        if not p["position"].has_key("e"): raise "p has no UTM coordinate"
-        if not p0["position"].has_key("e"): raise "p0 has no UTM coordinate"
+        if not p["position"].has_key("e"): return
+        if not p0["position"].has_key("e"): return
         p["x"] = int((-p0["position"]["e"] + p["position"]["e"]) / meters_per_px)
         p["y"] = int((p0["position"]["n"] - p["position"]["n"]) / meters_per_px)
 
@@ -781,6 +789,8 @@ class GpsTrackTab(BaseInfoTab):
         # Draw crosshair
         self.canvas.line([center_x-ch_l, center_y, center_x+ch_l, center_y], outline=0x0000ff, width=1)
         self.canvas.line([center_x, center_y-ch_l, center_x, center_y+ch_l], outline=0x0000ff, width=1)
+        # Test polygon
+        # self.canvas.polygon([15,15,100,100,100,15,50,10], outline=0x0000ff, width=4)
         # Draw track if it exists
         if len(track) > 0:
             p = track[0]
@@ -949,205 +959,12 @@ class GpsSpeedTab(BaseInfoTab):
         return lines, track, pois
 
 
-
-############## List VIEW START ##############
-class ListView(BaseView):
-    def __init__(self, parent):
-        self.name = "ListView"
-        self.parent = parent
-        self.Main = parent.Main
-        self.tabs = []
-        self.tabs.append((u"Single", SingleListTab(self)))
-        self.tabs.append((u"Double", DoubleListTab(self)))
-        self.current_tab = 0
-
-class SingleListTab:
-    def __init__(self, parent):
-        self.parent = parent
-        self.Main = parent.Main
-        self.list = [(u"1st (the first)"),
-                     (u"2nd (the second)"),
-                     (u"3rd (the third)")]
-        for i in range(4,10):
-            self.list.append((u"%sst" % i))
-        self.body = appuifw.Listbox(self.list, self.handle_select)
-        #appuifw.popup_menu()
-        self.menu = [(u"Multi selection list", self.multi_selection_list),
-                     (u"Close", self.handle_close)]
-
-    def activate(self):
-        self.active = True
-        appuifw.app.body = self.body
-        appuifw.app.menu = self.menu
-        appuifw.app.exit_key_handler = self.handle_close
-
-    def handle_select(self):
-        appuifw.note(u"Chosen: %s " % self.body.current(),'info')
-
-    def multi_selection_list(self):
-        L = [
-            u"Antipasti misti",
-            u"Insalata verde",
-            u"Caprese",
-            u"Insalata con caprino",
-            u"Lumache al gorgonzola e aglio",
-            u"Capesante al forno",
-            u"Pesce spada affumicato con pomodorini",
-            u"Crostino con gamberoni",
-            u"Carpaccio con rucola e asiago",
-            u"Crema di scorzanera",
-            u"Risotto ai funghi porcini",
-            u"Risotto alla veronese",
-            u"Risotto con caprino e aglio",
-            u"Garganelli con melanzane",
-            u"Rotolo di pasta con ricotta e spinaci",
-            u"Strozzapreti con pancetta e gorgonzola",
-            u"Linguine alle vongole",
-            u"Coregono al burro e salvia",
-            u"Spiedino del mare e risotto allo spumante",
-            u"Galletto gratinato al gorgonzola con due salse",
-            u"Rotolo d'agnello e polenta con salsa alla liquirizia",
-            u"Saltimbocca di vitello con caponata",
-            u"Filetto di manzo al pepe verde",
-            u"Tiramisù alla Papà Giovanni",
-            u"Misto di formaggi",
-            u"Frutti di bosco marinati alla grappa con spumone",
-            u"Gelato",
-             ]
-        selected = appuifw.multi_selection_list(L , style='checkbox', search_field=1)
-
-    def handle_close(self):
-        self.active = False
-        self.parent.close()
-
-class DoubleListTab:
-    def __init__(self, parent):
-        self.parent = parent
-        self.Main = parent.Main
-        self.list = [(u"1st", u"the first"),
-                     (u"2nd", u"the second"),
-                     (u"3rd", u"the third"),
-                     (u"4th", u"the fourth")
-                     ]
-        #for i in range(4,10):
-        #    self.list.append((u"%sth" % i))
-        self.body = appuifw.Listbox(self.list, self.handle_select)
-        self.menu = [(u"Close", self.handle_close)]
-
-    def activate(self):
-        self.active = True
-        appuifw.app.body = self.body
-        appuifw.app.menu = self.menu
-        appuifw.app.exit_key_handler = self.handle_close
-
-    def handle_select(self):
-        appuifw.note(u"Chosen: %s " % self.body.current(),'info')
-        pass
-
-    def handle_close(self):
-        self.active = False
-        self.parent.close()
-
-
-############## List VIEW END ###############
-
-################### BASE VIEW START #######################
-class TextView:
-    """Base class for all Text views"""
-
-    def __init__(self, parent):
-        """__init__ must be defined in derived class.
-        Set all tabs here."""
-        self.name = "BaseView"
-        self.parent = parent
-        self.Main = parent.Main
-        self.menu = [(u"Choose font", self.choose_font),
-                     (u"Choose color", self.choose_color),
-                     (u"Choose style", self.choose_style),
-                     (u"Choose size", self.choose_size),
-                     (u"Close", self.handle_close),
-                     ]
-        self.body = appuifw.Text(u"Use menus ")
-        #self.fonts = appuifw.available_fonts()
-        self.fonts = [u"annotation",
-                      u"title",
-                      u"legend",
-                      u"symbol",
-                      u"dense",
-                      u"normal",
-                      ]
-        self.colors = [(u"red",0xff0000),
-                       (u"green",0x00ff00),
-                       (u"blue",0x0000ff),
-                       (u"yellow",0xffff00),
-                       (u"black",0x000000),
-                      ]
-        self.styles = [(u"Normal",0),
-                       (u"Bold",appuifw.STYLE_BOLD),
-                       (u"Underlined",appuifw.STYLE_UNDERLINE),
-                       (u"Italic", appuifw.STYLE_ITALIC),
-                       (u"Strikethrough", appuifw.STYLE_STRIKETHROUGH),
-                       ]
-        self.sizes = [3, 6, 9, 12, 15, 18, 24, 30, 40, 60, 80, 100, 140]
-        self.font = (self.fonts[0], None)
-
-    def activate(self):
-        """Set main menu to app.body and left menu entries."""
-        appuifw.app.menu = self.menu
-        appuifw.app.exit_key_handler = self.exit_key_handler
-        appuifw.app.body = self.body
-
-    def choose_font(self):
-        selected = appuifw.selection_list(self.fonts, search_field=1)
-        if selected != None:
-            self.font = (str(self.fonts[selected]), None)
-            self.body.font = self.font
-            self.body.add(self.fonts[selected] + u"\n")
-
-    def choose_color(self):
-        selected = appuifw.selection_list([item[0] for item in self.colors], search_field=1)
-        if selected != None:
-            self.color = self.colors[selected][1]
-            self.body.color = self.color
-            self.body.add(self.colors[selected][0] + u"\n")
-
-    # \ | []
-    def choose_size(self):
-        selected = appuifw.selection_list([unicode(item) for item in self.sizes])
-        if selected != None:
-            self.font = (self.font[0], self.sizes[selected])
-            self.body.font = self.font
-            self.body.add(u"%d px\n" % self.sizes[selected])
-
-    def choose_style(self):
-        selected = appuifw.multi_selection_list([item[0] for item in self.styles])
-        if selected is None: return
-        style = 0
-        style_names = []
-        for i in selected:
-            style = style | self.styles[i][1]
-            style_names.append(self.styles[i][0])
-        self.style = style
-        self.body.style = self.style
-        self.body.add(','.join(style_names) + u"\n")
-
-    def exit_key_handler(self):
-        self.handle_close()
-
-    def handle_close(self):
-        # Activate previous (calling) view
-        self.parent.activate()
-################### BASE VIEW END #########################
+# TODO: add exception harness for test versions
 
 oldbody = appuifw.app.body
-myApp = GuiApp()
+myApp = GpsApp()
 myApp.run()
 positioning.stop_position()
-# Just testing workaround:
-# http://sourceforge.net/tracker/index.php?func=detail&aid=1458010&group_id=154155&atid=790646
-#e32.ao_sleep(0, myApp.run)
-#e32.ao_sleep(1)
 appuifw.app.body = oldbody
-#e32.ao_sleep(1)
 # For SIS-packaged version uncomment this:
 #appuifw.app.set_exit()
