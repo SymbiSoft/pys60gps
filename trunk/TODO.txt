@@ -1,0 +1,16 @@
+OK: - use os.path.join everywhere
+OK: c:\\data\\Pys60Gps ->  datadir = os.path.join(u"C:", u"data", u"Pys60Gps")
+OK: - avoid new e32.Ao_timer creation, use the old one instead.
+OK: - is timer.cancel() unneccessary (2 last lines in update())?
+- move graphics.Image.new() to the __init__(), do not create new in update()
+- NO hardcoded screen size, check the size just before update()?
+
+Track:
+- save new point if heading changes at least xx° 
+  AND the distance to the previous point is at least y meters
+
+Data:
+- ZIP data directory at request
+
+CELLs
+- allow cellid data downloading from the server and showing on the track view.
