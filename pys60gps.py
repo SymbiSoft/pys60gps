@@ -563,7 +563,15 @@ class GpsTrackTab(BaseInfoTab):
         appuifw.app.menu = [(u"Update", self.update),
                             (u"Close", self.handle_close),
                             ]
-        self.activate_extra()
+        self.canvas.bind(key_codes.EKeyHash, lambda: self.change_meters_per_px(1))
+        self.canvas.bind(key_codes.EKeyStar, lambda: self.change_meters_per_px(-1))
+        self.canvas.bind(key_codes.EKeySelect, self.save_poi)
+        appuifw.app.menu.insert(0, (u"Send track via bluetooth", self.send_track))
+        appuifw.app.menu.insert(0, (u"Send cellids via bluetooth", self.send_cellids))
+        appuifw.app.menu.insert(0, (u"Send debug track via bluetooth", self.send_debug))
+        appuifw.app.menu.insert(0, (u"Set meters/pixel", 
+                                    lambda:self.set_meters_per_px(appuifw.query(u"Meters","number", self.meters_per_px))))
+        appuifw.app.menu.insert(0, (u"Add POI", self.save_poi))
         self.update()
 
     def set_meters_per_px(self, px):
@@ -586,21 +594,6 @@ class GpsTrackTab(BaseInfoTab):
         self.meters_per_px = self.zoom_levels[self.zoom_index]
         self.update()
     
-    def activate_extra(self):
-        """
-        Add extra menu item to the menu, bind key pressings etc.
-        See class BaseInfoTab.
-        """
-        self.canvas.bind(key_codes.EKeyHash, lambda: self.change_meters_per_px(1))
-        self.canvas.bind(key_codes.EKeyStar, lambda: self.change_meters_per_px(-1))
-        self.canvas.bind(key_codes.EKeySelect, self.save_poi)
-        appuifw.app.menu.insert(0, (u"Send track via bluetooth", self.send_track))
-        appuifw.app.menu.insert(0, (u"Send cellids via bluetooth", self.send_cellids))
-        appuifw.app.menu.insert(0, (u"Send debug track via bluetooth", self.send_debug))
-        appuifw.app.menu.insert(0, (u"Set meters/pixel", 
-                                    lambda:self.set_meters_per_px(appuifw.query(u"Meters","number", self.meters_per_px))))
-        appuifw.app.menu.insert(0, (u"Add POI", self.save_poi))
-
     def send_track(self):
         # TODO: create also function to send via HTTP
         """
