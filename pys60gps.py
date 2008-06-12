@@ -373,11 +373,8 @@ class BaseInfoTab:
         lines = self._get_lines()
         self.canvas.clear()
         self.blit_lines(lines)
-        #self.t = e32.Ao_timer()
         if self.active:
             self.t.after(0.5, self.update)
-        #else:
-        #    self.t.cancel()
 
     def blit_lines(self, lines, color=0x000000):
         self.canvas.clear()
@@ -504,11 +501,8 @@ class GpsInfoTab(BaseInfoTab):
         else: # use gray font color if position is too old (3 sec)
             textcolor = 0xb0b0b0
         self.blit_lines(lines, color=textcolor)
-        #self.t = e32.Ao_timer()
         if self.active:
             self.t.after(0.5, self.update)
-        #else:
-        #    self.t.cancel()
 
     def _get_lines(self):
         lines = []
@@ -558,7 +552,20 @@ class GpsTrackTab(BaseInfoTab):
     # Are zoom_levels below 1.0 needeed?
     zoom_levels = [1,2,3,5,8,12,16,20,30,50,80,100,150,250,400,600,1000,2000,5000,10000]
     zoom_index = 3
-            
+
+    def activate(self):
+        self.active = True
+        appuifw.app.exit_key_handler = self.handle_close
+        self.canvas = appuifw.Canvas(redraw_callback=self.update)
+        self.ui = graphics.Image.new(self.canvas.size)
+        appuifw.app.body = self.canvas
+        appuifw.app.screen = "normal"
+        appuifw.app.menu = [(u"Update", self.update),
+                            (u"Close", self.handle_close),
+                            ]
+        self.activate_extra()
+        self.update()
+
     def set_meters_per_px(self, px):
         """
         Set the scale of the track. Minimum is 1.
@@ -800,7 +807,6 @@ class GpsTrackTab(BaseInfoTab):
         #lines = lines[-10:] # pick only last lines
         #lines.reverse() 
         # TODO: use double buffering instead of drawing straight to the canvas
-        self.ui = graphics.Image.new(self.canvas.size)
         self.ui.clear()
         #self.blit_lines(lines, 0xcccccc) # debugging, contains UTM and canvas XY coordinates
         # Print some information about track
@@ -884,12 +890,8 @@ class GpsTrackTab(BaseInfoTab):
             self.canvas.text(([10, 220]), u"%.1f km/h %.1f°" % (pc['course']['speed']*3.6, pc['course']['heading']), 
                                       font=(u"Series 60 Sans", 20), fill=0x000000)
         # KLUDGE part ends
-
-        #self.t = e32.Ao_timer()
         if self.active and self.Main.focus:
             self.t.after(0.5, self.update)
-        #else:
-        #    self.t.cancel()
 
     def draw_scalebar(self, canvas):
         """Draw the scale bar"""
@@ -975,13 +977,9 @@ class GpsSpeedTab(BaseInfoTab):
         #    speed_kmh = p["course"]["speed"] * 3.6
         #    self.canvas.point([i, int(speed_0-speed_kmh)], outline=0xff0000, width=2)
         #    i = i + 2
-
-        #self.t = e32.Ao_timer()
         if self.active:
             self.t.cancel()
             self.t.after(0.5, self.update)
-        #else:
-        #    self.t.cancel()
         
     def _get_lines(self):
         lines = []
