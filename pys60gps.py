@@ -37,7 +37,7 @@ class GpsApp:
         self.config["max_trackpoints"] = 500
         self.config["track_debug"] = False
         # Create a directory to contain all gathered and downloaded data
-        self.datadir = u"c:\\data\\Pys60Gps"
+        self.datadir = os.path.join(u"c:", u"data", u"Pys60Gps")
         if not os.path.exists(self.datadir):
             os.makedirs(self.datadir)
         # Data-repository
@@ -290,6 +290,8 @@ class GpsApp:
         appuifw.app.set_tabs([u"Back to normal"], lambda x: None)
 
 ################### BASE VIEW START #######################
+
+# TODO: move these to separate file
 class BaseView:
     """
     Base class for all tabbed views
@@ -371,11 +373,11 @@ class BaseInfoTab:
         lines = self._get_lines()
         self.canvas.clear()
         self.blit_lines(lines)
-        self.t = e32.Ao_timer()
+        #self.t = e32.Ao_timer()
         if self.active:
             self.t.after(0.5, self.update)
-        else:
-            self.t.cancel()
+        #else:
+        #    self.t.cancel()
 
     def blit_lines(self, lines, color=0x000000):
         self.canvas.clear()
@@ -387,7 +389,7 @@ class BaseInfoTab:
     def handle_close(self):
         self.active = False
         self.t.cancel()
-        self.parent.close()
+        self.parent.close() # Exit this tab set
 
 ############## Sysinfo VIEW START ##############
 class SysinfoView(BaseView):
@@ -502,11 +504,11 @@ class GpsInfoTab(BaseInfoTab):
         else: # use gray font color if position is too old (3 sec)
             textcolor = 0xb0b0b0
         self.blit_lines(lines, color=textcolor)
-        self.t = e32.Ao_timer()
+        #self.t = e32.Ao_timer()
         if self.active:
             self.t.after(0.5, self.update)
-        else:
-            self.t.cancel()
+        #else:
+        #    self.t.cancel()
 
     def _get_lines(self):
         lines = []
@@ -605,7 +607,6 @@ class GpsTrackTab(BaseInfoTab):
             trkpts.append(self._make_gpx_trkpt(p))
         if p:
             last_time = time.strftime(u"%Y%m%dT%H%M%SZ", time.localtime(p["satellites"]["time"]))
-            # TODO: use directory "c:\\data\\Pys60Gps" instead
             filename = u"trackpoints-%s.gpx" % last_time
             last_isotime = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", time.localtime(p["satellites"]["time"]))
         else:
@@ -652,7 +653,6 @@ class GpsTrackTab(BaseInfoTab):
             trkpts.append(self._make_xml_cellpt(gsm[i-1], gsm[i]))
         if lengsm > 0:
             last_time = time.strftime(u"%Y%m%dT%H%M%SZ", time.localtime(gsm[i]["satellites"]["time"]))
-            # TODO: use directory "c:\\data\\Pys60Gps" instead
             filename = u"cellids-%s.txt" % last_time
         else:
             filename = u"cellids-notime.txt"
@@ -698,7 +698,7 @@ class GpsTrackTab(BaseInfoTab):
         name = appuifw.query(u"Name", "text", u"")
         if name is None:
             name = u"latest" # TODO: strftimestamp here
-        filename = u"pos-%s.json" % name
+        filename = u"trackdebug-%s.txt" % name
         filename = os.path.join(self.Main.datadir, filename)
         f = open(filename, "wt")
         f.write(data)
@@ -789,12 +789,12 @@ class GpsTrackTab(BaseInfoTab):
         Draw all elements (texts, points, track, pois etc) to the canvas.
         Start a timer to launch new update after a while.
         """
+        self.t.cancel()
         poi_r = 5 # POI circles radius
         ch_l = 10 # Crosshair length
         # TODO: determine center from canvas width/height
         center_x = 120
         center_y = 120
-        self.t.cancel()
         # TODO: cleanup here!
         lines, track, pois = self._get_lines()
         #lines = lines[-10:] # pick only last lines
@@ -885,11 +885,11 @@ class GpsTrackTab(BaseInfoTab):
                                       font=(u"Series 60 Sans", 20), fill=0x000000)
         # KLUDGE part ends
 
-        self.t = e32.Ao_timer()
+        #self.t = e32.Ao_timer()
         if self.active and self.Main.focus:
             self.t.after(0.5, self.update)
-        else:
-            self.t.cancel()
+        #else:
+        #    self.t.cancel()
 
     def draw_scalebar(self, canvas):
         """Draw the scale bar"""
@@ -976,11 +976,12 @@ class GpsSpeedTab(BaseInfoTab):
         #    self.canvas.point([i, int(speed_0-speed_kmh)], outline=0xff0000, width=2)
         #    i = i + 2
 
-        self.t = e32.Ao_timer()
+        #self.t = e32.Ao_timer()
         if self.active:
-            self.t.after(0.5, self.update)
-        else:
             self.t.cancel()
+            self.t.after(0.5, self.update)
+        #else:
+        #    self.t.cancel()
         
     def _get_lines(self):
         lines = []
