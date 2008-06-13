@@ -837,24 +837,30 @@ class GpsTrackTab(BaseInfoTab):
         # self.ui.polygon([15,15,100,100,100,15,50,10], outline=0x0000ff, width=4)
         j = 0
         #print len(self.Main.pos_history_debug)
+        #if len(track) > 0:
+        #    p0 = track[0]
+        p0 = self.Main.pos # the center point
         # New style: use main apps data structures directly and _calculate_canvas_xy() to get pixel xy.
         for i in range(len(self.Main.pos_history_debug)-1, -1, -1):
             j = j + 1
-            if j > 20: break
+            if j > 20: break # draw only last x debug points
             p = self.Main.pos_history_debug[i]
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, self.Main.pos, p)
-            self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x000000, width=5)
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
+            # try: except: here? perhaps x doesn't exist
+            self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0xffff00, width=7)
             
         # Draw track if it exists
-        if len(track) > 0:
-            p = track[0]
-        #for i in range(len(track)-1, -1, -1): # draw trackpoints backwards
-        #    t = track[i]
-        for t in track:
-            self.ui.point([t["x"]+center_x, t["y"]+center_y], outline=0xff0000, width=5)
-            self.ui.line([t["x"]+center_x, t["y"]+center_y, 
-                              p["x"]+center_x, p["y"]+center_y], outline=0x00ff00, width=2)
-            p = t
+        #for t in track:
+        track = self.Main.data["position"]
+        if len(self.Main.data["position"]) > 0:
+            p1 = self.Main.data["position"][-1]
+        for i in range(len(self.Main.data["position"])-1, -1, -1): # draw trackpoints backwards
+            p = self.Main.data["position"][i]
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
+            self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0xff0000, width=5)
+            self.ui.line([p["x"]+center_x, p["y"]+center_y, 
+                          p1["x"]+center_x, p1["y"]+center_y], outline=0x00ff00, width=2)
+            p1 = p
         # Draw POIs if there are any
         for t in pois:
             if t.has_key("x"):
