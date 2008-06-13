@@ -31,10 +31,11 @@ class GpsApp:
         # Configuration/settings
         self.config = {} # TODO: read these from a configuration file
          # TODO: self.config = self.read_config()
-        self.config["max_speed_history_points"] = 100
+        self.config["max_speed_history_points"] = 200
         self.config["min_trackpoint_distance"] = 300 # meters
         self.config["estimated_error_radius"] = 20 # meters
         self.config["max_trackpoints"] = 500
+        self.config["max_debugpoints"] = 500
         self.config["track_debug"] = False
         # Create a directory to contain all gathered and downloaded data
         self.datadir = os.path.join(u"c:", u"data", u"Pys60Gps")
@@ -57,6 +58,7 @@ class GpsApp:
         self.track_debug = False # TODO: REMOVE
         # Put all menu entries and views as tuples into a sequence
         self.menu_entries = []
+        self.menu_entries.append(((u"Track"), TrackView(self)))
         self.menu_entries.append(((u"GPS"), GpsView(self)))
         self.menu_entries.append(((u"Sysinfo"), SysinfoView(self)))
         # Create main menu from that sequence
@@ -194,6 +196,9 @@ class GpsApp:
         """
         if self.track_debug:
             self.pos_history_debug.append(pos)
+            if len(self.pos_history_debug) > self.config["max_debugpoints"]:
+                self.pos_history_debug.pop(0)
+
             # TODO:
             # self.data["position_debug"].append(pos)
         pos["systime"] = time.time()
@@ -238,7 +243,7 @@ class GpsApp:
                 self.data["position"].append(pos)
             
         # If data["position"] is too big remove some of the oldest points
-        if len(self.data["position"]) > self.max_trackpoints:
+        if len(self.data["position"]) > self.config["max_trackpoints"]:
             self.data["position"].pop(0)
             self.data["position"].pop(0) # pop twice to reduce the number of points
         self.pos = pos
@@ -474,7 +479,7 @@ class GpsView(BaseView):
         self.Main = parent.Main
         self.tabs = []
         self.tabs.append((u"Gps", GpsInfoTab(self)))
-        self.tabs.append((u"Track", GpsTrackTab(self)))
+#        self.tabs.append((u"Track", GpsTrackTab(self)))
         self.tabs.append((u"Speed", GpsSpeedTab(self)))
         self.current_tab = 0
 
@@ -540,6 +545,29 @@ class GpsInfoTab(BaseInfoTab):
         lines.append(u"Satellites: %s/%s" % (s["used_satellites"],s["satellites"]))
         lines.append(u"DOP (H/V/T) %.1f/%.1f/%.1f" % (s["horizontal_dop"],s["vertical_dop"],s["time_dop"]))
         return lines
+
+class TrackView(BaseView):
+    def __init__(self, parent):
+        self.name = "GpsView"
+        self.parent = parent
+        self.Main = parent.Main
+        self.tabs = []
+#        self.tabs.append((u"Gps", GpsInfoTab(self)))
+        self.tabs.append((u"Track", GpsTrackTab(self)))
+#        self.tabs.append((u"Speed", GpsSpeedTab(self)))
+        self.current_tab = 0
+
+    def close(self):
+        # debug stuff
+        try:
+            for tab in self.tabs:
+                tab[1].t.cancel()
+        except:
+            print dir(tab[1])
+            pass
+        appuifw.app.set_tabs([u"Back to normal"], lambda x: None)
+        # Activate previous (caller) view
+        self.parent.activate()
 
 class GpsTrackTab(BaseInfoTab):
     """
@@ -796,12 +824,9 @@ class GpsTrackTab(BaseInfoTab):
         center_x = 120
         center_y = 120
         # TODO: cleanup here!
+        # TODO: do separate functions for these instead
         lines, track, pois = self._get_lines()
-        #lines = lines[-10:] # pick only last lines
-        #lines.reverse() 
-        # TODO: use double buffering instead of drawing straight to the canvas
         self.ui.clear()
-        #self.blit_lines(lines, 0xcccccc) # debugging, contains UTM and canvas XY coordinates
         # Print some information about track
         mdist = self.Main.min_trackpoint_distance
         helpfont = (u"Series 60 Sans", 12)
@@ -810,6 +835,16 @@ class GpsTrackTab(BaseInfoTab):
         self.ui.line([center_x, center_y-ch_l, center_x, center_y+ch_l], outline=0x0000ff, width=1)
         # Test polygon
         # self.ui.polygon([15,15,100,100,100,15,50,10], outline=0x0000ff, width=4)
+        j = 0
+        #print len(self.Main.pos_history_debug)
+        # New style: use main apps data structures directly and _calculate_canvas_xy() to get pixel xy.
+        for i in range(len(self.Main.pos_history_debug)-1, -1, -1):
+            j = j + 1
+            if j > 20: break
+            p = self.Main.pos_history_debug[i]
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, self.Main.pos, p)
+            self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x000000, width=5)
+            
         # Draw track if it exists
         if len(track) > 0:
             p = track[0]
@@ -957,19 +992,14 @@ class GpsSpeedTab(BaseInfoTab):
         for p in self.Main.speed_history:
             speed_min = speed_0 - p["speedmin"] * 3.6
             speed_max = speed_0 - 1 - p["speedmax"] * 3.6 # at least 1 px height
-            self.canvas.line([i, speed_min, i, speed_max], outline=0x0000ff, width=3)
-            i = i + 2
+            self.canvas.line([i, speed_min, i, speed_max], outline=0x0000ff, width=2)
+            i = i + 1
         self.canvas.line([0, speed_0, 200, speed_0], outline=0x999999, width=1)
         self.canvas.text(([5, speed_0+5]), u"0 km/h", font=(u"Series 60 Sans", 10), fill=0x333333)
         self.canvas.line([0, speed_50, 200, speed_50], outline=0x999999, width=1)
         self.canvas.text(([5, speed_50+5]), u"50 km/h", font=(u"Series 60 Sans", 10), fill=0x333333)
         self.canvas.line([0, speed_100, 200, speed_100], outline=0x999999, width=1)
         self.canvas.text(([5, speed_100+5]), u"100 km/h", font=(u"Series 60 Sans", 10), fill=0x333333)
-        #i = 0
-        #for p in self.Main.data["position"]:
-        #    speed_kmh = p["course"]["speed"] * 3.6
-        #    self.canvas.point([i, int(speed_0-speed_kmh)], outline=0xff0000, width=2)
-        #    i = i + 2
         if self.active:
             self.t.cancel()
             self.t.after(0.5, self.update)
