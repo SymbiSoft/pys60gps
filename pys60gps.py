@@ -30,7 +30,7 @@ class GpsApp:
         self.read_position_running = False
         # Configuration/settings
         self.config = {} # TODO: read these from a configuration file
-         # TODO: self.config = self.read_config()
+        # TODO: self.config = self.read_config()
         self.config["max_speed_history_points"] = 200
         self.config["min_trackpoint_distance"] = 300 # meters
         self.config["estimated_error_radius"] = 20 # meters
@@ -46,11 +46,9 @@ class GpsApp:
         self.data["gsm_location"] = [] # GSM-cellid history list (location.gsm_location())
         # GPS-position
         self.pos = {} # Contains always the latest position-record
-        self.pos_history = [] # TODO: REMOVE
-        self.pos_history_debug = [] # TODO: REMOVE
         self.data["position"] = [] # Position history list (positioning.position())
-        self.data["position_debug"] = []
         self.pos_estimate = {} # Contains estimated location, calculated from the latest history point
+        self.data["position_debug"] = [] # latest "max_debugpoints" 
         # temporary solution to handle speed data (to be removed/changed)
         self.speed_history = []
         self.min_trackpoint_distance = 300 # TODO: REMOVE
@@ -95,6 +93,13 @@ class GpsApp:
             ]
         appuifw.app.screen = 'normal'
 
+    def log(self, logtype, text):
+        """
+        Append a log entry to the log.
+        TODO: NOT IMPLEMENTED YET
+        """
+        pass
+
     def focus_callback(self, bg):
         """Callback for appuifw.app.focus"""
         self.focus = bg
@@ -112,7 +117,6 @@ class GpsApp:
     def set_estimate_error(self, meters):
         if meters and meters >= 0:
             self.config["estimated_error_radius"] = meters
-
 
     def toggle_debug(self):
         self.track_debug = not self.track_debug # Toggle true <-> false
@@ -162,7 +166,7 @@ class GpsApp:
             import random
             if random.random() < 0.05:
                 l = ('244','123','29000',random.randint(1,2**24))
-        # NOTE: gsm_location() may return None in certain circumstances
+        # NOTE: gsm_location() may return None in certain circumstances!
         if l is not None and len(l) == 4:
             gsm_location = {'cellid': l}
             try: # This needs some capability (ReadDeviceData?)
@@ -183,7 +187,7 @@ class GpsApp:
             
             # Remove the oldest records if the length exceeds limit
             # TODO: make limit configurable
-            if len(self.data["gsm_location"]) > 100:
+            if len(self.data["gsm_location"]) > 200:
                 self.data["gsm_location"].pop()
                 self.data["gsm_location"].pop()
 
@@ -195,9 +199,9 @@ class GpsApp:
         TODO: Save the track data (to a file) for future use.
         """
         if self.track_debug:
-            self.pos_history_debug.append(pos)
-            if len(self.pos_history_debug) > self.config["max_debugpoints"]:
-                self.pos_history_debug.pop(0)
+            self.data["position_debug"].append(pos)
+            if len(self.data["position_debug"]) > self.config["max_debugpoints"]:
+                self.data["position_debug"].pop(0)
 
             # TODO:
             # self.data["position_debug"].append(pos)
@@ -343,6 +347,9 @@ class BaseView:
 ############## List TAB START ##############
 class BaseInfoTab:
     def __init__(self, parent, **kwargs):
+        """
+        Initialize timer and set up some common variables.
+        """
         self.t = e32.Ao_timer()
         self.parent = parent
         self.Main = parent.Main
@@ -355,6 +362,10 @@ class BaseInfoTab:
         raise "_get_lines() must be implemented"
 
     def activate(self):
+        """
+        Set up exit_key_handler, canvas, left menu for this tab
+        and finally call self.update() to draw the screen.
+        """
         self.active = True
         appuifw.app.exit_key_handler = self.handle_close
         self.canvas = appuifw.Canvas(redraw_callback=self.update)
@@ -369,11 +380,17 @@ class BaseInfoTab:
     def activate_extra(self):
         """
         Override this in deriving class 
-        if you want to do some extra stuff during activate().
+        if you want to do some extra stuff during activate()
+        e.g. add extra items to the menu.
         """
         pass
 
     def update(self, dummy=(0, 0, 0, 0)):
+        """
+        Simply call self.blit_lines(lines) to draw some lines of text to the canvas.
+        This should be overriden in the deriving class if more complex operations are wanted.
+        Start a new timer to call update again after a short while.
+        """
         self.t.cancel()
         lines = self._get_lines()
         self.canvas.clear()
@@ -382,6 +399,9 @@ class BaseInfoTab:
             self.t.after(0.5, self.update)
 
     def blit_lines(self, lines, color=0x000000):
+        """
+        Draw some lines of text to the canvas.
+        """
         self.canvas.clear()
         start = 0
         for l in lines:
@@ -389,6 +409,9 @@ class BaseInfoTab:
             self.canvas.text((3,start), l, font=self.font, fill=color)
 
     def handle_close(self):
+        """
+        Cancel timer and call parent view's close().
+        """
         self.active = False
         self.t.cancel()
         self.parent.close() # Exit this tab set
@@ -467,7 +490,6 @@ class GsmTab(BaseInfoTab):
                            + u"%s,%s,%s,%s" % (l['gsm']["cellid"]))
             except:
                 lines.append(u"Error in gsm data")
-                # print l
         return lines
 ############## Sysinfo VIEW END ###############
 
@@ -479,7 +501,6 @@ class GpsView(BaseView):
         self.Main = parent.Main
         self.tabs = []
         self.tabs.append((u"Gps", GpsInfoTab(self)))
-#        self.tabs.append((u"Track", GpsTrackTab(self)))
         self.tabs.append((u"Speed", GpsSpeedTab(self)))
         self.current_tab = 0
 
@@ -720,7 +741,7 @@ class GpsTrackTab(BaseInfoTab):
         import pys60_json as json
         # jsonize only one pos per time, otherwise out of memory or takes very long time
         points = []
-        for p in self.Main.pos_history_debug:
+        for p in self.Main.data["position_debug"]:
             points.append(json.write(p))
         data = "\n".join(points)
         name = appuifw.query(u"Name", "text", u"")
@@ -836,15 +857,15 @@ class GpsTrackTab(BaseInfoTab):
         # Test polygon
         # self.ui.polygon([15,15,100,100,100,15,50,10], outline=0x0000ff, width=4)
         j = 0
-        #print len(self.Main.pos_history_debug)
+        #print len(self.Main.data["position_debug"])
         #if len(track) > 0:
         #    p0 = track[0]
         p0 = self.Main.pos # the center point
         # New style: use main apps data structures directly and _calculate_canvas_xy() to get pixel xy.
-        for i in range(len(self.Main.pos_history_debug)-1, -1, -1):
+        for i in range(len(self.Main.data["position_debug"])-1, -1, -1):
             j = j + 1
             if j > 20: break # draw only last x debug points
-            p = self.Main.pos_history_debug[i]
+            p = self.Main.data["position_debug"][i]
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
             # try: except: here? perhaps x doesn't exist
             self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0xffff00, width=7)
