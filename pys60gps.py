@@ -39,8 +39,8 @@ class GpsApp:
         self.config["max_trackpoints"] = 500
         self.config["max_debugpoints"] = 500
         self.config["track_debug"] = False
-        # Create a directory to contain all gathered and downloaded data
-        self.datadir = os.path.join(u"c:", u"data", u"Pys60Gps")
+        # Create a directory to contain all gathered and downloaded data. Note '\\' in the first argument.
+        self.datadir = os.path.join(u"C:\\Data", u"Pys60Gps")
         if not os.path.exists(self.datadir):
             os.makedirs(self.datadir)
         # Data-repository
@@ -900,17 +900,17 @@ class GpsTrackTab(BaseInfoTab):
                 pass
             
         # Draw track if it exists
-        # TODO: to a function
+        # TODO: all of these loops to a function
         track = self.Main.data["position"]
         if len(self.Main.data["position"]) > 0:
             p1 = self.Main.data["position"][-1]
         for i in range(len(self.Main.data["position"])-1, -1, -1): # draw trackpoints backwards
             p = self.Main.data["position"][i]
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
-            # TODO: check that x and y exist
-            self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0xff0000, width=5)
-            self.ui.line([p["x"]+center_x, p["y"]+center_y, 
-                          p1["x"]+center_x, p1["y"]+center_y], outline=0x00ff00, width=2)
+            if p.has_key("x"):
+                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0xff0000, width=5)
+                self.ui.line([p["x"]+center_x, p["y"]+center_y, 
+                              p1["x"]+center_x, p1["y"]+center_y], outline=0x00ff00, width=2)
             p1 = p
         # Draw POIs if there are any
         # TODO: to a function
