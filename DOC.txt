@@ -1,0 +1,38 @@
+$Id$
+
+Pys60gps documentation, very incomplete.
+
+Pys60gps is a "framework" for S60 mobile phones which offers some location based services for 
+plugins which can be 
+- included in the program package, 
+- downloaded from the net or 
+- imported from a predefined directory (e.g. E:\Pys60gps)
+
+Datastructures
+
+self.data["gsm_location"] = [] # GSM-cellid history list (location.gsm_location())
+# GPS-position
+self.pos = {} # Contains always the latest position-record
+self.data["position"] = [] # Position history list (positioning.position())
+self.pos_estimate = {} # Contains estimated location, calculated from the latest history point
+self.data["position_debug"] = [] # latest "max_debugpoints" 
+# POIs
+self.data["pois_private"] = []
+self.data["pois_downloaded"] = []
+
+
+pos (Main.pos) is a dictionary which may (or may not) contain following keys:
+- all keys and values created by positioning.position() call (see the source or pys60-documentation)
+- system time
+  ["systime"] = time.time()
+- zone, easting and northing calculated by LatLongUTMconversion.LLtoUTM()
+  ["position"]["z"]
+  ["position"]["e"]
+  ["position"]["n"]
+- GSM-cellid:
+  ["gsm"]["cellid"] = location.gsm_location()
+  ["gsm"]["signal_bars"] = sysinfo.signal_bars()
+  ["gsm"]["signal_dbm"] = sysinfo.signal_dbm()
+- Canvas coordinates, related to the center point
+  ["x"]
+  ["y"]
