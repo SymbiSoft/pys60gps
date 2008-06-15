@@ -16,6 +16,8 @@ import key_codes
 import graphics
 import LatLongUTMconversion
 import Calculate
+import pys60_json as json
+
 
 class GpsApp:
     __version__ = u'$Id$'
@@ -49,6 +51,25 @@ class GpsApp:
         self.data["position"] = [] # Position history list (positioning.position())
         self.pos_estimate = {} # Contains estimated location, calculated from the latest history point
         self.data["position_debug"] = [] # latest "max_debugpoints" 
+        # POIs
+        self.data["pois_private"] = []
+        self.data["pois_downloaded"] = []
+        # Test poi
+        self.key = u""
+        pos = {"position": {}}
+        pos["position"]["latitude"] = 61.45
+        pos["position"]["longitude"] = 23.84
+        pos["systime"] = time.time()
+        pos["text"] = u"Testi"
+        self._calculate_UTM(pos)
+        self.data["pois_downloaded"].append(pos)
+        pos = {"position": {}}
+        pos["position"]["latitude"] = 60.275
+        pos["position"]["longitude"] = 24.985
+        pos["systime"] = time.time()
+        pos["text"] = u"Hima"
+        self._calculate_UTM(pos)
+        self.data["pois_downloaded"].append(pos)
         # temporary solution to handle speed data (to be removed/changed)
         self.speed_history = []
         self.min_trackpoint_distance = 300 # TODO: REMOVE
@@ -66,6 +87,38 @@ class GpsApp:
         # Create a listbox from main_menu and set select-handler
         self.listbox = appuifw.Listbox(self.main_menu, self.handle_select)
         self.activate()
+
+    def download_pois(self):
+        """
+        Test function for downloading POI-object from the internet
+        """
+        import urllib
+        self.key = appuifw.query(u"Keyword", "text", self.key)
+        if self.key is None: self.key = u""
+        params = {'key': self.key}
+        if (len(self.data["position"]) > 0):
+            pos = self.data["position"][-1]
+            params["lat"] = pos["position"]["latitude"]
+            params["lon"] = pos["position"]["longitude"]
+        else:
+            appuifw.note(u"Can't download POIs, current position unknown.", 'error')
+            return
+        params = urllib.urlencode(params)
+        try: # FIXME: hardcoded url TODO: centralized communication to the server
+            f = urllib.urlopen("http://www.plok.in/poi.php", params)
+            jsondata = f.read() 
+            # print jsondata.decode("utf-8")
+            # NOTE: all strings in "pois" are now plain utf-8 encoded strings
+            # so they are not valid arguments for canvas.text() or appuifw.note() !
+            pois = json.read(jsondata) 
+            f.close()
+            for pos in pois:
+                self._calculate_UTM(pos)
+                pos["text"] = pos["text"].decode("utf-8")
+            self.data["pois_downloaded"] = pois
+        except Exception, error:
+            appuifw.note(unicode(error), 'error')
+            raise
 
     def activate(self):
         """Set main menu to app.body and left menu entries."""
@@ -134,9 +187,10 @@ class GpsApp:
             service = services.values()[0]
             # Upload the file
             socket.bt_obex_send_file(bt_addr, service, filename)
-            appuifw.note(u"File '%s' sent")
+            appuifw.note(u"File '%s' sent" % filename)
         except Exception, error:
             appuifw.note(unicode(error), 'error')
+            raise
 
     def start_read_position(self):
         """
@@ -178,9 +232,11 @@ class GpsApp:
             # Append gsm_location if current differs from the last saved...
             if len(self.data["gsm_location"]) > 0 and l != self.data["gsm_location"][-1]['gsm']['cellid']:
                 pos["gsm"] = gsm_location
+                pos["text"] = l[3]
                 self.data["gsm_location"].append(pos)
             elif len(self.data["gsm_location"]) == 0: # ...or the history is empty: append the 1st record
                 pos["gsm"] = gsm_location
+                pos["text"] = l[3]
                 self.data["gsm_location"].append(pos)
             # TODO: if the distance to the latest point exceeds 
             # some configurable limit (e.g. 1000 meters), then append a new point too
@@ -191,25 +247,39 @@ class GpsApp:
                 self.data["gsm_location"].pop()
                 self.data["gsm_location"].pop()
 
+    def _calculate_UTM(self, pos):
+        """
+        Calculate UTM coordinates and append them to pos. 
+        pos["position"]["latitude"] and pos["position"]["longitude"] must exist and be float.
+        """
+        try:
+            (pos["position"]["z"], 
+             pos["position"]["e"], 
+             pos["position"]["n"]) = LatLongUTMconversion.LLtoUTM(23, # Wgs84
+                                                                  pos["position"]["latitude"],
+                                                                  pos["position"]["longitude"])
+            return True
+        except:
+            # TODO: line number and exception text here too?
+            self.log(u"exception", u"Failed to LLtoUTM()")
+            return False
+    
     def read_position(self, pos):
         """
         positioning.position() callback.
         Save the latest position object to the self.pos.
         Keep latest n position objects in the data["position"] list.
-        TODO: Save the track data (to a file) for future use.
+        TODO: Save the track data (to a file) automatically for future use.
         """
         if self.track_debug:
             self.data["position_debug"].append(pos)
             if len(self.data["position_debug"]) > self.config["max_debugpoints"]:
                 self.data["position_debug"].pop(0)
-
             # TODO:
             # self.data["position_debug"].append(pos)
         pos["systime"] = time.time()
         if str(pos["position"]["latitude"]) != "NaN":
-            # Calculate UTM coordinates for future use
-            (z, pos["position"]["e"], pos["position"]["n"]) = LatLongUTMconversion.LLtoUTM(23, pos["position"]["latitude"],
-                                                                                               pos["position"]["longitude"])
+            self._calculate_UTM(pos)
             # Calculate distance between the current pos and the latest history pos
             dist = 0
             dist_estimate = 0
@@ -230,8 +300,9 @@ class GpsApp:
                 p["position"] = {}
                 p["position"]["latitude"] = lat
                 p["position"]["longitude"] = lon
-                (z, p["position"]["e"], p["position"]["n"]) = LatLongUTMconversion.LLtoUTM(23, p["position"]["latitude"],
-                                                                                               p["position"]["longitude"])
+                self.Main._calculate_UTM(p)
+                #(z, p["position"]["e"], p["position"]["n"]) = LatLongUTMconversion.LLtoUTM(23, p["position"]["latitude"],
+                #                                                                               p["position"]["longitude"])
                 self.pos_estimate = p
                 # This calculates the distance between current point and estimation.
                 # Perhaps ellips could be more optime?
@@ -597,7 +668,7 @@ class GpsTrackTab(BaseInfoTab):
     TODO: Use Image and blit to avoid flickering.
     """
     meters_per_px = 5
-    pois = []
+    #pois = []
     # Are zoom_levels below 1.0 needeed?
     zoom_levels = [1,2,3,5,8,12,16,20,30,50,80,100,150,250,400,600,1000,2000,5000,10000]
     zoom_index = 3
@@ -621,6 +692,7 @@ class GpsTrackTab(BaseInfoTab):
         appuifw.app.menu.insert(0, (u"Set meters/pixel", 
                                     lambda:self.set_meters_per_px(appuifw.query(u"Meters","number", self.meters_per_px))))
         appuifw.app.menu.insert(0, (u"Add POI", self.save_poi))
+        appuifw.app.menu.insert(0, (u"POIs Download", self.Main.download_pois))
         self.update()
 
     def set_meters_per_px(self, px):
@@ -650,7 +722,7 @@ class GpsTrackTab(BaseInfoTab):
         """
         wpts = []
         trkpts = []
-        for p in self.pois:
+        for p in self.Main.data["pois_private"]:
             wpts.append(self._make_gpx_trkpt(p, "wpt"))
         for p in self.Main.data["position"]:
             trkpts.append(self._make_gpx_trkpt(p))
@@ -738,7 +810,6 @@ class GpsTrackTab(BaseInfoTab):
         """
         Send saved position data to the other bluetooth device.
         """
-        import pys60_json as json
         # jsonize only one pos per time, otherwise out of memory or takes very long time
         points = []
         for p in self.Main.data["position_debug"]:
@@ -769,57 +840,11 @@ class GpsTrackTab(BaseInfoTab):
         # print pos
         pos["text"] = appuifw.query(u"Name", "text", ts)
         if pos["text"] is not None: # user did not press Cancel
-            self.pois.append(pos)
+            self.Main.data["pois_private"].append(pos)
         else:  # user pressed cancel -> no POI
             pass
             #pos["text"] = u"" # empty text
         
-    def calc_xy(self, **kwargs):
-        """
-        Calculates the xy-position of all points on the canvas.
-        """
-        p0 = kwargs["center"]
-        # KLUDGE: p0 doesn't have "e" if there is no fix, use latest history point instead
-        if not p0["position"].has_key("e"):
-            p0 = kwargs["track"][-1]
-        lines = []
-        track = []
-        #track.append(p0)
-        pois = []
-
-        p0["x"] = int(kwargs["canvas_size"][0]/2)
-        p0["y"] = int(kwargs["canvas_size"][1]/2)
-        for p in kwargs["track"]: # TODO: make a function for this
-            # FIXME: this crashes if there is no fix
-            if not p["position"].has_key("e"): continue
-            x = int((-p0["position"]["e"] + p["position"]["e"]) / kwargs["meters_per_px"])
-            y = int((p0["position"]["n"] - p["position"]["n"]) / kwargs["meters_per_px"])
-            # TODO: Update current p instead creating new one
-            p1 = {"e":p["position"]["e"], "n":p["position"]["n"], 'x':x, 'y':y}
-            p["x"] = x
-            p["y"] = y
-            track.append(p1)
-            lines.append(u"%d %d %d %d" % (p["position"]["n"], p["position"]["e"], x, y))
-        for p in kwargs["pois"]: # TODO: make a function for this
-            if not p["position"].has_key("e"): continue
-            x = int((-p0["position"]["e"] + p["position"]["e"]) / kwargs["meters_per_px"])
-            y = int((p0["position"]["n"] - p["position"]["n"]) / kwargs["meters_per_px"])
-            # TODO: Update current p instead creating new one
-            p["x"] = x
-            p["y"] = y
-            p1 = {"e":p["position"]["e"], "n":p["position"]["n"], 'x':x, 'y':y, "text":p["text"]}
-            pois.append(p1)
-        for p in kwargs["gsm"]: # TODO: make a function for this
-            if not p["position"].has_key("e"): continue
-            x = int((-p0["position"]["e"] + p["position"]["e"]) / kwargs["meters_per_px"])
-            y = int((p0["position"]["n"] - p["position"]["n"]) / kwargs["meters_per_px"])
-            # TODO: Update current p instead creating new one
-            p["x"] = x
-            p["y"] = y
-            p1 = {"e":p["position"]["e"], "n":p["position"]["n"], 'x':x, 'y':y, "text":p["gsm"]["cellid"][3]}
-            pois.append(p1)
-        return lines, track, pois
-
     def _calculate_canvas_xy(self, image, meters_per_px, p0, p):
         """
         Calculcate x- and y-coordiates for point p.
@@ -846,12 +871,13 @@ class GpsTrackTab(BaseInfoTab):
         center_y = 120
         # TODO: cleanup here!
         # TODO: do separate functions for these instead
-        lines, track, pois = self._get_lines()
+        #lines, track, pois = self._get_lines()
         self.ui.clear()
         # Print some information about track
         mdist = self.Main.min_trackpoint_distance
         helpfont = (u"Series 60 Sans", 12)
         # Draw crosshair
+        # TODO: draw arrow
         self.ui.line([center_x-ch_l, center_y, center_x+ch_l, center_y], outline=0x0000ff, width=1)
         self.ui.line([center_x, center_y-ch_l, center_x, center_y+ch_l], outline=0x0000ff, width=1)
         # Test polygon
@@ -862,36 +888,55 @@ class GpsTrackTab(BaseInfoTab):
         #    p0 = track[0]
         p0 = self.Main.pos # the center point
         # New style: use main apps data structures directly and _calculate_canvas_xy() to get pixel xy.
+        # TODO: to a function
         for i in range(len(self.Main.data["position_debug"])-1, -1, -1):
             j = j + 1
             if j > 20: break # draw only last x debug points
             p = self.Main.data["position_debug"][i]
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
-            # try: except: here? perhaps x doesn't exist
-            self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0xffff00, width=7)
+            try:
+                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0xffff00, width=7)
+            except: 
+                pass
             
         # Draw track if it exists
-        #for t in track:
+        # TODO: to a function
         track = self.Main.data["position"]
         if len(self.Main.data["position"]) > 0:
             p1 = self.Main.data["position"][-1]
         for i in range(len(self.Main.data["position"])-1, -1, -1): # draw trackpoints backwards
             p = self.Main.data["position"][i]
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
+            # TODO: check that x and y exist
             self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0xff0000, width=5)
             self.ui.line([p["x"]+center_x, p["y"]+center_y, 
                           p1["x"]+center_x, p1["y"]+center_y], outline=0x00ff00, width=2)
             p1 = p
         # Draw POIs if there are any
-        for t in pois:
-            if t.has_key("x"):
-                self.ui.point([t["x"]+center_x, t["y"]+center_y], outline=0x0000ff, width=5)
-                self.ui.ellipse([(t["x"]+center_x-poi_r,t["y"]+center_y-poi_r),
-                                     (t["x"]+center_x+poi_r,t["y"]+center_y+poi_r)], outline=0x0000ff)
+        # TODO: to a function
+        for p in self.Main.data["pois_private"]:
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
+            if p.has_key("x"):
+                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x0000ff, width=5)
+                self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
+                                 (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=0x0000ff)
                 # There is a bug in image.text (fixed in 1.4.4?), so text must be drawn straight to the canvas
                 # self.ui.text(([t["x"]+130, t["y"]+125]), u"%s" % t["text"], font=(u"Series 60 Sans", 10), fill=0x000000)
+        for p in self.Main.data["pois_downloaded"]:
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
+            if p.has_key("x"):
+                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0xff00ff, width=5)
+                self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
+                                 (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=0x0000ff)
+        for p in self.Main.data["gsm_location"]:
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
+            if p.has_key("x"):
+                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x0000ff, width=5)
+                self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
+                                 (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=0x0000ff)
         ##############################################        
         # Testing the point estimation 
+        # TODO: to a function
         if len(self.Main.data["position"]) > 0: 
             pc = self.Main.pos
             p0 = self.Main.data["position"][-1] # use the latest saved point in history
@@ -925,9 +970,15 @@ class GpsTrackTab(BaseInfoTab):
         self.canvas.text((2,39), u"Press joystick to save a POI", font=helpfont, fill=0x999999)
         self.canvas.text((2,51), u"Press * or # to zoom", font=helpfont, fill=0x999999)
         self.canvas.text((2,63), u"Debug %s" % self.Main.track_debug, font=helpfont, fill=0x999999)
-        for t in pois: # TODO: Remove this when image.text is fixed
-            if t.has_key("x"):
-                self.canvas.text(([t["x"]+130, t["y"]+125]), u"%s" % t["text"], font=(u"Series 60 Sans", 10), fill=0x000000)
+        for p in self.Main.data["pois_private"]: # TODO: Remove this when image.text is fixed
+            if p.has_key("x"):
+                self.canvas.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x000066)
+        for p in self.Main.data["pois_downloaded"]: # TODO: Remove this when image.text is fixed
+            if p.has_key("x"):
+                self.canvas.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x666600)
+        for p in self.Main.data["gsm_location"]: # TODO: Remove this when image.text is fixed
+            if p.has_key("x"):
+                self.canvas.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x000066)
         scale_bar_width = 50 # pixels
         scale_bar_x = 150    # x location
         scale_bar_y = 20     # y location
@@ -963,30 +1014,6 @@ class GpsTrackTab(BaseInfoTab):
         canvas.line([scale_bar_x, 20, scale_bar_x + scale_bar_width, 20], outline=0x0000ff, width=1)
         canvas.line([scale_bar_x, 15, scale_bar_x, 25], outline=0x0000ff, width=1)
         canvas.line([scale_bar_x + scale_bar_width, 15, scale_bar_x + scale_bar_width, 25], outline=0x0000ff, width=1)
-        
-    def _get_lines(self):
-        lines = []
-        track = []
-        pois = [] # Points Of Interests
-        # TODO: Check this
-        try:
-            points = self.Main.data["position"]
-        except:
-            lines.append(u"GPS-data not available")
-            lines.append(u"Use main screens GPS-menu")
-            return lines, track, []# pois
-            
-        lines.append(u"Track length: %d" % len(track))
-        if len(points) > 0:
-            lines, track, pois = self.calc_xy(canvas_size=(240,240),
-                             meters_per_px=self.meters_per_px,
-                             center=(self.Main.pos), # Latest point to the center of canvas
-                             track=self.Main.data["position"],
-                             pois=self.pois,
-                             gsm=self.Main.data["gsm_location"]
-                            )
-        lines.append(u"Track length: %d" % len(track))
-        return lines, track, pois
 
 class GpsSpeedTab(BaseInfoTab):
     def update(self, dummy=(0, 0, 0, 0)):
@@ -1016,6 +1043,7 @@ class GpsSpeedTab(BaseInfoTab):
         speed_50 = 90
         speed_100 = 40
         i = 0
+        # Draw the speed graph
         for p in self.Main.speed_history:
             speed_min = speed_0 - p["speedmin"] * 3.6
             speed_max = speed_0 - 1 - p["speedmax"] * 3.6 # at least 1 px height
@@ -1030,33 +1058,8 @@ class GpsSpeedTab(BaseInfoTab):
         if self.active:
             self.t.cancel()
             self.t.after(0.5, self.update)
-        
-    def _get_lines(self):
-        lines = []
-        track = []
-        #pois = self.pois # [] # Points Of Interests
-        # TODO: Check this
-        try:
-            points = self.Main.data["position"]
-        except:
-            lines.append(u"GPS-data not available")
-            lines.append(u"Use main screens GPS-menu")
-            return lines, track, []# pois
-            
-        lines.append(u"Track length: %d" % len(track))
-        if len(points) > 0:
-            lines, track, pois = self.calc_xy(canvas_size=(240,240),
-                             meters_per_px=self.meters_per_px,
-                             center=(self.Main.pos), # Latest point to the center of canvas
-                             track=self.Main.data["position"],
-                             pois=self.pois
-                            )
-        lines.append(u"Track length: %d" % len(track))
-        return lines, track, pois
-
 
 # TODO: add exception harness for test versions
-
 oldbody = appuifw.app.body
 myApp = GpsApp()
 myApp.run()
