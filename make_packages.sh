@@ -22,10 +22,11 @@ find pys60gps.py lib  -name "*.py" | zip -@ pys60gps.zip
 
 mkdir sis
 pushd sis
-ln -s ../pys60gps.py default.py
-ln -s ../plugins plugins
+cp -p ../pys60gps.py default.py
+echo "appuifw.app.set_exit()" >> default.py
+cp -rp ../plugins plugins
 for py in ../lib/*.py;
-  do ln -s $py .
+  do cp -p $py .
 done
 popd
 

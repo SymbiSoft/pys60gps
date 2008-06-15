@@ -57,17 +57,17 @@ class GpsApp:
         # Test poi
         self.key = u""
         pos = {"position": {}}
-        pos["position"]["latitude"] = 61.45
-        pos["position"]["longitude"] = 23.84
+        pos["position"]["latitude"] = 61.448268
+        pos["position"]["longitude"] = 23.854067
         pos["systime"] = time.time()
-        pos["text"] = u"Testi"
+        pos["text"] = u"Hervanta"
         self._calculate_UTM(pos)
         self.data["pois_downloaded"].append(pos)
         pos = {"position": {}}
-        pos["position"]["latitude"] = 60.275
-        pos["position"]["longitude"] = 24.985
+        pos["position"]["latitude"] = 60.170704
+        pos["position"]["longitude"] = 24.941435
         pos["systime"] = time.time()
-        pos["text"] = u"Hima"
+        pos["text"] = u"Hki assa"
         self._calculate_UTM(pos)
         self.data["pois_downloaded"].append(pos)
         # temporary solution to handle speed data (to be removed/changed)
@@ -1066,4 +1066,4 @@ myApp.run()
 positioning.stop_position()
 appuifw.app.body = oldbody
 # For SIS-packaged version uncomment this:
-#appuifw.app.set_exit()
+# appuifw.app.set_exit()
