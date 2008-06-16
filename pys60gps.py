@@ -670,8 +670,8 @@ class GpsTrackTab(BaseInfoTab):
     meters_per_px = 5
     #pois = []
     # Are zoom_levels below 1.0 needeed?
-    zoom_levels = [1,2,3,5,8,12,16,20,30,50,80,100,150,250,400,600,1000,2000,5000,10000]
-    zoom_index = 3
+    zoom_levels = [0.125,0.25,0.5,1,2,3,5,8,12,16,20,30,50,80,100,150,250,400,600,1000,2000,5000,10000]
+    zoom_index = 7
 
     def activate(self):
         self.active = True
@@ -987,8 +987,12 @@ class GpsTrackTab(BaseInfoTab):
             scale_text = u"%.1f km" % (scale_value / 1000.0)
         else:
             scale_text = u"%d m" % (scale_value)
+        if self.meters_per_px >= 1.0:
+            mppx_text = u"%d m/px" % self.meters_per_px
+        else:
+            mppx_text = u"%.2f m/px" % self.meters_per_px
         self.canvas.text((scale_bar_x + 5, 18), scale_text, font=(u"Series 60 Sans", 10), fill=0x333333)
-        self.canvas.text((scale_bar_x + 5, 32), u"%d m/px" % self.meters_per_px, font=(u"Series 60 Sans", 10), fill=0x333333)
+        self.canvas.text((scale_bar_x + 5, 32), mppx_text, font=(u"Series 60 Sans", 10), fill=0x333333)
         self.canvas.line([scale_bar_x, 20, scale_bar_x + scale_bar_width, 20], outline=0x0000ff, width=1)
         self.canvas.line([scale_bar_x, 15, scale_bar_x, 25], outline=0x0000ff, width=1)
         self.canvas.line([scale_bar_x + scale_bar_width, 15, scale_bar_x + scale_bar_width, 25], outline=0x0000ff, width=1)
