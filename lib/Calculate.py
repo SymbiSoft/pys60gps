@@ -57,6 +57,15 @@ def bearing(lat1, lon1, lat2, lon2):
         bearingdegrees = 360 + bearingdegrees
     return bearingdegrees
 
+def anglediff(a,b):
+    """
+    Calculate the difference of two degree angels
+    """
+    d = abs(a-b)
+    if d > 180:
+        d = abs(360-d)
+    return d
+
 def newlatlon(lat, lon, dist, bear):
     """
     Calculate new latitude and longitude from
