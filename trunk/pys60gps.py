@@ -283,6 +283,14 @@ class GpsApp:
             # Calculate distance between the current pos and the latest history pos
             dist = 0
             dist_estimate = 0
+            anglediff = 0
+            timediff = 0
+            minanglediff = 30 # FIXME: hardcoded value, make configurable
+            mindist = 10 # FIXME: hardcoded value, make configurable
+            # Maximum time between points in seconds
+            maxtimediff = 60 # FIXME: hardcoded value, make configurable
+            if pos["position"]["horizontal_accuracy"] > mindist: # horizontal_accuracy may be NaN
+                mindist = pos["position"]["horizontal_accuracy"]
             if len(self.data["position"]) > 0:
                 p0 = self.data["position"][-1] # use the latest saved point in history
                 # Distance between current and the latest saved position
@@ -291,9 +299,13 @@ class GpsApp:
                                           pos["position"]["latitude"],
                                           pos["position"]["longitude"],
                                          )
+                # Difference of heading between current and the latest saved position
+                anglediff = Calculate.anglediff(p0['course']['heading'], pos['course']['heading'])
+                # Time difference between current and the latest saved position
+                timediff = pos['systime'] - p0['systime']
                 # Project a location estimation point using speed and heading from the latest saved point
                 p = {}
-                timediff = time.time() - p0['systime']
+                # timediff = time.time() - p0['systime']
                 dist_project = p0['course']['speed'] * timediff # speed * seconds = distance in meters
                 lat, lon = Calculate.newlatlon(p0["position"]["latitude"], p0["position"]["longitude"], 
                                                dist_project, p0['course']['heading'])
@@ -314,7 +326,11 @@ class GpsApp:
             else: # Always append the first point with fix
                 self.data["position"].append(pos)
             # If the dinstance exceeds the treshold, save the position object to the history list
-            if dist > self.min_trackpoint_distance or dist_estimate > self.config["estimated_error_radius"]:
+            # TODO: think which is the best order of these (most probable to the first place)
+            if   (dist > self.min_trackpoint_distance) \
+              or ((dist > mindist) and (dist_estimate > self.config["estimated_error_radius"])) \
+              or ((dist > mindist) and (anglediff > minanglediff)) \
+              or (timediff > maxtimediff): 
                 self.data["position"].append(pos)
             
         # If data["position"] is too big remove some of the oldest points
