@@ -313,8 +313,6 @@ class GpsApp:
                 p["position"]["latitude"] = lat
                 p["position"]["longitude"] = lon
                 self.Main._calculate_UTM(p)
-                #(z, p["position"]["e"], p["position"]["n"]) = LatLongUTMconversion.LLtoUTM(23, p["position"]["latitude"],
-                #                                                                               p["position"]["longitude"])
                 self.pos_estimate = p
                 # This calculates the distance between current point and estimation.
                 # Perhaps ellips could be more optime?
@@ -865,10 +863,9 @@ class GpsTrackTab(BaseInfoTab):
         """
         Calculcate x- and y-coordiates for point p.
         p0 is the center point of the image.
+        FIXME: this doesn't consider UTM ZONE yet!
         """
         # is image neccessary?
-        #if not p.has_key("position") or not p["position"].has_key("e"): return
-        #if not p0.has_key("position") or p0["position"].has_key("e"): return
         if not p.has_key("position") or not p["position"].has_key("e"): return
         if not p0.has_key("position") or not p0["position"].has_key("e"): return
         p["x"] = int((-p0["position"]["e"] + p["position"]["e"]) / meters_per_px)
@@ -923,7 +920,7 @@ class GpsTrackTab(BaseInfoTab):
         for i in range(len(self.Main.data["position"])-1, -1, -1): # draw trackpoints backwards
             p = self.Main.data["position"][i]
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
-            if p.has_key("x"):
+            if p.has_key("x") and p1.has_key("x"):
                 self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0xff0000, width=5)
                 self.ui.line([p["x"]+center_x, p["y"]+center_y, 
                               p1["x"]+center_x, p1["y"]+center_y], outline=0x00ff00, width=2)
