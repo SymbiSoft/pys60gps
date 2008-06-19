@@ -30,6 +30,7 @@ class GpsApp:
         self.focus = True
         appuifw.app.focus = self.focus_callback # Set up focus callback
         self.read_position_running = False
+        self.downloading_pois_test = False # TEMP
         self.apid = None # Default access point
         # Configuration/settings
         self.config = {} # TODO: read these from a configuration file
@@ -92,10 +93,13 @@ class GpsApp:
         # Create a listbox from main_menu and set select-handler
         self.listbox = appuifw.Listbox(self.main_menu, self.handle_select)
         self.activate()
+        self._select_access_point()
 
     def _select_access_point(self):
         """
         Shortcut for socket.select_access_point() 
+        TODO: save selected access point to the config
+        TODO: allow user to change access point later
         """
         self.apid = socket.select_access_point()
         if self.apid:
@@ -106,9 +110,10 @@ class GpsApp:
         """
         Test function for downloading POI-object from the internet
         """
+        self.downloading_pois_test = True
         import urllib
-        if not self.apid and not e32.in_emulator():
-            self._select_access_point()
+        #if not self.apid and not e32.in_emulator():
+        #self._select_access_point()
         
         self.key = appuifw.query(u"Keyword", "text", self.key)
         if self.key is None: self.key = u""
@@ -136,6 +141,7 @@ class GpsApp:
         except Exception, error:
             appuifw.note(unicode(error), 'error')
             raise
+        self.downloading_pois_test = False
 
     def _update_menu(self):
         #tp_values = [10,20,50,100,200,500,1000,5000,10000]
@@ -685,9 +691,7 @@ class TrackView(BaseView):
         self.parent = parent
         self.Main = parent.Main
         self.tabs = []
-#        self.tabs.append((u"Gps", GpsInfoTab(self)))
         self.tabs.append((u"Track", GpsTrackTab(self)))
-#        self.tabs.append((u"Speed", GpsSpeedTab(self)))
         self.current_tab = 0
 
     def close(self):
@@ -845,7 +849,6 @@ class GpsTrackTab(BaseInfoTab):
         att["dop"] = u"%.2f;%.2f;0" % (p["satellites"]["horizontal_dop"], p["satellites"]["vertical_dop"])
         cellpt = "<cellpt " + " ".join([ '%s="%s"' % (k, att[k]) for k in att.keys() ]) + "></cellpt>"
         return cellpt
-        # return """<cellpt lat="%(lat)s" lon="%(lon)s" alt="%(alt)s" speed_kmph="%(speed_kmh)s" heading="%(heading)s" time="%(time)s" cellfrom="%(cellfrom)s" cellto="%(cellto)s  signalfrom="%(signalfrom)s" signalto="%(signalto)s" dop="%(dop)s"></cellpt>""" % att
 
     def send_debug(self):
         """
@@ -923,9 +926,6 @@ class GpsTrackTab(BaseInfoTab):
         # Test polygon
         # self.ui.polygon([15,15,100,100,100,15,50,10], outline=0x0000ff, width=4)
         j = 0
-        #print len(self.Main.data["position_debug"])
-        #if len(track) > 0:
-        #    p0 = track[0]
         p0 = self.Main.pos # the center point
         # New style: use main apps data structures directly and _calculate_canvas_xy() to get pixel xy.
         # TODO: to a function
@@ -974,6 +974,17 @@ class GpsTrackTab(BaseInfoTab):
                 self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x0000ff, width=5)
                 self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
                                  (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=0x0000ff)
+        ##############################################
+        # Testing "status" bar. TODO: implement better, e.g. own function for status bar
+        if self.Main.read_position_running:
+            if p0.has_key("position") and p0["position"]["latitude"] > 0: # TODO: create has_fix(p): bool -function
+                self.ui.point([10, 10], outline=0x00ff00, width=10)
+            else:
+                self.ui.point([10, 10], outline=0xffff00, width=10)
+        else:
+            self.ui.point([10, 10], outline=0xff0000, width=10)
+        if self.Main.downloading_pois_test:
+            self.ui.point([20, 10], outline=0xffff00, width=10)
         ##############################################        
         # Testing the point estimation 
         # TODO: to a function
@@ -983,7 +994,7 @@ class GpsTrackTab(BaseInfoTab):
             p = self.Main.pos_estimate
             err_radius = self.Main.config["estimated_error_radius"] # meters
             ell_r = err_radius / self.meters_per_px 
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, self.Main.pos, p)
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
             if p.has_key("x"):
                 self.ui.ellipse([(p["x"]+center_x-ell_r,p["y"]+center_y-ell_r),
                                  (p["x"]+center_x+ell_r,p["y"]+center_y+ell_r)], outline=0x9999ff)
