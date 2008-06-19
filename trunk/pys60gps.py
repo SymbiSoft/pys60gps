@@ -43,6 +43,10 @@ class GpsApp:
         self.datadir = os.path.join(u"C:\\Data", u"Pys60Gps")
         if not os.path.exists(self.datadir):
             os.makedirs(self.datadir)
+        # Create a directory for temporary data
+        self.cachedir = u"D:\\Pys60Gps"
+        if not os.path.exists(self.cachedir):
+            os.makedirs(self.cachedir)
         # Data-repository
         self.data = {}
         self.data["gsm_location"] = [] # GSM-cellid history list (location.gsm_location())
@@ -56,7 +60,7 @@ class GpsApp:
         self.data["pois_downloaded"] = []
         # Test poi
         self.key = u""
-        pos = {"position": {}}
+        pos = {"position": {}} # This point is for emulator's positioning-emulation
         pos["position"]["latitude"] = 61.448268
         pos["position"]["longitude"] = 23.854067
         pos["systime"] = time.time()
@@ -120,30 +124,37 @@ class GpsApp:
             appuifw.note(unicode(error), 'error')
             raise
 
-    def activate(self):
-        """Set main menu to app.body and left menu entries."""
-        # Use exit_key_handler of current class
-        appuifw.app.exit_key_handler = self.exit_key_handler
-        appuifw.app.body = self.listbox
-        tp_values = [10,20,50,100,200,500,1000,5000,10000]
-        tp_menu_entries = [ (u'%s meters' % v, lambda:self.set_trackpoint_distance(v)) for v in tp_values ]
+    def _update_menu(self):
+        #tp_values = [10,20,50,100,200,500,1000,5000,10000]
+        #tp_menu_entries = [ (u'%s meters' % v, lambda:self.set_trackpoint_distance(v)) for v in tp_values ]
         # We need to convert list to a tuple for appuifw.app.menu
-        set_trackpoint_distance_menu=(u"Trackpoint dist (broken)", tuple(tp_menu_entries))
+        #set_trackpoint_distance_menu=(u"Trackpoint dist (broken)", tuple(tp_menu_entries))
+        if self.read_position_running == True:
+            gps_onoff = u"OFF"
+        else:
+            gps_onoff = u"ON"
         appuifw.app.menu = [
             (u"Select",self.handle_select),
-            (u"GPS",self.start_read_position), # TODO: add GPS on/off to the menu
+            (u"GPS %s" % (gps_onoff),self.start_read_position),
             (u"Max trackpoints (%d)" % self.max_trackpoints, 
                   lambda:self.set_max_trackpoints(appuifw.query(u"Max points","number", self.max_trackpoints))),
             (u"Set trackpoint dist (%d)" % self.min_trackpoint_distance, 
                   lambda:self.set_trackpoint_distance(appuifw.query(u"Trackpoint dist","number", self.min_trackpoint_distance))),
             (u"Set estimation error (%d)" % self.config["estimated_error_radius"], 
                   lambda:self.set_estimate_error(appuifw.query(u"Estimate error","number", self.config["estimated_error_radius"]))),
-            set_trackpoint_distance_menu,
+            #set_trackpoint_distance_menu,
             (u"Toggle debug",self.toggle_debug),
             (u"Reboot",self.reboot),
             (u"Version", lambda:appuifw.note(self.__version__, 'info')),
             (u"Close", self.lock.signal),
             ]
+
+    def activate(self):
+        """Set main menu to app.body and left menu entries."""
+        # Use exit_key_handler of current class
+        appuifw.app.exit_key_handler = self.exit_key_handler
+        appuifw.app.body = self.listbox
+        self._update_menu()
         appuifw.app.screen = 'normal'
 
     def log(self, logtype, text):
@@ -196,9 +207,11 @@ class GpsApp:
         """
         Start or stop reading position.
         """
+
         if self.read_position_running == True:
             positioning.stop_position()
             self.read_position_running = False
+            self._update_menu() # NOTE: this messes up the menu if this function is called from outside of main view!
             appuifw.note(u"Stopping GPS...", 'info')
             return
         self.read_position_running = True
@@ -206,6 +219,7 @@ class GpsApp:
                                      "format":"application", 
                                      "data":"test_app"}])
         positioning.position(course=1,satellites=1, callback=self.read_position, interval=1000000, partial=1) 
+        self._update_menu() # NOTE: this messes up the menu if this function is called from outside of main view!
         appuifw.note(u"Starting GPS...", 'info')
 
     def read_gsm_location(self):
