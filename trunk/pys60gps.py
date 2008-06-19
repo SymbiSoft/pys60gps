@@ -254,7 +254,7 @@ class GpsApp:
     def save_log_cache(self, logname):
         """Save cached log data to persistent disk (C:)."""
         cache_filename = self._get_log_cache_filename(logname)
-        cache_filename_tmp = cache_filename + u".tmp"
+        cache_filename_tmp = cache_filename + u".tmp" # FIXME: unique name here
         try:
             os.rename(cache_filename, cache_filename_tmp)
             log_filename = os.path.join(self.datadir, logname + time.strftime("-%Y%m%d.txt", time.localtime(time.time())))
@@ -277,7 +277,7 @@ class GpsApp:
         l = location.gsm_location()
         if e32.in_emulator(): # Do some random cell changes if in emulator
             import random
-            if random.random() < 0.35:
+            if random.random() < 0.05:
                 l = ('244','123','29000',random.randint(1,2**24))
         # NOTE: gsm_location() may return None in certain circumstances!
         if l is not None and len(l) == 4:
@@ -449,6 +449,8 @@ class GpsApp:
             self.lock.signal()
 
     def close(self):
+        self.save_log_cache("track")
+        self.save_log_cache("cellid") 
         self.running = False
         appuifw.app.exit_key_handler = None
         appuifw.app.set_tabs([u"Back to normal"], lambda x: None)
