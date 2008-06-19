@@ -18,6 +18,7 @@ import LatLongUTMconversion
 import Calculate
 import pys60_json as json
 
+import PositionHelper
 
 class GpsApp:
     __version__ = u'$Id$'
@@ -226,11 +227,10 @@ class GpsApp:
         """
         Start or stop reading position.
         """
-
         if self.read_position_running == True:
             positioning.stop_position()
             self.read_position_running = False
-            self._update_menu() # NOTE: this messes up the menu if this function is called from outside of main view!
+            self._update_menu() # NOTE: this messes up the menu if this function is called from outside of the main view!
             appuifw.note(u"Stopping GPS...", 'info')
             return
         self.read_position_running = True
@@ -238,8 +238,34 @@ class GpsApp:
                                      "format":"application", 
                                      "data":"test_app"}])
         positioning.position(course=1,satellites=1, callback=self.read_position, interval=1000000, partial=1) 
-        self._update_menu() # NOTE: this messes up the menu if this function is called from outside of main view!
+        self._update_menu() # NOTE: this messes up the menu if this function is called from outside of the main view!
         appuifw.note(u"Starting GPS...", 'info')
+
+    def _get_log_cache_filename(self, logname):
+        return os.path.join(self.cachedir, u"%s.txt" % logname)
+        
+    def append_log_cache(self, logname, data):
+        """Append data to name log cache file."""
+        filename = self._get_log_cache_filename(logname)
+        f = open(filename, "at")
+        f.write(data + "\n")
+        f.close()
+    
+    def save_log_cache(self, logname):
+        """Save cached log data to persistent disk (C:)."""
+        cache_filename = self._get_log_cache_filename(logname)
+        cache_filename_tmp = cache_filename + u".tmp"
+        try:
+            os.rename(cache_filename, cache_filename_tmp)
+            log_filename = os.path.join(self.datadir, logname + time.strftime("-%Y%m%d.txt", time.localtime(time.time())))
+            fout = open(log_filename, "at")
+            fin = open(cache_filename_tmp, "rt")
+            data = fout.write(fin.read())
+            fin.close()
+            os.remove(cache_filename_tmp)
+            fout.close()
+        except:
+            pass # Failed. TODO: error logging here
 
     def read_gsm_location(self):
         """
@@ -251,7 +277,7 @@ class GpsApp:
         l = location.gsm_location()
         if e32.in_emulator(): # Do some random cell changes if in emulator
             import random
-            if random.random() < 0.05:
+            if random.random() < 0.35:
                 l = ('244','123','29000',random.randint(1,2**24))
         # NOTE: gsm_location() may return None in certain circumstances!
         if l is not None and len(l) == 4:
@@ -263,14 +289,19 @@ class GpsApp:
                 gsm_location["signal_bars"] = None
                 gsm_location["signal_dbm"] = None
             # Append gsm_location if current differs from the last saved...
+            # TODO: append also to the log file
             if len(self.data["gsm_location"]) > 0 and l != self.data["gsm_location"][-1]['gsm']['cellid']:
                 pos["gsm"] = gsm_location
                 pos["text"] = l[3]
+                self.append_log_cache("cellid", PositionHelper._make_xml_cellpt(self.data["gsm_location"][-1], pos))
                 self.data["gsm_location"].append(pos)
             elif len(self.data["gsm_location"]) == 0: # ...or the history is empty: append the 1st record
                 pos["gsm"] = gsm_location
                 pos["text"] = l[3]
                 self.data["gsm_location"].append(pos)
+            if len(self.data["gsm_location"]) % 20 == 0: # save cellids after 20 lines
+                self.save_log_cache("cellid")
+            #else: print len(self.data["gsm_location"]) % 5
             # TODO: if the distance to the latest point exceeds 
             # some configurable limit (e.g. 1000 meters), then append a new point too
             
@@ -296,6 +327,8 @@ class GpsApp:
             # TODO: line number and exception text here too?
             self.log(u"exception", u"Failed to LLtoUTM()")
             return False
+
+    #def _cache_
     
     def read_position(self, pos):
         """
@@ -363,6 +396,10 @@ class GpsApp:
               or ((dist > mindist) and (anglediff > minanglediff)) \
               or (timediff > maxtimediff): 
                 self.data["position"].append(pos)
+                self.append_log_cache("track", PositionHelper._make_xml_trackpt(pos))
+                # FIXME: this does not work after self.config["max_trackpoints"] has been reached
+                if len(self.data["position"]) % 20 == 0: # save trackpoints after 20 lines
+                    self.save_log_cache("track") 
             
         # If data["position"] is too big remove some of the oldest points
         if len(self.data["position"]) > self.config["max_trackpoints"]:
@@ -814,9 +851,9 @@ class GpsTrackTab(BaseInfoTab):
         lengsm = len(gsm) # Save the length 
         i = 0
         if lengsm == 1: # Save the first point 
-            trkpts.append(self._make_xml_cellpt(gsm[0], gsm[0]))
+            trkpts.append(PositionHelper._make_xml_cellpt(gsm[0], gsm[0]))
         for i in range(1,lengsm): # Save points 1..last
-            trkpts.append(self._make_xml_cellpt(gsm[i-1], gsm[i]))
+            trkpts.append(PositionHelper._make_xml_cellpt(gsm[i-1], gsm[i]))
         if lengsm > 0:
             last_time = time.strftime(u"%Y%m%dT%H%M%SZ", time.localtime(gsm[i]["satellites"]["time"]))
             filename = u"cellids-%s.txt" % last_time
@@ -832,23 +869,6 @@ class GpsTrackTab(BaseInfoTab):
         # If writing to a file was successful (we are here) remove all saved cellpoints from the list
         self.Main.data["gsm_location"] = self.Main.data["gsm_location"][lengsm:] 
         self.Main.send_file_over_bluetooth(filename)
-
-    def _make_xml_cellpt(self, p, p2):
-        """Temporary function to help to make cellpoints"""
-        att = {}
-        att["lat"] = u"%.6f" % (p["position"]["latitude"])
-        att["lon"] = u"%.6f" % (p["position"]["longitude"])
-        att["alt"] = u"%.1f" % (p["position"]["altitude"])
-        att["time"] = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", time.localtime(p["satellites"]["time"]))
-        att["cellfrom"] = u"%s,%s,%s,%s" % (p["gsm"]["cellid"])
-        att["cellto"] = u"%s,%s,%s,%s" % (p2["gsm"]["cellid"])
-        att["signalfrom"] = u"%.1f" % (p["gsm"]["signal_dbm"])
-        att["signalto"] = u"%.1f" % (p2["gsm"]["signal_dbm"])
-        att["speed_kmh"] = u"%.2f" % (p["course"]["speed"] * 3.6)
-        att["heading"] = u"%.2f" % (p["course"]["heading"])
-        att["dop"] = u"%.2f;%.2f;0" % (p["satellites"]["horizontal_dop"], p["satellites"]["vertical_dop"])
-        cellpt = "<cellpt " + " ".join([ '%s="%s"' % (k, att[k]) for k in att.keys() ]) + "></cellpt>"
-        return cellpt
 
     def send_debug(self):
         """
