@@ -30,6 +30,7 @@ class GpsApp:
         self.focus = True
         appuifw.app.focus = self.focus_callback # Set up focus callback
         self.read_position_running = False
+        self.apid = None # Default access point
         # Configuration/settings
         self.config = {} # TODO: read these from a configuration file
         # TODO: self.config = self.read_config()
@@ -92,11 +93,23 @@ class GpsApp:
         self.listbox = appuifw.Listbox(self.main_menu, self.handle_select)
         self.activate()
 
-    def download_pois(self):
+    def _select_access_point(self):
+        """
+        Shortcut for socket.select_access_point() 
+        """
+        self.apid = socket.select_access_point()
+        if self.apid:
+            self.apo = socket.access_point(self.apid)
+            socket.set_default_access_point(self.apo)
+
+    def download_pois_test(self):
         """
         Test function for downloading POI-object from the internet
         """
         import urllib
+        if not self.apid and not e32.in_emulator():
+            self._select_access_point()
+        
         self.key = appuifw.query(u"Keyword", "text", self.key)
         if self.key is None: self.key = u""
         params = {'key': self.key}
@@ -720,7 +733,7 @@ class GpsTrackTab(BaseInfoTab):
         appuifw.app.menu.insert(0, (u"Set meters/pixel", 
                                     lambda:self.set_meters_per_px(appuifw.query(u"Meters","number", self.meters_per_px))))
         appuifw.app.menu.insert(0, (u"Add POI", self.save_poi))
-        appuifw.app.menu.insert(0, (u"POIs Download", self.Main.download_pois))
+        appuifw.app.menu.insert(0, (u"POIs Download", self.Main.download_pois_test))
         self.update()
 
     def set_meters_per_px(self, px):
