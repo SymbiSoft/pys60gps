@@ -56,7 +56,7 @@ _ellipsoid = [
 #def LLtoUTM(int ReferenceEllipsoid, const double Lat, const double Long, 
 #			 double &UTMNorthing, double &UTMEasting, char* UTMZone)
 
-def LLtoUTM(ReferenceEllipsoid, Lat, Long):
+def LLtoUTM(ReferenceEllipsoid, Lat, Long, LongOrigin=None):
 #converts lat/long to UTM coords.  Equations from USGS Bulletin 1532 
 #East Longitudes are positive, West longitudes are negative. 
 #North latitudes are positive, South latitudes are negative
@@ -84,8 +84,10 @@ def LLtoUTM(ReferenceEllipsoid, Lat, Long):
         elif LongTemp >= 9.0  and LongTemp < 21.0: ZoneNumber = 33
         elif LongTemp >= 21.0 and LongTemp < 33.0: ZoneNumber = 35
         elif LongTemp >= 33.0 and LongTemp < 42.0: ZoneNumber = 37
-
-    LongOrigin = (ZoneNumber - 1)*6 - 180 + 3 #+3 puts origin in middle of zone
+    # If optional LongOrigin was given, use it as origin
+    # NOTE: this is not UTM any more then, but sort of "local grid"
+    if not LongOrigin:
+        LongOrigin = (ZoneNumber - 1)*6 - 180 + 3 #+3 puts origin in middle of zone
     LongOriginRad = LongOrigin * _deg2rad
 
     #compute the UTM Zone from the latitude and longitude
