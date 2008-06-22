@@ -50,6 +50,8 @@ class GpsApp:
         self.cachedir = u"D:\\Pys60Gps"
         if not os.path.exists(self.cachedir):
             os.makedirs(self.cachedir)
+        # Center meridian
+        self.LongOrigin = None
         # Data-repository
         self.data = {}
         self.data["gsm_location"] = [] # GSM-cellid history list (location.gsm_location())
@@ -93,8 +95,8 @@ class GpsApp:
         self.views = [item[1] for item in self.menu_entries]
         # Create a listbox from main_menu and set select-handler
         self.listbox = appuifw.Listbox(self.main_menu, self.handle_select)
-        self.activate()
         self._select_access_point()
+        self.activate()
 
     def _select_access_point(self):
         """
@@ -111,7 +113,6 @@ class GpsApp:
         """
         Test function for downloading POI-object from the internet
         """
-        self.downloading_pois_test = True
         import urllib
         #if not self.apid and not e32.in_emulator():
         #self._select_access_point()
@@ -126,7 +127,9 @@ class GpsApp:
         else:
             appuifw.note(u"Can't download POIs, current position unknown.", 'error')
             return
+        e32.ao_sleep(0.05) # let the querypopup disappear
         params = urllib.urlencode(params)
+        self.downloading_pois_test = True
         try: # FIXME: hardcoded url TODO: centralized communication to the server
             f = urllib.urlopen("http://www.plok.in/poi.php", params)
             jsondata = f.read() 
@@ -141,7 +144,8 @@ class GpsApp:
             self.data["pois_downloaded"] = pois
         except Exception, error:
             appuifw.note(unicode(error), 'error')
-            raise
+            self.downloading_pois_test = False
+            raise # let the traceback go to the console
         self.downloading_pois_test = False
 
     def _update_menu(self):
@@ -311,17 +315,20 @@ class GpsApp:
                 self.data["gsm_location"].pop()
                 self.data["gsm_location"].pop()
 
-    def _calculate_UTM(self, pos):
+    def _calculate_UTM(self, pos, LongOrigin=None):
         """
         Calculate UTM coordinates and append them to pos. 
         pos["position"]["latitude"] and pos["position"]["longitude"] must exist and be float.
         """
+        if self.LongOrigin:
+             LongOrigin = self.LongOrigin
         try:
             (pos["position"]["z"], 
              pos["position"]["e"], 
              pos["position"]["n"]) = LatLongUTMconversion.LLtoUTM(23, # Wgs84
                                                                   pos["position"]["latitude"],
-                                                                  pos["position"]["longitude"])
+                                                                  pos["position"]["longitude"],
+                                                                  LongOrigin)
             return True
         except:
             # TODO: line number and exception text here too?
@@ -337,14 +344,16 @@ class GpsApp:
         Keep latest n position objects in the data["position"] list.
         TODO: Save the track data (to a file) automatically for future use.
         """
+        pos["systime"] = time.time()
         if self.track_debug:
             self.data["position_debug"].append(pos)
             if len(self.data["position_debug"]) > self.config["max_debugpoints"]:
                 self.data["position_debug"].pop(0)
             # TODO:
             # self.data["position_debug"].append(pos)
-        pos["systime"] = time.time()
         if str(pos["position"]["latitude"]) != "NaN":
+            if not self.LongOrigin: # Set center meridian
+                self.LongOrigin = pos["position"]["longitude"]
             self._calculate_UTM(pos)
             # Calculate distance between the current pos and the latest history pos
             dist = 0
@@ -368,7 +377,9 @@ class GpsApp:
                 # Difference of heading between current and the latest saved position
                 anglediff = Calculate.anglediff(p0['course']['heading'], pos['course']['heading'])
                 # Time difference between current and the latest saved position
-                timediff = pos['systime'] - p0['systime']
+                # timediff = pos['systime'] - p0['systime']
+                timediff = pos["satellites"]["time"] - p0["satellites"]["time"]
+                
                 # Project a location estimation point using speed and heading from the latest saved point
                 p = {}
                 # timediff = time.time() - p0['systime']
@@ -705,6 +716,8 @@ class GpsInfoTab(BaseInfoTab):
             lines.append(u"Lat: %.5f " % (p["latitude"]))
         if str(p["longitude"]) != "NaN":
             lines.append(u"Lon: %.5f " % (p["longitude"]))
+        if p.has_key("e"):
+            lines.append(u"E: %.3f N: %.3f" % (p["e"],p["n"]))
         if str(p["horizontal_accuracy"]) != "NaN" and str(p["vertical_accuracy"]) != "NaN":
             lines.append(u"Accuracy (Hor/Ver): %.1f/%.1f " % (p["horizontal_accuracy"],p["vertical_accuracy"]))
         # Course-data
