@@ -24,6 +24,7 @@ class GpsApp:
     __version__ = u'$Id$'
 
     def __init__(self):
+        appuifw.app.title = u"Pys60Gps"
         self.Main = self # This is the base of all views, tabs etc.
         self.lock = e32.Ao_lock()
         appuifw.app.exit_key_handler = self.exit_key_handler
@@ -104,6 +105,7 @@ class GpsApp:
         TODO: save selected access point to the config
         TODO: allow user to change access point later
         """
+        e32.ao_sleep(0.1) # Python crashes if this is not here.
         self.apid = socket.select_access_point()
         if self.apid:
             self.apo = socket.access_point(self.apid)
