@@ -24,7 +24,8 @@ mkdir sis
 pushd sis
 cp -p ../pys60gps.py default.py
 echo "appuifw.app.set_exit()" >> default.py
-cp -rp ../plugins plugins
+mkdir -p plugins
+cp -p ../plugins/*.py plugins/
 for py in ../lib/*.py;
   do cp -p $py .
 done
@@ -43,6 +44,7 @@ then
   exit 1;
 fi;
 
+# http://www.forum.nokia.com/main/platforms/s60/capability_descriptions.html
 # TODO: 
-${ENSYMBLE} py2sis sis pys60gps.sis
+${ENSYMBLE} py2sis --uid=0xE00184F0 --appname=Pys60GPS --version=0.2.1 --lang=EN --shortcaption="Pys60GPS" --caption="PyS60 GPS"  --drive=C --caps=ALL-TCB-DRM-AllFiles-CommDD-MultimediaDD-NetworkControl-DiskAdmin --vendor="Plokaus Oy" --runinstall --verbose sis pys60gps_unsigned_testrange.sis
 
