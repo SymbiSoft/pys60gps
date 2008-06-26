@@ -111,18 +111,16 @@ class GpsApp:
             self.apo = socket.access_point(self.apid)
             socket.set_default_access_point(self.apo)
 
-    def download_pois_test(self):
+    def download_pois_test(self, pos = None):
         """
         Test function for downloading POI-object from the internet
         """
+        self.downloading_pois_test = True
         import urllib
-        #if not self.apid and not e32.in_emulator():
-        #self._select_access_point()
-        
         self.key = appuifw.query(u"Keyword", "text", self.key)
         if self.key is None: self.key = u""
         params = {'key': self.key}
-        if (len(self.data["position"]) > 0):
+        if (len(self.data["position"]) > 0): # TODO: use has_fix here?
             pos = self.data["position"][-1]
             params["lat"] = pos["position"]["latitude"]
             params["lon"] = pos["position"]["longitude"]
@@ -131,7 +129,6 @@ class GpsApp:
             return
         e32.ao_sleep(0.05) # let the querypopup disappear
         params = urllib.urlencode(params)
-        self.downloading_pois_test = True
         try: # FIXME: hardcoded url TODO: centralized communication to the server
             f = urllib.urlopen("http://www.plok.in/poi.php", params)
             jsondata = f.read() 
@@ -337,7 +334,12 @@ class GpsApp:
             self.log(u"exception", u"Failed to LLtoUTM()")
             return False
 
-    #def _cache_
+    def has_fix(self, pos):
+        """Return True is pos has a fix."""
+        if pos.has_key("position") and  pos["position"].has_key("latitude") and str(pos["position"]["latitude"]) != "NaN":
+            return True
+        else:
+            return False
     
     def read_position(self, pos):
         """
@@ -353,7 +355,7 @@ class GpsApp:
                 self.data["position_debug"].pop(0)
             # TODO:
             # self.data["position_debug"].append(pos)
-        if str(pos["position"]["latitude"]) != "NaN":
+        if self.has_fix(pos):
             if not self.LongOrigin: # Set center meridian
                 self.LongOrigin = pos["position"]["longitude"]
             self._calculate_UTM(pos)
@@ -771,6 +773,7 @@ class GpsTrackTab(BaseInfoTab):
     # Are zoom_levels below 1.0 needeed?
     zoom_levels = [0.125,0.25,0.5,1,2,3,5,8,12,16,20,30,50,80,100,150,250,400,600,1000,2000,5000,10000]
     zoom_index = 7
+    center_pos = {}
 
     def activate(self):
         self.active = True
@@ -784,6 +787,11 @@ class GpsTrackTab(BaseInfoTab):
                             ]
         self.canvas.bind(key_codes.EKeyHash, lambda: self.change_meters_per_px(1))
         self.canvas.bind(key_codes.EKeyStar, lambda: self.change_meters_per_px(-1))
+        self.canvas.bind(key_codes.EKey0, self.center)
+        self.canvas.bind(key_codes.EKeyRightArrow, lambda: self.move(1, 0))
+        self.canvas.bind(key_codes.EKeyLeftArrow, lambda: self.move(-1, 0))
+        self.canvas.bind(key_codes.EKeyUpArrow, lambda: self.move(0, -1))
+        self.canvas.bind(key_codes.EKeyDownArrow, lambda: self.move(0, 1))
         self.canvas.bind(key_codes.EKeySelect, self.save_poi)
         appuifw.app.menu.insert(0, (u"Send track via bluetooth", self.send_track))
         appuifw.app.menu.insert(0, (u"Send cellids via bluetooth", self.send_cellids))
@@ -794,9 +802,50 @@ class GpsTrackTab(BaseInfoTab):
         appuifw.app.menu.insert(0, (u"POIs Download", self.Main.download_pois_test))
         self.update()
 
+    def move(self, x, y):
+        """
+        TODO: make map movable
+        If there is not previous center point, 
+        create a new center from current point,
+        points per pixel and direction
+        """
+        if not self.center_pos:
+            if not self.Main.pos: # empty position, no gps connected since start
+                appuifw.note(u"No GPS", 'error')
+                return
+            if self.Main.has_fix(self.Main.pos):
+                self.center_pos = self.Main.pos
+            elif self.Main.has_fix(self.Main.data["position"][-1]):
+                self.center_pos = self.Main.data["position"][-1]
+            else:
+                appuifw.note(u"No FIX", 'error')
+                return
+        move_m = self.meters_per_px * 50
+        if (1,0) == (x,y):
+            # direction = u"east"
+            self.center_pos["position"]["e"] = self.center_pos["position"]["e"] + move_m
+            # TODO: calc lat and lon here too
+        elif (0,1) == (x,y):
+            # direction = u"south"
+            self.center_pos["position"]["n"] = self.center_pos["position"]["n"] - move_m
+            # TODO: calc lat and lon here too
+        elif (-1,0) == (x,y):
+            # direction = u"west"
+            self.center_pos["position"]["e"] = self.center_pos["position"]["e"] - move_m
+            # TODO: calc lat and lon here too
+        elif (0,-1) == (x,y):
+            # direction = u"north"
+            self.center_pos["position"]["n"] = self.center_pos["position"]["n"] + move_m
+            # TODO: calc lat and lon here too
+        self.update()
+
+    def center(self):
+        self.center_pos = {}
+        self.update()
+
     def set_meters_per_px(self, px):
         """
-        Set the scale of the track. Minimum is 1.
+        Set the scale of the track. Minimum is 0.
         """
         if px and px > 0:
             self.meters_per_px = px
@@ -930,7 +979,6 @@ class GpsTrackTab(BaseInfoTab):
         """
         Calculcate x- and y-coordiates for point p.
         p0 is the center point of the image.
-        FIXME: this doesn't consider UTM ZONE yet!
         """
         # is image neccessary?
         if not p.has_key("position") or not p["position"].has_key("e"): return
@@ -963,7 +1011,11 @@ class GpsTrackTab(BaseInfoTab):
         # Test polygon
         # self.ui.polygon([15,15,100,100,100,15,50,10], outline=0x0000ff, width=4)
         j = 0
-        p0 = self.Main.pos # the center point
+        pos = self.Main.pos # the current position during this update()
+        if self.center_pos:
+            p0 = self.center_pos
+        else:
+            p0 = pos # the center point
         # New style: use main apps data structures directly and _calculate_canvas_xy() to get pixel xy.
         # TODO: to a function
         for i in range(len(self.Main.data["position_debug"])-1, -1, -1):
@@ -1002,9 +1054,23 @@ class GpsTrackTab(BaseInfoTab):
         for p in self.Main.data["pois_downloaded"]:
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
             if p.has_key("x"):
-                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0xff00ff, width=5)
+                if p.has_key("seen"):
+                    pointcolor = 0xcccccc
+                    bordercolor = 0x999999
+                else:
+                    pointcolor = 0xff00ff
+                    bordercolor = 0x0000ff
+                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=pointcolor, width=5)
                 self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
-                                 (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=0x0000ff)
+                                 (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=bordercolor)
+                # Add "seen" key if user was near enough to the point
+                if Calculate.distance(pos["position"]["latitude"],
+                                      pos["position"]["longitude"],
+                                      p["position"]["latitude"],
+                                      p["position"]["longitude"],
+                                      ) < self.Main.config["estimated_error_radius"]:
+                    p["seen"] = 1
+
         for p in self.Main.data["gsm_location"]:
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
             if p.has_key("x"):
@@ -1014,7 +1080,7 @@ class GpsTrackTab(BaseInfoTab):
         ##############################################
         # Testing "status" bar. TODO: implement better, e.g. own function for status bar
         if self.Main.read_position_running:
-            if p0.has_key("position") and p0["position"]["latitude"] > 0: # TODO: create has_fix(p): bool -function
+            if self.Main.has_fix(pos):
                 self.ui.point([10, 10], outline=0x00ff00, width=10)
             else:
                 self.ui.point([10, 10], outline=0xffff00, width=10)
@@ -1026,21 +1092,22 @@ class GpsTrackTab(BaseInfoTab):
         # Testing the point estimation 
         # TODO: to a function
         if len(self.Main.data["position"]) > 0: 
-            pc = self.Main.pos
-            p0 = self.Main.data["position"][-1] # use the latest saved point in history
+            #pc = self.Main.pos
+            #p0 = self.Main.data["position"][-1] # use the latest saved point in history
             p = self.Main.pos_estimate
             err_radius = self.Main.config["estimated_error_radius"] # meters
             ell_r = err_radius / self.meters_per_px 
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
             if p.has_key("x"):
                 self.ui.ellipse([(p["x"]+center_x-ell_r,p["y"]+center_y-ell_r),
                                  (p["x"]+center_x+ell_r,p["y"]+center_y+ell_r)], outline=0x9999ff)
             # Draw accurancy circle
-            acc_radius = pc["position"]["horizontal_accuracy"]
+            # FIXME: this doesn't draw the circle to the current position, instead to the map center
+            acc_radius = pos["position"]["horizontal_accuracy"]
             if acc_radius > 0:
                 acc_r = acc_radius / self.meters_per_px 
                 self.ui.ellipse([(center_x-acc_r,center_y-acc_r),
-                                     (center_x+acc_r,center_y+acc_r)], outline=0xccffcc)
+                                 (center_x+acc_r,center_y+acc_r)], outline=0xccffcc)
             # see kludge part below:
             #self.ui.text(([10, 220]), u"%.1f km/h %.1f°" % (pc['course']['speed']*3.6, pc['course']['heading']), 
             #                          font=(u"Series 60 Sans", 20), fill=0x000000)
@@ -1058,6 +1125,9 @@ class GpsTrackTab(BaseInfoTab):
         self.canvas.text((2,39), u"Press joystick to save a POI", font=helpfont, fill=0x999999)
         self.canvas.text((2,51), u"Press * or # to zoom", font=helpfont, fill=0x999999)
         self.canvas.text((2,63), u"Debug %s" % self.Main.track_debug, font=helpfont, fill=0x999999)
+        if self.center_pos and self.center_pos["position"].has_key("e"):
+            self.canvas.text((2,75), u"E %.2f" % self.center_pos["position"]["e"], font=helpfont, fill=0x999999)
+        
         for p in self.Main.data["pois_private"]: # TODO: Remove this when image.text is fixed
             if p.has_key("x"):
                 self.canvas.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x000066)
@@ -1085,7 +1155,7 @@ class GpsTrackTab(BaseInfoTab):
         self.canvas.line([scale_bar_x, 15, scale_bar_x, 25], outline=0x0000ff, width=1)
         self.canvas.line([scale_bar_x + scale_bar_width, 15, scale_bar_x + scale_bar_width, 25], outline=0x0000ff, width=1)
         if len(self.Main.data["position"]) > 0: 
-            self.canvas.text(([10, 220]), u"%.1f km/h %.1f°" % (pc['course']['speed']*3.6, pc['course']['heading']), 
+            self.canvas.text(([10, 220]), u"%.1f km/h %.1f°" % (pos['course']['speed']*3.6, pos['course']['heading']), 
                                       font=(u"Series 60 Sans", 20), fill=0x000000)
         # KLUDGE part ends
         if self.active and self.Main.focus:
