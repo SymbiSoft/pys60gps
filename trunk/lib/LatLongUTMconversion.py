@@ -155,7 +155,7 @@ def _UTMLetterDesignator(Lat):
 #void UTMtoLL(int ReferenceEllipsoid, const double UTMNorthing, const double UTMEasting, const char* UTMZone,
 #			  double& Lat,  double& Long )
 
-def UTMtoLL(ReferenceEllipsoid, northing, easting, zone):
+def UTMtoLL(ReferenceEllipsoid, northing, easting, zone, LongOrigin=None):
 
 #converts UTM coords to lat/long.  Equations from USGS Bulletin 1532 
 #East Longitudes are positive, West longitudes are negative. 
@@ -173,15 +173,16 @@ def UTMtoLL(ReferenceEllipsoid, northing, easting, zone):
     x = easting - 500000.0 #remove 500,000 meter offset for longitude
     y = northing
 
-    ZoneLetter = zone[-1]
-    ZoneNumber = int(zone[:-1])
-    if ZoneLetter >= 'N':
-        NorthernHemisphere = 1  # point is in northern hemisphere
-    else:
-        NorthernHemisphere = 0  # point is in southern hemisphere
-        y -= 10000000.0         # remove 10,000,000 meter offset used for southern hemisphere
-
-    LongOrigin = (ZoneNumber - 1)*6 - 180 + 3  # +3 puts origin in middle of zone
+    if not LongOrigin:
+        ZoneLetter = zone[-1]
+        ZoneNumber = int(zone[:-1])
+        if ZoneLetter >= 'N':
+            NorthernHemisphere = 1  # point is in northern hemisphere
+        else:
+            NorthernHemisphere = 0  # point is in southern hemisphere
+            y -= 10000000.0         # remove 10,000,000 meter offset used for southern hemisphere
+    
+        LongOrigin = (ZoneNumber - 1)*6 - 180 + 3  # +3 puts origin in middle of zone
 
     eccPrimeSquared = (eccSquared)/(1-eccSquared)
 
