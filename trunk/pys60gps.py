@@ -781,6 +781,9 @@ class GpsTrackTab(BaseInfoTab):
         self.active = True
         appuifw.app.exit_key_handler = self.handle_close
         self.canvas = appuifw.Canvas(redraw_callback=self.update)
+        size = self.canvas.size
+        self.center_x = size[0]
+        self.center_y = size[1]
         self.ui = graphics.Image.new(self.canvas.size)
         appuifw.app.body = self.canvas
         appuifw.app.screen = "normal"
@@ -807,8 +810,14 @@ class GpsTrackTab(BaseInfoTab):
         self.update()
 
     def toggle(self, key):
+        """
+        Toggle (make visible/invisible) things on the canvas.
+        """
         if self.toggables.has_key(key):
-        	self.toggables[key] = not self.toggables[key]
+            self.toggables[key] = not self.toggables[key]
+            appuifw.note(u"Toggle %s is not implemented yet!" % key, 'error')
+        else:
+            appuifw.note(u"Togglekey %s is not found!" % key, 'error')
         
     def move(self, x, y):
         """
