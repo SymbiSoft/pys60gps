@@ -10,6 +10,7 @@ import e32
 import socket
 import sysinfo
 import time
+import copy
 import positioning
 import location
 import key_codes
@@ -765,15 +766,16 @@ class TrackView(BaseView):
 class GpsTrackTab(BaseInfoTab):
     """
     Print the track on the canvas.
-    TODO: flickering exists if there is over 40 trackpoints to draw. 
-    TODO: Use Image and blit to avoid flickering.
     """
     meters_per_px = 5
     #pois = []
     # Are zoom_levels below 1.0 needeed?
-    zoom_levels = [0.125,0.25,0.5,1,2,3,5,8,12,16,20,30,50,80,100,150,250,400,600,1000,2000,5000,10000]
-    zoom_index = 7
+    zoom_levels = [0.0675,0.125,0.25,0.5,1,2,3,5,8,12,16,20,30,50,80,100,150,250,400,600,1000,2000,5000,10000]
+    zoom_index = 8
     center_pos = {}
+    toggables = {"track":True,
+                 "cellid":False,
+                }
 
     def activate(self):
         self.active = True
@@ -793,6 +795,8 @@ class GpsTrackTab(BaseInfoTab):
         self.canvas.bind(key_codes.EKeyUpArrow, lambda: self.move(0, -1))
         self.canvas.bind(key_codes.EKeyDownArrow, lambda: self.move(0, 1))
         self.canvas.bind(key_codes.EKeySelect, self.save_poi)
+        self.canvas.bind(key_codes.EKey1, lambda: self.toggle("track"))
+        self.canvas.bind(key_codes.EKey2, lambda: self.toggle("cellid"))
         appuifw.app.menu.insert(0, (u"Send track via bluetooth", self.send_track))
         appuifw.app.menu.insert(0, (u"Send cellids via bluetooth", self.send_cellids))
         appuifw.app.menu.insert(0, (u"Send debug track via bluetooth", self.send_debug))
@@ -802,6 +806,10 @@ class GpsTrackTab(BaseInfoTab):
         appuifw.app.menu.insert(0, (u"POIs Download", self.Main.download_pois_test))
         self.update()
 
+    def toggle(self, key):
+        if self.toggables.has_key(key):
+        	self.toggables[key] = not self.toggables[key]
+        
     def move(self, x, y):
         """
         TODO: make map movable
@@ -814,9 +822,9 @@ class GpsTrackTab(BaseInfoTab):
                 appuifw.note(u"No GPS", 'error')
                 return
             if self.Main.has_fix(self.Main.pos):
-                self.center_pos = self.Main.pos
+                self.center_pos = copy.deepcopy(self.Main.pos)
             elif self.Main.has_fix(self.Main.data["position"][-1]):
-                self.center_pos = self.Main.data["position"][-1]
+                self.center_pos = copy.deepcopy(self.Main.data["position"][-1])
             else:
                 appuifw.note(u"No FIX", 'error')
                 return
@@ -840,6 +848,9 @@ class GpsTrackTab(BaseInfoTab):
         self.update()
 
     def center(self):
+        """
+        Reset center_pos so current position is the center again.
+        """
         self.center_pos = {}
         self.update()
 
@@ -998,8 +1009,6 @@ class GpsTrackTab(BaseInfoTab):
         center_x = 120
         center_y = 120
         # TODO: cleanup here!
-        # TODO: do separate functions for these instead
-        #lines, track, pois = self._get_lines()
         self.ui.clear()
         # Print some information about track
         mdist = self.Main.min_trackpoint_distance
@@ -1012,21 +1021,23 @@ class GpsTrackTab(BaseInfoTab):
         # self.ui.polygon([15,15,100,100,100,15,50,10], outline=0x0000ff, width=4)
         j = 0
         pos = self.Main.pos # the current position during this update()
+        # p0 is the current center point
         if self.center_pos:
             p0 = self.center_pos
         else:
-            p0 = pos # the center point
+            p0 = pos
         # New style: use main apps data structures directly and _calculate_canvas_xy() to get pixel xy.
         # TODO: to a function
         for i in range(len(self.Main.data["position_debug"])-1, -1, -1):
             j = j + 1
-            if j > 20: break # draw only last x debug points
+            if j > 60: break # draw only last x debug points
             p = self.Main.data["position_debug"][i]
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
-            try:
+            #try:
+            if self.Main.has_fix(p):
                 self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0xffff00, width=7)
-            except: 
-                pass
+            #except: 
+            #    pass
             
         # Draw track if it exists
         # TODO: all of these loops to a function
