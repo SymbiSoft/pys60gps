@@ -15,6 +15,8 @@ import positioning
 import location
 import key_codes
 import graphics
+import audio
+
 import LatLongUTMconversion
 import Calculate
 import pys60_json as json
@@ -99,6 +101,7 @@ class GpsApp:
         self.listbox = appuifw.Listbox(self.main_menu, self.handle_select)
         self._select_access_point()
         self.activate()
+        self.beep = self.get_tone(freq=440, duration=500, volume=1.0)
 
     def _select_access_point(self):
         """
@@ -470,6 +473,25 @@ class GpsApp:
         self.running = False
         appuifw.app.exit_key_handler = None
         appuifw.app.set_tabs([u"Back to normal"], lambda x: None)
+
+    def get_tone(self, freq=440, duration=1000, volume=0.5):
+        from struct import pack
+        from math import sin, pi
+        f = open('D:\\tmptone.au', 'wb')    # temp file
+        f.write('.snd' + pack('>5L', 24, 8*duration, 2, 8000, 1))  #header
+        for i in range(duration*8):
+            sin_i = sin(i * 2*pi*freq/8000)  # sine wave
+            f.write(pack('b', volume*127*sin_i))
+        f.close()
+        # now play the file
+        s = audio.Sound.open('D:\\tmptone.au')
+        return s
+    
+    def play_tone(self):
+        if self.beep.state() == audio.EPlaying:
+            return
+            #sound_barf.stop()
+        self.beep.play()
 
 ################### BASE VIEW START #######################
 
@@ -1063,6 +1085,8 @@ class GpsTrackTab(BaseInfoTab):
             p1 = p
         # Draw POIs if there are any
         # TODO: to a function
+        poi_width = 20 / self.meters_per_px # show pois relative to zoom level
+        if poi_width < 1: poi_width = 1
         for p in self.Main.data["pois_private"]:
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
             if p.has_key("x"):
@@ -1070,33 +1094,39 @@ class GpsTrackTab(BaseInfoTab):
                 self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
                                  (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=0x0000ff)
                 # There is a bug in image.text (fixed in 1.4.4?), so text must be drawn straight to the canvas
-                # self.ui.text(([t["x"]+130, t["y"]+125]), u"%s" % t["text"], font=(u"Series 60 Sans", 10), fill=0x000000)
+                self.ui.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x6666ff)
         for p in self.Main.data["pois_downloaded"]:
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
             if p.has_key("x"):
-                if p.has_key("seen"):
-                    pointcolor = 0xcccccc
-                    bordercolor = 0x999999
-                else:
-                    pointcolor = 0xff00ff
-                    bordercolor = 0x0000ff
-                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=pointcolor, width=5)
-                self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
-                                 (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=bordercolor)
                 # Add "seen" key if user was near enough to the point
                 if Calculate.distance(pos["position"]["latitude"],
                                       pos["position"]["longitude"],
                                       p["position"]["latitude"],
                                       p["position"]["longitude"],
-                                      ) < self.Main.config["estimated_error_radius"]:
+                                      ) < 20: # temporary hardcoded
+                                      # self.Main.config["estimated_error_radius"]
+                    if not p.has_key("seen"): # play only the first time
+                        self.Main.play_tone()
                     p["seen"] = 1
 
+                    # TODO: say beep here!
+                if p.has_key("seen"):
+                    pointcolor = 0xcccccc
+                    bordercolor = 0x999999
+                else:
+                    pointcolor = 0x660000
+                    bordercolor = 0x0000ff
+                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=pointcolor, width=poi_width)
+                #self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
+                #                 (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=bordercolor)
+                self.ui.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x666600)
         for p in self.Main.data["gsm_location"]:
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
             if p.has_key("x"):
-                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x0000ff, width=5)
-                self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
-                                 (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=0x0000ff)
+                self.ui.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x9999ff)
+                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x3333ff, width=poi_width)
+                #self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
+                #                 (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=0x9999ff)
         ##############################################
         # Testing "status" bar. TODO: implement better, e.g. own function for status bar
         if self.Main.read_position_running:
@@ -1148,15 +1178,12 @@ class GpsTrackTab(BaseInfoTab):
         if self.center_pos and self.center_pos["position"].has_key("e"):
             self.canvas.text((2,75), u"E %.2f" % self.center_pos["position"]["e"], font=helpfont, fill=0x999999)
         
-        for p in self.Main.data["pois_private"]: # TODO: Remove this when image.text is fixed
-            if p.has_key("x"):
-                self.canvas.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x000066)
-        for p in self.Main.data["pois_downloaded"]: # TODO: Remove this when image.text is fixed
-            if p.has_key("x"):
-                self.canvas.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x666600)
-        for p in self.Main.data["gsm_location"]: # TODO: Remove this when image.text is fixed
-            if p.has_key("x"):
-                self.canvas.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x000066)
+        #for p in self.Main.data["pois_private"]: # TODO: Remove this when image.text is fixed
+        #    if p.has_key("x"):
+        #        self.canvas.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x000066)
+        #for p in self.Main.data["pois_downloaded"]: # TODO: Remove this when image.text is fixed
+        #    if p.has_key("x"):
+        #        self.canvas.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x666600)
         scale_bar_width = 50 # pixels
         scale_bar_x = 150    # x location
         scale_bar_y = 20     # y location
