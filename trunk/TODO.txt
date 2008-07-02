@@ -4,9 +4,9 @@ Short term TODOs:
 
 Track:
 - send track data to the server!
-- save new point if heading changes at least xx° 
-  AND the distance to the previous point is at least y meters
-- scrollable map with direction key
++ save new point if heading changes at least xx° 
++ AND the distance to the previous point is at least y meters
++ scrollable map with direction key
 - quick keys to show/hide entities (POIs, track, cellids) on the screen
 
 Data:
