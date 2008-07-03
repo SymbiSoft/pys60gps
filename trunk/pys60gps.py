@@ -828,7 +828,16 @@ class GpsTrackTab(BaseInfoTab):
         appuifw.app.menu.insert(0, (u"Set meters/pixel", 
                                     lambda:self.set_meters_per_px(appuifw.query(u"Meters","number", self.meters_per_px))))
         appuifw.app.menu.insert(0, (u"Add POI", self.save_poi))
-        appuifw.app.menu.insert(0, (u"POIs Download", self.Main.download_pois_test))
+        appuifw.app.menu.insert(0, (u"POIs Download", self.download_pois_test))
+        self.update()
+
+    def download_pois_test(self):
+        self.active = False # FIXME: this shoud be inactive only when query dialog is open
+        # Perhaps self.Main.download_pois_test() could take "this" as an argument: 
+        # self.Main.download_pois_test(self)
+        # and when query is open, Main could set view.active = False
+        self.Main.download_pois_test()
+        self.active = True
         self.update()
 
     def toggle(self, key):
@@ -1087,6 +1096,7 @@ class GpsTrackTab(BaseInfoTab):
         # TODO: to a function
         poi_width = 20 / self.meters_per_px # show pois relative to zoom level
         if poi_width < 1: poi_width = 1
+        if poi_width > 20: poi_width = 20
         for p in self.Main.data["pois_private"]:
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
             if p.has_key("x"):
@@ -1094,12 +1104,12 @@ class GpsTrackTab(BaseInfoTab):
                 self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
                                  (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=0x0000ff)
                 # There is a bug in image.text (fixed in 1.4.4?), so text must be drawn straight to the canvas
-                self.ui.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x6666ff)
+                self.ui.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x9999ff)
         for p in self.Main.data["pois_downloaded"]:
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
             if p.has_key("x"):
                 # Add "seen" key if user was near enough to the point
-                if Calculate.distance(pos["position"]["latitude"],
+                if not p.has_key("seen") and Calculate.distance(pos["position"]["latitude"],
                                       pos["position"]["longitude"],
                                       p["position"]["latitude"],
                                       p["position"]["longitude"],
@@ -1123,8 +1133,8 @@ class GpsTrackTab(BaseInfoTab):
         for p in self.Main.data["gsm_location"]:
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
             if p.has_key("x"):
-                self.ui.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x9999ff)
-                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x3333ff, width=poi_width)
+                self.ui.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0xccccff)
+                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x9999ff, width=poi_width)
                 #self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
                 #                 (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=0x9999ff)
         ##############################################
@@ -1163,48 +1173,22 @@ class GpsTrackTab(BaseInfoTab):
             #                          font=(u"Series 60 Sans", 20), fill=0x000000)
         ###########################################
         # Draw scale bar
-        # see kludge part below
-        # self.draw_scalebar(self.ui)
+        self.draw_scalebar(self.ui)
 
-        # KLUDGE: image.text() workarounds, remove when the bug is fixed! (1.4.4?)
-        self.canvas.blit(self.ui)
-        self.canvas.text((2,15), u"%d m between points" % mdist, font=helpfont, fill=0x999999)
-        self.canvas.text((2,27), u"%d/%d points in history" % 
+        self.ui.text((2,15), u"%d m between points" % mdist, font=helpfont, fill=0x999999)
+        self.ui.text((2,27), u"%d/%d points in history" % 
              (len(self.Main.data["position"]), self.Main.max_trackpoints), font=helpfont, fill=0x999999)
         
-        self.canvas.text((2,39), u"Press joystick to save a POI", font=helpfont, fill=0x999999)
-        self.canvas.text((2,51), u"Press * or # to zoom", font=helpfont, fill=0x999999)
-        self.canvas.text((2,63), u"Debug %s" % self.Main.track_debug, font=helpfont, fill=0x999999)
+        self.ui.text((2,39), u"Press joystick to save a POI", font=helpfont, fill=0x999999)
+        self.ui.text((2,51), u"Press * or # to zoom", font=helpfont, fill=0x999999)
+        self.ui.text((2,63), u"Debug %s" % self.Main.track_debug, font=helpfont, fill=0x999999)
         if self.center_pos and self.center_pos["position"].has_key("e"):
-            self.canvas.text((2,75), u"E %.2f" % self.center_pos["position"]["e"], font=helpfont, fill=0x999999)
-        
-        #for p in self.Main.data["pois_private"]: # TODO: Remove this when image.text is fixed
-        #    if p.has_key("x"):
-        #        self.canvas.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x000066)
-        #for p in self.Main.data["pois_downloaded"]: # TODO: Remove this when image.text is fixed
-        #    if p.has_key("x"):
-        #        self.canvas.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x666600)
-        scale_bar_width = 50 # pixels
-        scale_bar_x = 150    # x location
-        scale_bar_y = 20     # y location
-        scale_value = scale_bar_width * self.meters_per_px
-        if scale_value > 1000: 
-            scale_text = u"%.1f km" % (scale_value / 1000.0)
-        else:
-            scale_text = u"%d m" % (scale_value)
-        if self.meters_per_px >= 1.0:
-            mppx_text = u"%d m/px" % self.meters_per_px
-        else:
-            mppx_text = u"%.2f m/px" % self.meters_per_px
-        self.canvas.text((scale_bar_x + 5, 18), scale_text, font=(u"Series 60 Sans", 10), fill=0x333333)
-        self.canvas.text((scale_bar_x + 5, 32), mppx_text, font=(u"Series 60 Sans", 10), fill=0x333333)
-        self.canvas.line([scale_bar_x, 20, scale_bar_x + scale_bar_width, 20], outline=0x0000ff, width=1)
-        self.canvas.line([scale_bar_x, 15, scale_bar_x, 25], outline=0x0000ff, width=1)
-        self.canvas.line([scale_bar_x + scale_bar_width, 15, scale_bar_x + scale_bar_width, 25], outline=0x0000ff, width=1)
+            self.ui.text((2,75), u"E %.2f" % self.center_pos["position"]["e"], font=helpfont, fill=0x999999)
+
         if len(self.Main.data["position"]) > 0: 
-            self.canvas.text(([10, 220]), u"%.1f km/h %.1f°" % (pos['course']['speed']*3.6, pos['course']['heading']), 
+            self.ui.text(([10, 220]), u"%.1f km/h %.1f°" % (pos['course']['speed']*3.6, pos['course']['heading']), 
                                       font=(u"Series 60 Sans", 20), fill=0x000000)
-        # KLUDGE part ends
+        self.canvas.blit(self.ui)
         if self.active and self.Main.focus:
             self.t.after(0.5, self.update)
 
