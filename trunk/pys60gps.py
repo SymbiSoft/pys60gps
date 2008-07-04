@@ -37,15 +37,6 @@ class GpsApp:
         self.read_position_running = False
         self.downloading_pois_test = False # TEMP
         self.apid = None # Default access point
-        # Configuration/settings
-        self.config = {} # TODO: read these from a configuration file
-        # TODO: self.config = self.read_config()
-        self.config["max_speed_history_points"] = 200
-        self.config["min_trackpoint_distance"] = 300 # meters
-        self.config["estimated_error_radius"] = 20 # meters
-        self.config["max_trackpoints"] = 500
-        self.config["max_debugpoints"] = 500
-        self.config["track_debug"] = False
         # Create a directory to contain all gathered and downloaded data. Note '\\' in the first argument.
         self.datadir = os.path.join(u"C:\\Data", u"Pys60Gps")
         if not os.path.exists(self.datadir):
@@ -54,6 +45,10 @@ class GpsApp:
         self.cachedir = u"D:\\Pys60Gps"
         if not os.path.exists(self.cachedir):
             os.makedirs(self.cachedir)
+        # Configuration/settings
+        self.config_file = os.path.join(self.datadir, "settings.ini")
+        self.config = {} # TODO: read these from a configuration file
+        self.read_config()
         # Center meridian
         self.LongOrigin = None
         # Data-repository
@@ -85,9 +80,6 @@ class GpsApp:
         self.data["pois_downloaded"].append(pos)
         # temporary solution to handle speed data (to be removed/changed)
         self.speed_history = []
-        self.min_trackpoint_distance = 300 # TODO: REMOVE
-        self.max_trackpoints = 500 # TODO: REMOVE
-        self.track_debug = False # TODO: REMOVE
         # Put all menu entries and views as tuples into a sequence
         self.menu_entries = []
         self.menu_entries.append(((u"Track"), TrackView(self)))
@@ -114,6 +106,41 @@ class GpsApp:
         if self.apid:
             self.apo = socket.access_point(self.apid)
             socket.set_default_access_point(self.apo)
+
+    def read_config(self):
+        data = {}
+        try:
+            f = open(self.config_file, "rt")
+            data = eval(f.read())
+            #data = f.read()
+            f.close()
+        except:
+            appuifw.note(u"Can't open saved settings. Generating new one with predefined values.", 'error')
+            # raise
+        defaults = {
+            "max_speed_history_points" : 200,
+            "min_trackpoint_distance" : 300, # meters
+            "estimated_error_radius" : 20, # meters
+            "max_trackpoints" : 500, 
+            "max_debugpoints" : 500, 
+            "track_debug" : False,
+        }
+        # TODO: here asking values if some is mandatory
+        for key in defaults.keys():
+            if data.has_key(key):
+                defaults[key] = data[key]
+        self.config = defaults
+        ##self.config["max_speed_history_points"] = 200
+        #self.config["min_trackpoint_distance"] = 300 # meters
+        #self.config["estimated_error_radius"] = 20 # meters
+        #self.config["max_trackpoints"] = 500
+        #self.config["max_debugpoints"] = 500
+        #self.config["track_debug"] = False
+        
+    def save_config(self):
+        f = open(self.config_file, "wt")
+        f.write(repr(self.config))
+        f.close()
 
     def download_pois_test(self, pos = None):
         """
@@ -143,7 +170,11 @@ class GpsApp:
             f.close()
             for pos in pois:
                 self._calculate_UTM(pos)
-                pos["text"] = pos["text"].decode("utf-8")
+                try:
+                    pos["text"] = pos["text"].decode("utf-8")
+                except:
+                    pos["text"] = u"Decode_failed!"
+                    raise
             self.data["pois_downloaded"] = pois
         except Exception, error:
             appuifw.note(unicode(error), 'error')
@@ -163,10 +194,10 @@ class GpsApp:
         appuifw.app.menu = [
             (u"Select",self.handle_select),
             (u"GPS %s" % (gps_onoff),self.start_read_position),
-            (u"Max trackpoints (%d)" % self.max_trackpoints, 
-                  lambda:self.set_max_trackpoints(appuifw.query(u"Max points","number", self.max_trackpoints))),
-            (u"Set trackpoint dist (%d)" % self.min_trackpoint_distance, 
-                  lambda:self.set_trackpoint_distance(appuifw.query(u"Trackpoint dist","number", self.min_trackpoint_distance))),
+            (u"Max trackpoints (%d)" % self.config["max_trackpoints"], 
+                  lambda:self.set_max_trackpoints(appuifw.query(u"Max points","number", self.config["max_trackpoints"]))),
+            (u"Set trackpoint dist (%d)" % self.config["min_trackpoint_distance"], 
+                  lambda:self.set_trackpoint_distance(appuifw.query(u"Trackpoint dist","number", self.config["min_trackpoint_distance"]))),
             (u"Set estimation error (%d)" % self.config["estimated_error_radius"], 
                   lambda:self.set_estimate_error(appuifw.query(u"Estimate error","number", self.config["estimated_error_radius"]))),
             #set_trackpoint_distance_menu,
@@ -197,20 +228,22 @@ class GpsApp:
 
     def set_trackpoint_distance(self, distance):
         if distance is not None:
-            self.min_trackpoint_distance = distance
             self.config["min_trackpoint_distance"] = distance
+            self.save_config()
 
     def set_max_trackpoints(self, max):
         if max and max > 0:
-            self.max_trackpoints = max
             self.config["max_trackpoints"] = max
+            self.save_config()
 
     def set_estimate_error(self, meters):
         if meters and meters >= 0:
             self.config["estimated_error_radius"] = meters
+            self.save_config()
 
     def toggle_debug(self):
-        self.track_debug = not self.track_debug # Toggle true <-> false
+        self.config["track_debug"] = not self.config["track_debug"] # Toggle true <-> false
+        self.save_config()
 
     def send_file_over_bluetooth(self, filename):
         """
@@ -339,7 +372,7 @@ class GpsApp:
             return False
 
     def has_fix(self, pos):
-        """Return True is pos has a fix."""
+        """Return True if pos has a fix."""
         if pos.has_key("position") and  pos["position"].has_key("latitude") and str(pos["position"]["latitude"]) != "NaN":
             return True
         else:
@@ -353,7 +386,7 @@ class GpsApp:
         TODO: Save the track data (to a file) automatically for future use.
         """
         pos["systime"] = time.time()
-        if self.track_debug:
+        if self.config["track_debug"]:
             self.data["position_debug"].append(pos)
             if len(self.data["position_debug"]) > self.config["max_debugpoints"]:
                 self.data["position_debug"].pop(0)
@@ -410,7 +443,7 @@ class GpsApp:
                 self.data["position"].append(pos)
             # If the dinstance exceeds the treshold, save the position object to the history list
             # TODO: think which is the best order of these (most probable to the first place)
-            if   (dist > self.min_trackpoint_distance) \
+            if   (dist > self.config["min_trackpoint_distance"]) \
               or ((dist > mindist) and (dist_estimate > self.config["estimated_error_radius"])) \
               or ((dist > mindist) and (anglediff > minanglediff)) \
               or (timediff > maxtimediff): 
@@ -1051,7 +1084,7 @@ class GpsTrackTab(BaseInfoTab):
         # TODO: cleanup here!
         self.ui.clear()
         # Print some information about track
-        mdist = self.Main.min_trackpoint_distance
+        mdist = self.Main.config["min_trackpoint_distance"]
         helpfont = (u"Series 60 Sans", 12)
         # Draw crosshair
         # TODO: draw arrow
@@ -1177,11 +1210,11 @@ class GpsTrackTab(BaseInfoTab):
 
         self.ui.text((2,15), u"%d m between points" % mdist, font=helpfont, fill=0x999999)
         self.ui.text((2,27), u"%d/%d points in history" % 
-             (len(self.Main.data["position"]), self.Main.max_trackpoints), font=helpfont, fill=0x999999)
+             (len(self.Main.data["position"]), self.Main.config["max_trackpoints"]), font=helpfont, fill=0x999999)
         
         self.ui.text((2,39), u"Press joystick to save a POI", font=helpfont, fill=0x999999)
         self.ui.text((2,51), u"Press * or # to zoom", font=helpfont, fill=0x999999)
-        self.ui.text((2,63), u"Debug %s" % self.Main.track_debug, font=helpfont, fill=0x999999)
+        self.ui.text((2,63), u"Debug %s" % self.Main.config["track_debug"], font=helpfont, fill=0x999999)
         if self.center_pos and self.center_pos["position"].has_key("e"):
             self.ui.text((2,75), u"E %.2f" % self.center_pos["position"]["e"], font=helpfont, fill=0x999999)
 
