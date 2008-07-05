@@ -91,8 +91,8 @@ class GpsApp:
         self.views = [item[1] for item in self.menu_entries]
         # Create a listbox from main_menu and set select-handler
         self.listbox = appuifw.Listbox(self.main_menu, self.handle_select)
-        self._select_access_point()
         self.activate()
+        self._select_access_point()
         self.beep = self.get_tone(freq=440, duration=500, volume=1.0)
 
     def _select_access_point(self):
@@ -117,6 +117,7 @@ class GpsApp:
         except:
             appuifw.note(u"Can't open saved settings. Generating new one with predefined values.", 'error')
             # raise
+        # List here ALL POSSIBLE configuration keys, so they will be initialized
         defaults = {
             "max_speed_history_points" : 200,
             "min_trackpoint_distance" : 300, # meters
@@ -124,18 +125,38 @@ class GpsApp:
             "max_trackpoints" : 500, 
             "max_debugpoints" : 500, 
             "track_debug" : False,
+            "username" : None,
+            "group" : None,
         }
-        # TODO: here asking values if some is mandatory
+        # List here all configuration keys, which must be defined before use
+        mandatory = {
+            "username" : {"querytext" : u"Give nickname", 
+                          "valuetype" : "text", 
+                          "default" : u'',
+                          "canceltext" : u'Nickname is mandatory',
+                          },
+            "group"    : {"querytext" : u"Give group name (cancel for default group)", 
+                          "valuetype" : "text", 
+                          "default" : u'',
+                          "canceltext" : None,
+                          },
+        }
         for key in defaults.keys():
             if data.has_key(key):
                 defaults[key] = data[key]
+            elif mandatory.has_key(key) and defaults[key] is None:
+                value = None
+                while value is None:
+                    value = appuifw.query(mandatory[key]["querytext"], 
+                                          mandatory[key]["valuetype"], 
+                                          mandatory[key]["default"])
+                    if value is None and mandatory[key]["canceltext"]:
+                        appuifw.note(mandatory[key]["canceltext"], 'error')
+                    elif value is None:
+                        value = u""
+ 
         self.config = defaults
-        ##self.config["max_speed_history_points"] = 200
-        #self.config["min_trackpoint_distance"] = 300 # meters
-        #self.config["estimated_error_radius"] = 20 # meters
-        #self.config["max_trackpoints"] = 500
-        #self.config["max_debugpoints"] = 500
-        #self.config["track_debug"] = False
+        self.save_config()
         
     def save_config(self):
         f = open(self.config_file, "wt")
@@ -191,16 +212,23 @@ class GpsApp:
             gps_onoff = u"OFF"
         else:
             gps_onoff = u"ON"
-        appuifw.app.menu = [
-            (u"Select",self.handle_select),
-            (u"GPS %s" % (gps_onoff),self.start_read_position),
+        set_menu=(u"Set", (
             (u"Max trackpoints (%d)" % self.config["max_trackpoints"], 
-                  lambda:self.set_max_trackpoints(appuifw.query(u"Max points","number", self.config["max_trackpoints"]))),
-            (u"Set trackpoint dist (%d)" % self.config["min_trackpoint_distance"], 
-                  lambda:self.set_trackpoint_distance(appuifw.query(u"Trackpoint dist","number", self.config["min_trackpoint_distance"]))),
-            (u"Set estimation error (%d)" % self.config["estimated_error_radius"], 
-                  lambda:self.set_estimate_error(appuifw.query(u"Estimate error","number", self.config["estimated_error_radius"]))),
-            #set_trackpoint_distance_menu,
+                lambda:self.set_config_var(u"Max points", "number", "max_trackpoints")),
+            (u"Trackpoint dist (%d)" % self.config["min_trackpoint_distance"], 
+                lambda:self.set_config_var(u"Trackpoint dist", "number", "min_trackpoint_distance")),
+            (u"Estimation circle (%d)" % self.config["estimated_error_radius"], 
+                lambda:self.set_config_var(u"Estimation circle", "number", "estimated_error_radius")),
+            (u"Nickname (%s)" % self.config["username"], 
+                lambda:self.set_config_var(u"Nickname", "text", "username")),
+            (u"Group (%s)" % self.config["group"], 
+                lambda:self.set_config_var(u"Group", "text", "group")),
+        ))
+            
+        appuifw.app.menu = [
+            (u"GPS %s" % (gps_onoff),self.start_read_position),
+            (u"Select",self.handle_select),
+            set_menu,
             (u"Toggle debug",self.toggle_debug),
             (u"Reboot",self.reboot),
             (u"Version", lambda:appuifw.note(self.__version__, 'info')),
@@ -226,20 +254,19 @@ class GpsApp:
         """Callback for appuifw.app.focus"""
         self.focus = bg
 
-    def set_trackpoint_distance(self, distance):
-        if distance is not None:
-            self.config["min_trackpoint_distance"] = distance
+    def set_config_var(self, text, valuetype, key):
+        """Set a configuration parameter."""
+        if not self.config.has_key(key):
+            appuifw.note(u"Configutation key '%s' is not defined" % (key), 'error')
+            return
+        value = appuifw.query(text, valuetype, self.config[key])
+        if value is not None:
+            self.config[key] = value
             self.save_config()
-
-    def set_max_trackpoints(self, max):
-        if max and max > 0:
-            self.config["max_trackpoints"] = max
-            self.save_config()
-
-    def set_estimate_error(self, meters):
-        if meters and meters >= 0:
-            self.config["estimated_error_radius"] = meters
-            self.save_config()
+            self._update_menu()
+        else: 
+            # TODO: ASK here instead if user wants to reset this configuration parameter
+            appuifw.note(u"Setting configutation key '%s' cancelled" % (key), 'info')
 
     def toggle_debug(self):
         self.config["track_debug"] = not self.config["track_debug"] # Toggle true <-> false
