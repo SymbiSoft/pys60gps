@@ -154,7 +154,7 @@ class GpsApp:
                         appuifw.note(mandatory[key]["canceltext"], 'error')
                     elif value is None:
                         value = u""
- 
+                defaults[key] = value
         self.config = defaults
         self.save_config()
         
