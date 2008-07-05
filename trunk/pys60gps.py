@@ -2,11 +2,21 @@
 # $Id$
 
 # TODO: import topwindow and splashscreen here
-import sys
-import os.path
+
 import appuifw
 appuifw.app.orientation = 'portrait'
+
+#### STARTUP "splash screen"
+def startup_screen(dummy=(0, 0, 0, 0)):
+    pass
+canvas = appuifw.Canvas(redraw_callback=startup_screen)
+appuifw.app.body = canvas
+canvas.text((10, 100), u"Starting up", font=(u"Series 60 Sans", 30), fill=0x333333)
 import e32
+e32.ao_sleep(0.05) # Wait until the canvas has been drawn
+
+import sys
+import os.path
 import socket
 import sysinfo
 import time
@@ -127,6 +137,7 @@ class GpsApp:
             "track_debug" : False,
             "username" : None,
             "group" : None,
+            "url" : u"http://www.plok.in/poi.php",
         }
         # List here all configuration keys, which must be defined before use
         mandatory = {
@@ -142,17 +153,17 @@ class GpsApp:
                           },
         }
         for key in defaults.keys():
-            if data.has_key(key):
+            if data.has_key(key): # Use the value found from the data
                 defaults[key] = data[key]
-            elif mandatory.has_key(key) and defaults[key] is None:
+            elif mandatory.has_key(key) and defaults[key] is None: # Ask mandatory values from the user
                 value = None
                 while value is None:
                     value = appuifw.query(mandatory[key]["querytext"], 
                                           mandatory[key]["valuetype"], 
                                           mandatory[key]["default"])
-                    if value is None and mandatory[key]["canceltext"]:
+                    if value is None and mandatory[key]["canceltext"]: 
                         appuifw.note(mandatory[key]["canceltext"], 'error')
-                    elif value is None:
+                    elif value is None: # If canceltext is u"", change value None to u""
                         value = u""
                 defaults[key] = value
         self.config = defaults
@@ -162,6 +173,18 @@ class GpsApp:
         f = open(self.config_file, "wt")
         f.write(repr(self.config))
         f.close()
+
+    def reset_config(self):
+        if appuifw.query(u'Confirm configuration reset', 'query') is True:
+            os.remove(self.config_file)
+            # TODO: create combined exit handler
+            self.save_log_cache("track")
+            self.save_log_cache("cellid") 
+            appuifw.note(u"You need to restart program now.", 'info')
+            self.running = False
+            self.lock.signal()
+            appuifw.app.exit_key_handler = None
+            appuifw.app.set_tabs([u"Back to normal"], lambda x: None)
 
     def download_pois_test(self, pos = None):
         """
@@ -182,7 +205,7 @@ class GpsApp:
         e32.ao_sleep(0.05) # let the querypopup disappear
         params = urllib.urlencode(params)
         try: # FIXME: hardcoded url TODO: centralized communication to the server
-            f = urllib.urlopen("http://www.plok.in/poi.php", params)
+            f = urllib.urlopen(self.config["url"], params)
             jsondata = f.read() 
             # print jsondata.decode("utf-8")
             # NOTE: all strings in "pois" are now plain utf-8 encoded strings
@@ -223,6 +246,9 @@ class GpsApp:
                 lambda:self.set_config_var(u"Nickname", "text", "username")),
             (u"Group (%s)" % self.config["group"], 
                 lambda:self.set_config_var(u"Group", "text", "group")),
+            (u"URL (%s)" % self.config["url"], 
+                lambda:self.set_config_var(u"Url (for server connections)", "text", "url")),
+            (u"Reset all values", self.reset_config),
         ))
             
         appuifw.app.menu = [
@@ -265,7 +291,8 @@ class GpsApp:
             self.save_config()
             self._update_menu()
         else: 
-            # TODO: ASK here instead if user wants to reset this configuration parameter
+            # TODO: Instead ASK here if user wants to reset this configuration parameter.
+            # defaults need to be global then?
             appuifw.note(u"Setting configutation key '%s' cancelled" % (key), 'info')
 
     def toggle_debug(self):
@@ -850,6 +877,7 @@ class GpsTrackTab(BaseInfoTab):
     Print the track on the canvas.
     """
     meters_per_px = 5
+    seen_counter = 0
     #pois = []
     # Are zoom_levels below 1.0 needeed?
     zoom_levels = [0.0675,0.125,0.25,0.5,1,2,3,5,8,12,16,20,30,50,80,100,150,250,400,600,1000,2000,5000,10000]
@@ -1177,6 +1205,7 @@ class GpsTrackTab(BaseInfoTab):
                                       # self.Main.config["estimated_error_radius"]
                     if not p.has_key("seen"): # play only the first time
                         self.Main.play_tone()
+                        self.seen_counter = self.seen_counter + 1
                     p["seen"] = 1
 
                     # TODO: say beep here!
@@ -1242,6 +1271,9 @@ class GpsTrackTab(BaseInfoTab):
         self.ui.text((2,39), u"Press joystick to save a POI", font=helpfont, fill=0x999999)
         self.ui.text((2,51), u"Press * or # to zoom", font=helpfont, fill=0x999999)
         self.ui.text((2,63), u"Debug %s" % self.Main.config["track_debug"], font=helpfont, fill=0x999999)
+        if self.seen_counter > 0:
+            self.ui.text((100,63), u"Eaten %d" % self.seen_counter, font=helpfont, fill=0x999999)
+        
         if self.center_pos and self.center_pos["position"].has_key("e"):
             self.ui.text((2,75), u"E %.2f" % self.center_pos["position"]["e"], font=helpfont, fill=0x999999)
 
