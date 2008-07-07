@@ -1,4 +1,4 @@
-# -*- coding: iso-8859-15 -*-
+# -*- coding: iso-8859-1 -*-
 # $Id$
 
 import appuifw
@@ -214,7 +214,9 @@ class GpsApp:
                 try:
                     pos["text"] = pos["text"].decode("utf-8")
                 except:
-                    pos["text"] = u"Decode_failed!"
+                    print pos["text"]
+                    # pos["text"] = u"Decode_failed!"
+                    appuifw.note(u"Decode_failed!", 'error')
                     raise
             self.data["pois_downloaded"] = pois
         except Exception, error:
@@ -224,10 +226,7 @@ class GpsApp:
         self.downloading_pois_test = False
 
     def _update_menu(self):
-        #tp_values = [10,20,50,100,200,500,1000,5000,10000]
-        #tp_menu_entries = [ (u'%s meters' % v, lambda:self.set_trackpoint_distance(v)) for v in tp_values ]
-        # We need to convert list to a tuple for appuifw.app.menu
-        #set_trackpoint_distance_menu=(u"Trackpoint dist (broken)", tuple(tp_menu_entries))
+        """Update main view's left menu."""
         if self.read_position_running == True:
             gps_onoff = u"OFF"
         else:
