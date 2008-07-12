@@ -8,7 +8,8 @@ def startup_screen(dummy=(0, 0, 0, 0)):
     pass
 canvas = appuifw.Canvas(redraw_callback=startup_screen)
 appuifw.app.body = canvas
-canvas.text((10, 100), u"Starting up", font=(u"Series 60 Sans", 30), fill=0x333333)
+canvas.text((10, 50), u"Starting up", font=(u"Series 60 Sans", 30), fill=0x333333)
+canvas.text((10, 70), u"TODO: insert pretty startup picture here", font=(u"Series 60 Sans", 12), fill=0xff3333)
 import e32
 e32.ao_sleep(0.05) # Wait until the canvas has been drawn
 
@@ -29,6 +30,48 @@ import Calculate
 import pys60_json as json
 
 import PositionHelper
+
+####################################
+# FIXME: move these to an own module
+import math
+rad=math.pi/180
+
+def project_point(x0, y0, dist, angle):
+    """Project a new point from point x0,y0 to given direction and angle."""
+    # TODO: check that the docstring is correct
+    # TODO: check that alghorithm below is correct
+    y1 = y0 + math.cos(angle * rad) * dist
+    x1 = x0 + math.cos((90 - angle) * rad) * dist
+    return x1, y1
+
+def slope(x0, y0, x1, y1):
+    """Calculate the slope of the line joining two points."""
+    if x0 == x1: return 0
+    return 1.0*(y0-y1)/(x0-x1)
+
+def intercept(x, y, a):
+    """Return the y-value (c) where the line intercepts y-axis."""
+    # TODO: check that the docstring is correct
+    return y-a*x
+
+def distance(a,b,c,m,n):
+    return abs(a*m+b*n+c)/math.sqrt(a**2+b**2)
+
+def distance_from_vector(x0, y0, dist, angle, x, y):
+    x1, y1 = project_point(x0, y0, dist, angle)
+    a = slope(x0, y0, x1, y1)
+    c = intercept(x0, y0, a)
+    dist = distance(a, -1, c, x, y)
+    return dist
+
+def distance_from_line(x0, y0, x1, y1, x, y):
+    a = slope(x0, y0, x1, y1)
+    c = intercept(x0, y0, a)
+    dist = distance(a, -1, c, x, y)
+    return dist
+####################################
+
+
 
 class GpsApp:
     __version__ = u'$Id$'
@@ -129,6 +172,7 @@ class GpsApp:
             "max_speed_history_points" : 200,
             "min_trackpoint_distance" : 300, # meters
             "estimated_error_radius" : 20, # meters
+            "max_estimation_vector_distance" : 10, # meters
             "max_trackpoints" : 500, 
             "max_debugpoints" : 500, 
             "track_debug" : False,
@@ -236,6 +280,8 @@ class GpsApp:
                 lambda:self.set_config_var(u"Max points", "number", "max_trackpoints")),
             (u"Trackpoint dist (%d)" % self.config["min_trackpoint_distance"], 
                 lambda:self.set_config_var(u"Trackpoint dist", "number", "min_trackpoint_distance")),
+            (u"Est.vector dist (%d)" % self.config["max_estimation_vector_distance"], 
+                lambda:self.set_config_var(u"Trackpoint dist", "number", "max_estimation_vector_distance")),
             (u"Estimation circle (%d)" % self.config["estimated_error_radius"], 
                 lambda:self.set_config_var(u"Estimation circle", "number", "estimated_error_radius")),
             (u"Nickname (%s)" % self.config["username"], 
@@ -324,6 +370,7 @@ class GpsApp:
             appuifw.note(u"Stopping GPS...", 'info')
             return
         self.read_position_running = True
+        self.data["trip_distance"] = 0.0 # TODO: set this up in __init__ and give change to reset this
         positioning.set_requestors([{"type":"service", 
                                      "format":"application", 
                                      "data":"test_app"}])
@@ -449,6 +496,7 @@ class GpsApp:
             # Calculate distance between the current pos and the latest history pos
             dist = 0
             dist_estimate = 0
+            dist_line = 0
             anglediff = 0
             timediff = 0
             minanglediff = 30 # FIXME: hardcoded value, make configurable
@@ -459,6 +507,10 @@ class GpsApp:
                 mindist = pos["position"]["horizontal_accuracy"]
             if len(self.data["position"]) > 0:
                 p0 = self.data["position"][-1] # use the latest saved point in history
+                if len(self.data["position"]) > 1:
+                    p1 = self.data["position"][-2] # used to calculate estimation line
+                else:
+                    p1 = None
                 # Distance between current and the latest saved position
                 dist = Calculate.distance(p0["position"]["latitude"],
                                           p0["position"]["longitude"],
@@ -482,18 +534,31 @@ class GpsApp:
                 p["position"]["longitude"] = lon
                 self.Main._calculate_UTM(p)
                 self.pos_estimate = p
-                # This calculates the distance between current point and estimation.
+                # This calculates the distance between the current point and the estimated point.
                 # Perhaps ellips could be more optime?
                 dist_estimate = Calculate.distance(p["position"]["latitude"],
                                           p["position"]["longitude"],
                                           pos["position"]["latitude"],
                                           pos["position"]["longitude"],
                                          )
+                # This calculates the distance of the current point from the estimation vector                         
+                if p0.has_key("course") and p0['course'].has_key("speed") and p0['course'].has_key("heading"):
+                    dist_line  = distance_from_vector(p0["position"]["e"], p0["position"]["n"],
+                                                      p0['course']['speed']*3.6, p0['course']['heading'],
+                                                      pos["position"]["e"],pos["position"]["n"])
+                if p1 and p0.has_key("course") and p0['course'].has_key("speed") and p0['course'].has_key("heading") \
+                 and p1.has_key("course") and p1['course'].has_key("speed") and p1['course'].has_key("heading"):
+                    dist_line  = distance_from_line(p0["position"]["e"], p0["position"]["n"],
+                                                    p1["position"]["e"], p1["position"]["n"],
+                                                    pos["position"]["e"],pos["position"]["n"])
+                                         
             else: # Always append the first point with fix
                 self.data["position"].append(pos)
+            self.data["dist_line"] = dist_line
             # If the dinstance exceeds the treshold, save the position object to the history list
             # TODO: think which is the best order of these (most probable to the first place)
             if   (dist > self.config["min_trackpoint_distance"]) \
+              or (dist_line > self.config["max_estimation_vector_distance"]) \
               or ((dist > mindist) and (dist_estimate > self.config["estimated_error_radius"])) \
               or ((dist > mindist) and (anglediff > minanglediff)) \
               or (timediff > maxtimediff): 
@@ -502,6 +567,7 @@ class GpsApp:
                 # FIXME: this does not work after self.config["max_trackpoints"] has been reached
                 if len(self.data["position"]) % 20 == 0: # save trackpoints after 20 lines
                     self.save_log_cache("track") 
+                self.data["trip_distance"] = self.data["trip_distance"] + dist
             
         # If data["position"] is too big remove some of the oldest points
         if len(self.data["position"]) > self.config["max_trackpoints"]:
@@ -1125,6 +1191,9 @@ class GpsTrackTab(BaseInfoTab):
         """
         Draw all elements (texts, points, track, pois etc) to the canvas.
         Start a timer to launch new update after a while.
+        pos is always the latest position object
+        p0 is the center point position object
+        p is temporary position object e.g. in for loop
         """
         self.t.cancel()
         poi_r = 5 # POI circles radius
@@ -1150,6 +1219,66 @@ class GpsTrackTab(BaseInfoTab):
             p0 = self.center_pos
         else:
             p0 = pos
+
+        # TESTING direction line
+        if len(self.Main.data["position"]) > 0 and self.Main.data["position"][-1]['course']['speed']:
+            # Copy latest saved position from history
+            p = copy.deepcopy(self.Main.data["position"][-1])
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
+            # Project new point from latest point, heading and speed
+            p1 = {}
+            p1["position"] = {}
+            x, y = project_point(p["position"]["e"], p["position"]["n"], p['course']['speed']*20, p['course']['heading'])
+            p1["position"]["e"], p1["position"]["n"] = x, y
+            try:
+                self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p1)
+            except:
+                pass
+            x0, y0 = p["x"], p["y"]
+            x, y = p1["x"], p1["y"]
+            #x,y = project_point(x0, y0, p['course']['speed']*3.6, p['course']['heading'])
+            self.ui.line([x0+center_x, y0+center_y, x+center_x, y+center_y], outline=0xffff99, 
+                          width=1+(self.Main.config["max_estimation_vector_distance"]/self.meters_per_px/2))
+            #dist  = distance_from_vector(p["position"]["e"], p["position"]["n"],
+            #                             p['course']['speed']*3.6, p['course']['heading'],
+            #                             pos["position"]["e"],pos["position"]["n"])
+            dist = self.Main.data["dist_line"]
+            s=60
+            i=15
+            try:
+                d = math.sqrt(p["position"]["e"]**2 + p["position"]["n"]**2) - math.sqrt(pos["position"]["e"]**2 + pos["position"]["n"]**2)
+            except:
+                d = -1
+            #self.ui.text((160, s), u"%d %d" % (p["position"]["e"], p["position"]["n"]), font=(u"Series 60 Sans", 10), fill=0x000000)
+            #s = s + i
+            #self.ui.text((160, s), u"%d %d" % (pos["position"]["e"],pos["position"]["n"]), font=(u"Series 60 Sans", 10), fill=0x000000)
+            #s = s + i
+            self.ui.text((150, s), u"%.1f m (ldist)" % (dist), font=(u"Series 60 Sans", i), fill=0x000000)
+            s = s + i
+            self.ui.text((150, s), u"%.1f m (pdist)" % (abs(d)), font=(u"Series 60 Sans", i), fill=0x000000)
+            s = s + i
+            self.ui.text((150, s), u"%d m (trip)" % (self.Main.data["trip_distance"]), font=(u"Series 60 Sans", i), fill=0x000000)
+            
+            
+            #self.ui.text((160, s), u"%d %d %d %d" % (x0, y0, x, y), font=(u"Series 60 Sans", 10), fill=0x000000)
+        # draw "heading arrow"
+        if self.Main.has_fix(pos) and pos['course']['heading'] and pos['course']['speed']:
+            p = copy.deepcopy(pos)
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
+            try:
+                p1 = {}
+                p1["position"] = {}
+                p1["position"]["e"], p1["position"]["n"] = project_point(p["position"]["e"], p["position"]["n"], 
+                                                                         50*self.meters_per_px, p['course']['heading'])
+#                                                                         p['course']['speed']*20, p['course']['heading'])
+                self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p1)
+                x0, y0 = p["x"], p["y"]
+                x, y = p1["x"], p1["y"]
+                self.ui.line([x0+center_x, y0+center_y, x+center_x, y+center_y], outline=0x0000ff, width=2)
+            except:
+                # Probably speed or heading was missing?
+                pass
+
         # New style: use main apps data structures directly and _calculate_canvas_xy() to get pixel xy.
         # TODO: to a function
         for i in range(len(self.Main.data["position_debug"])-1, -1, -1):
@@ -1159,7 +1288,7 @@ class GpsTrackTab(BaseInfoTab):
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
             #try:
             if self.Main.has_fix(p):
-                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0xffff00, width=7)
+                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x000066, width=3)
             #except: 
             #    pass
             
