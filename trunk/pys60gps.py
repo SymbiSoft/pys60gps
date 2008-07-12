@@ -1220,6 +1220,16 @@ class GpsTrackTab(BaseInfoTab):
         else:
             p0 = pos
 
+        poi_width = 20 / self.meters_per_px # show pois relative to zoom level
+        if poi_width < 1: poi_width = 1
+        if poi_width > 10: poi_width = 10
+        for p in self.Main.data["gsm_location"]:
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
+            if p.has_key("x"):
+                self.ui.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0xccccff)
+                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x9999ff, width=poi_width)
+
+
         # TESTING direction line
         if len(self.Main.data["position"]) > 0 and self.Main.data["position"][-1]['course']['speed']:
             # Copy latest saved position from history
@@ -1307,9 +1317,6 @@ class GpsTrackTab(BaseInfoTab):
             p1 = p
         # Draw POIs if there are any
         # TODO: to a function
-        poi_width = 20 / self.meters_per_px # show pois relative to zoom level
-        if poi_width < 1: poi_width = 1
-        if poi_width > 20: poi_width = 20
         for p in self.Main.data["pois_private"]:
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
             if p.has_key("x"):
@@ -1344,13 +1351,7 @@ class GpsTrackTab(BaseInfoTab):
                 #self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
                 #                 (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=bordercolor)
                 self.ui.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x666600)
-        for p in self.Main.data["gsm_location"]:
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
-            if p.has_key("x"):
-                self.ui.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0xccccff)
-                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x9999ff, width=poi_width)
-                #self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
-                #                 (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=0x9999ff)
+
         ##############################################
         # Testing "status" bar. TODO: implement better, e.g. own function for status bar
         if self.Main.read_position_running:
