@@ -235,7 +235,10 @@ class GpsApp:
         import urllib
         self.key = appuifw.query(u"Keyword", "text", self.key)
         if self.key is None: self.key = u""
-        params = {'key': self.key}
+        params = {"key" : self.key, 
+                  "user" : self.config["username"],
+                  "group" : self.config["group"],
+                  }
         if (len(self.data["position"]) > 0): # TODO: use has_fix here?
             pos = self.data["position"][-1]
             params["lat"] = pos["position"]["latitude"]
@@ -1022,7 +1025,7 @@ class GpsTrackTab(BaseInfoTab):
                 return
             if self.Main.has_fix(self.Main.pos):
                 self.center_pos = copy.deepcopy(self.Main.pos)
-            elif self.Main.has_fix(self.Main.data["position"][-1]):
+            elif len(self.Main.data["position"]) > 0 and self.Main.has_fix(self.Main.data["position"][-1]):
                 self.center_pos = copy.deepcopy(self.Main.data["position"][-1])
             else:
                 appuifw.note(u"No FIX", 'error')
@@ -1265,18 +1268,13 @@ class GpsTrackTab(BaseInfoTab):
             s=50
             i=15
             try:
-                d = math.sqrt(p["position"]["e"]**2 + p["position"]["n"]**2) - math.sqrt(pos["position"]["e"]**2 + pos["position"]["n"]**2)
+                d = (math.sqrt(p["position"]["e"]**2 + p["position"]["n"]**2) 
+                   - math.sqrt(pos["position"]["e"]**2 + pos["position"]["n"]**2))
             except:
                 d = -1
-            #self.ui.text((160, s), u"%d %d" % (p["position"]["e"], p["position"]["n"]), font=(u"Series 60 Sans", 10), fill=0x000000)
-            #s = s + i
-            #self.ui.text((160, s), u"%d %d" % (pos["position"]["e"],pos["position"]["n"]), font=(u"Series 60 Sans", 10), fill=0x000000)
-            #s = s + i
             self.ui.text((150, s), u"%.1f m (ldist)" % (dist), font=(u"Series 60 Sans", i), fill=0x000000)
             s = s + i
             self.ui.text((150, s), u"%.1f m (pdist)" % (abs(d)), font=(u"Series 60 Sans", i), fill=0x000000)
-            #s = s + i
-            #self.ui.text((150, s), u"%d m (trip)" % (self.Main.data["trip_distance"]), font=(u"Series 60 Sans", i), fill=0x000000)
             
             
             #self.ui.text((160, s), u"%d %d %d %d" % (x0, y0, x, y), font=(u"Series 60 Sans", 10), fill=0x000000)
