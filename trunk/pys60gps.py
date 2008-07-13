@@ -523,25 +523,26 @@ class GpsApp:
                 # timediff = pos['systime'] - p0['systime']
                 timediff = pos["satellites"]["time"] - p0["satellites"]["time"]
                 
-                # Project a location estimation point using speed and heading from the latest saved point
-                p = {}
+                # Project a location estimation point (pe) using speed and heading from the latest saved point
+                pe = {}
                 # timediff = time.time() - p0['systime']
                 dist_project = p0['course']['speed'] * timediff # speed * seconds = distance in meters
                 lat, lon = Calculate.newlatlon(p0["position"]["latitude"], p0["position"]["longitude"], 
                                                dist_project, p0['course']['heading'])
-                p["position"] = {}
-                p["position"]["latitude"] = lat
-                p["position"]["longitude"] = lon
-                self.Main._calculate_UTM(p)
-                self.pos_estimate = p
+                pe["position"] = {}
+                pe["position"]["latitude"] = lat
+                pe["position"]["longitude"] = lon
+                self.Main._calculate_UTM(pe)
+                self.pos_estimate = pe
                 # This calculates the distance between the current point and the estimated point.
                 # Perhaps ellips could be more optime?
-                dist_estimate = Calculate.distance(p["position"]["latitude"],
-                                          p["position"]["longitude"],
+                dist_estimate = Calculate.distance(pe["position"]["latitude"],
+                                          pe["position"]["longitude"],
                                           pos["position"]["latitude"],
                                           pos["position"]["longitude"],
                                          )
-                # This calculates the distance of the current point from the estimation vector                         
+                # This calculates the distance of the current point from the estimation vector
+                # In the future this will be an alternate to the estimation circle
                 if p0.has_key("course") and p0['course'].has_key("speed") and p0['course'].has_key("heading"):
                     dist_line  = distance_from_vector(p0["position"]["e"], p0["position"]["n"],
                                                       p0['course']['speed']*3.6, p0['course']['heading'],
@@ -567,12 +568,20 @@ class GpsApp:
                 # FIXME: this does not work after self.config["max_trackpoints"] has been reached
                 if len(self.data["position"]) % 20 == 0: # save trackpoints after 20 lines
                     self.save_log_cache("track") 
-                self.data["trip_distance"] = self.data["trip_distance"] + dist
             
-        # If data["position"] is too big remove some of the oldest points
+        # If data["position"] is too long, remove some of the oldest points
         if len(self.data["position"]) > self.config["max_trackpoints"]:
             self.data["position"].pop(0)
             self.data["position"].pop(0) # pop twice to reduce the number of points
+        # Calculate the distance between the newest and the previous pos and add it to trip_distance
+        try: # TODO: do not add if time between positions is more than e.g. 120 sec
+            if pos["satellites"]["time"] - self.pos["satellites"]["time"] < 120:
+                d = (math.sqrt(self.pos["position"]["e"]**2 + self.pos["position"]["n"]**2) 
+                   - math.sqrt(pos["position"]["e"]**2 + pos["position"]["n"]**2))
+                self.data["trip_distance"] = self.data["trip_distance"] + abs(d)
+        except: # FIXME: check first do both positions exist and has_fix(), then 
+            pass
+        # Save the new pos to global (current) self.pos
         self.pos = pos
         # Read gsm-cell changes
         self.read_gsm_location()
@@ -1253,7 +1262,7 @@ class GpsTrackTab(BaseInfoTab):
             #                             p['course']['speed']*3.6, p['course']['heading'],
             #                             pos["position"]["e"],pos["position"]["n"])
             dist = self.Main.data["dist_line"]
-            s=60
+            s=50
             i=15
             try:
                 d = math.sqrt(p["position"]["e"]**2 + p["position"]["n"]**2) - math.sqrt(pos["position"]["e"]**2 + pos["position"]["n"]**2)
@@ -1266,8 +1275,8 @@ class GpsTrackTab(BaseInfoTab):
             self.ui.text((150, s), u"%.1f m (ldist)" % (dist), font=(u"Series 60 Sans", i), fill=0x000000)
             s = s + i
             self.ui.text((150, s), u"%.1f m (pdist)" % (abs(d)), font=(u"Series 60 Sans", i), fill=0x000000)
-            s = s + i
-            self.ui.text((150, s), u"%d m (trip)" % (self.Main.data["trip_distance"]), font=(u"Series 60 Sans", i), fill=0x000000)
+            #s = s + i
+            #self.ui.text((150, s), u"%d m (trip)" % (self.Main.data["trip_distance"]), font=(u"Series 60 Sans", i), fill=0x000000)
             
             
             #self.ui.text((160, s), u"%d %d %d %d" % (x0, y0, x, y), font=(u"Series 60 Sans", 10), fill=0x000000)
@@ -1367,13 +1376,13 @@ class GpsTrackTab(BaseInfoTab):
         # Testing the point estimation 
         # TODO: to a function
         if len(self.Main.data["position"]) > 0: 
-            p = self.Main.pos_estimate
+            pe = self.Main.pos_estimate
             err_radius = self.Main.config["estimated_error_radius"] # meters
             ell_r = err_radius / self.meters_per_px 
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
-            if p.has_key("x"):
-                self.ui.ellipse([(p["x"]+center_x-ell_r,p["y"]+center_y-ell_r),
-                                 (p["x"]+center_x+ell_r,p["y"]+center_y+ell_r)], outline=0x9999ff)
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, pe)
+            if pe.has_key("x"):
+                self.ui.ellipse([(pe["x"]+center_x-ell_r,pe["y"]+center_y-ell_r),
+                                 (pe["x"]+center_x+ell_r,pe["y"]+center_y+ell_r)], outline=0x9999ff)
             # Draw accurancy circle
             # FIXME: this doesn't draw the circle to the current position, instead to the map center
             acc_radius = pos["position"]["horizontal_accuracy"]
@@ -1381,8 +1390,13 @@ class GpsTrackTab(BaseInfoTab):
                 acc_r = acc_radius / self.meters_per_px 
                 self.ui.ellipse([(center_x-acc_r,center_y-acc_r),
                                  (center_x+acc_r,center_y+acc_r)], outline=0xccffcc)
-            self.ui.text(([10, 220]), u"%.1f km/h %.1f°" % (pos['course']['speed']*3.6, pos['course']['heading']), 
-                                      font=(u"Series 60 Sans", 20), fill=0x000000)
+            if self.Main.data["trip_distance"] >= 1000.0:
+                trip = u"%.2f km" % (self.Main.data["trip_distance"] / 1000)
+            else:
+                trip = u"%.1f m" % (self.Main.data["trip_distance"])
+            self.ui.text(([10, 230]), u"%.1f km/h %.1f° %s" % (pos['course']['speed']*3.6, pos['course']['heading'],  trip), 
+                                      font=(u"Series 60 Sans", 18), fill=0x000000)
+                                      
         ###########################################
         # Draw scale bar
         self.draw_scalebar(self.ui)
