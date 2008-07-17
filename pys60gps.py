@@ -521,7 +521,7 @@ class GpsApp:
                                           pos["position"]["longitude"],
                                          )
                 # Difference of heading between current and the latest saved position
-                anglediff = Calculate.anglediff(p0['course']['heading'], pos['course']['heading'])
+                anglediff = Calculate.anglediff(p0["course"]["heading"], pos["course"]["heading"])
                 # Time difference between current and the latest saved position
                 # timediff = pos['systime'] - p0['systime']
                 timediff = pos["satellites"]["time"] - p0["satellites"]["time"]
@@ -529,9 +529,9 @@ class GpsApp:
                 # Project a location estimation point (pe) using speed and heading from the latest saved point
                 pe = {}
                 # timediff = time.time() - p0['systime']
-                dist_project = p0['course']['speed'] * timediff # speed * seconds = distance in meters
+                dist_project = p0["course"]["speed"] * timediff # speed * seconds = distance in meters
                 lat, lon = Calculate.newlatlon(p0["position"]["latitude"], p0["position"]["longitude"], 
-                                               dist_project, p0['course']['heading'])
+                                               dist_project, p0["course"]["heading"])
                 pe["position"] = {}
                 pe["position"]["latitude"] = lat
                 pe["position"]["longitude"] = lon
@@ -546,12 +546,12 @@ class GpsApp:
                                          )
                 # This calculates the distance of the current point from the estimation vector
                 # In the future this will be an alternate to the estimation circle
-                if p0.has_key("course") and p0['course'].has_key("speed") and p0['course'].has_key("heading"):
+                if p0.has_key("course") and p0["course"].has_key("speed") and p0["course"].has_key("heading"):
                     dist_line  = distance_from_vector(p0["position"]["e"], p0["position"]["n"],
-                                                      p0['course']['speed']*3.6, p0['course']['heading'],
+                                                      p0["course"]["speed"]*3.6, p0["course"]["heading"],
                                                       pos["position"]["e"],pos["position"]["n"])
-                if p1 and p0.has_key("course") and p0['course'].has_key("speed") and p0['course'].has_key("heading") \
-                 and p1.has_key("course") and p1['course'].has_key("speed") and p1['course'].has_key("heading"):
+                if p1 and p0.has_key("course") and p0["course"].has_key("speed") and p0["course"].has_key("heading") \
+                 and p1.has_key("course") and p1["course"].has_key("speed") and p1["course"].has_key("heading"):
                     dist_line  = distance_from_line(p0["position"]["e"], p0["position"]["n"],
                                                     p1["position"]["e"], p1["position"]["n"],
                                                     pos["position"]["e"],pos["position"]["n"])
@@ -579,9 +579,13 @@ class GpsApp:
         # Calculate the distance between the newest and the previous pos and add it to trip_distance
         try: # TODO: do not add if time between positions is more than e.g. 120 sec
             if pos["satellites"]["time"] - self.pos["satellites"]["time"] < 120:
-                d = (math.sqrt(self.pos["position"]["e"]**2 + self.pos["position"]["n"]**2) 
-                   - math.sqrt(pos["position"]["e"]**2 + pos["position"]["n"]**2))
-                self.data["trip_distance"] = self.data["trip_distance"] + abs(d)
+                #d = Calculate.distance(self.pos["position"]["latitude"],self.pos["position"]["longitude"],
+                #                       pos["position"]["latitude"], pos["position"]["longitude"])
+                # This should be cheaper
+                d = math.sqrt((self.pos["position"]["e"] - pos["position"]["e"])**2 + (self.pos["position"]["n"] - pos["position"]["n"])**2)
+                self.data["trip_distance"] = self.data["trip_distance"] + d
+                self.data["dist_2_latest"] = d
+                #self.data["debug"] = u"E:%.1f N:%.1f" % (abs(self.pos["position"]["e"] - pos["position"]["e"]), abs(self.pos["position"]["n"] - pos["position"]["n"]))
         except: # FIXME: check first do both positions exist and has_fix(), then 
             pass
         # Save the new pos to global (current) self.pos
@@ -1204,7 +1208,7 @@ class GpsTrackTab(BaseInfoTab):
         Draw all elements (texts, points, track, pois etc) to the canvas.
         Start a timer to launch new update after a while.
         pos is always the latest position object
-        p0 is the center point position object
+        p0 is the center point position object TODO: refactor p0 -> pc (position center)
         p is temporary position object e.g. in for loop
         """
         self.t.cancel()
@@ -1243,51 +1247,53 @@ class GpsTrackTab(BaseInfoTab):
 
 
         # TESTING direction line
-        if len(self.Main.data["position"]) > 0 and self.Main.data["position"][-1]['course']['speed']:
+        if len(self.Main.data["position"]) > 0 and self.Main.data["position"][-1]["course"].has_key("speed"):
             # Copy latest saved position from history
             p = copy.deepcopy(self.Main.data["position"][-1])
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
             # Project new point from latest point, heading and speed
             p1 = {}
             p1["position"] = {}
-            x, y = project_point(p["position"]["e"], p["position"]["n"], p['course']['speed']*20, p['course']['heading'])
+            x, y = project_point(p["position"]["e"], p["position"]["n"], p["course"]["speed"]*20, p["course"]["heading"])
             p1["position"]["e"], p1["position"]["n"] = x, y
             try:
                 self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p1)
+                x0, y0 = p["x"], p["y"]
+                x, y = p1["x"], p1["y"]
             except:
-                pass
-            x0, y0 = p["x"], p["y"]
-            x, y = p1["x"], p1["y"]
-            #x,y = project_point(x0, y0, p['course']['speed']*3.6, p['course']['heading'])
+                x0, y0 = 0, 0
+                x, y = 0, 0
+            #x,y = project_point(x0, y0, p["course"]["speed"]*3.6, p["course"]["heading"])
             self.ui.line([x0+center_x, y0+center_y, x+center_x, y+center_y], outline=0xffff99, 
                           width=1+(self.Main.config["max_estimation_vector_distance"]/self.meters_per_px/2))
             #dist  = distance_from_vector(p["position"]["e"], p["position"]["n"],
-            #                             p['course']['speed']*3.6, p['course']['heading'],
+            #                             p["course"]["speed"]*3.6, p["course"]["heading"],
             #                             pos["position"]["e"],pos["position"]["n"])
             dist = self.Main.data["dist_line"]
             s=50
             i=15
             try:
-                d = (math.sqrt(p["position"]["e"]**2 + p["position"]["n"]**2) 
-                   - math.sqrt(pos["position"]["e"]**2 + pos["position"]["n"]**2))
+                d = math.sqrt((p["position"]["e"] - pos["position"]["e"])**2 + (p["position"]["n"] - pos["position"]["n"])**2)
             except:
                 d = -1
             self.ui.text((150, s), u"%.1f m (ldist)" % (dist), font=(u"Series 60 Sans", i), fill=0x000000)
             s = s + i
             self.ui.text((150, s), u"%.1f m (pdist)" % (abs(d)), font=(u"Series 60 Sans", i), fill=0x000000)
+            s = s + i
+            self.ui.text((150, s), u"%.1f m" % (self.Main.data["dist_2_latest"]), font=(u"Series 60 Sans", i), fill=0x000000)
             
             
             #self.ui.text((160, s), u"%d %d %d %d" % (x0, y0, x, y), font=(u"Series 60 Sans", 10), fill=0x000000)
         # draw "heading arrow"
-        if self.Main.has_fix(pos) and pos['course']['heading'] and pos['course']['speed']:
+        if self.Main.has_fix(pos) and pos["course"]["heading"] and pos["course"]["speed"]:
             p = copy.deepcopy(pos)
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
             try:
                 p1 = {}
                 p1["position"] = {}
                 p1["position"]["e"], p1["position"]["n"] = project_point(p["position"]["e"], p["position"]["n"], 
-                                                                         50*self.meters_per_px, p['course']['heading'])
-#                                                                         p['course']['speed']*20, p['course']['heading'])
+                                                                         50*self.meters_per_px, p["course"]["heading"])
+#                                                                         p["course"]["speed"]*20, p["course"]["heading"])
                 self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p1)
                 x0, y0 = p["x"], p["y"]
                 x, y = p1["x"], p1["y"]
@@ -1303,11 +1309,11 @@ class GpsTrackTab(BaseInfoTab):
             if j > 60: break # draw only last x debug points
             p = self.Main.data["position_debug"][i]
             self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
-            #try:
-            if self.Main.has_fix(p):
+            try:
+            #if self.Main.has_fix(p):
                 self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x000066, width=3)
-            #except: 
-            #    pass
+            except: 
+                pass
             
         # Draw track if it exists
         # TODO: all of these loops to a function
@@ -1392,7 +1398,10 @@ class GpsTrackTab(BaseInfoTab):
                 trip = u"%.2f km" % (self.Main.data["trip_distance"] / 1000)
             else:
                 trip = u"%.1f m" % (self.Main.data["trip_distance"])
-            self.ui.text(([10, 230]), u"%.1f km/h %.1f° %s" % (pos['course']['speed']*3.6, pos['course']['heading'],  trip), 
+            # TODO REMOVE:
+            # trip = u"%.1f m" % (self.Main.data["trip_distance"])
+            #self.ui.text(([10, 230]), u"%.1f km/h %.1f° %s" % (pos["course"]["speed"]*3.6, pos["course"]["heading"],  trip), 
+            self.ui.text(([10, 230]), u"%.1f m/s %.1f° %s" % (pos["course"]["speed"], pos["course"]["heading"],  trip), 
                                       font=(u"Series 60 Sans", 18), fill=0x000000)
                                       
         ###########################################
