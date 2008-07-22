@@ -86,7 +86,6 @@ class GpsApp:
         appuifw.app.focus = self.focus_callback # Set up focus callback
         self.read_position_running = False
         self.downloading_pois_test = False # TEMP
-        self.apid = None # Default access point
         # Create a directory to contain all gathered and downloaded data. Note '\\' in the first argument.
         self.datadir = os.path.join(u"C:\\Data", u"Pys60Gps")
         if not os.path.exists(self.datadir):
@@ -98,7 +97,10 @@ class GpsApp:
         # Configuration/settings
         self.config_file = os.path.join(self.datadir, "settings.ini")
         self.config = {} # TODO: read these from a configuration file
+        self.apid = None # Default access point
         self.read_config()
+        if self.config.has_key("apid"):
+            self._select_access_point(self.config["apid"])
         # Center meridian
         self.LongOrigin = None
         # Data-repository
@@ -112,22 +114,7 @@ class GpsApp:
         # POIs
         self.data["pois_private"] = []
         self.data["pois_downloaded"] = []
-        # Test poi
         self.key = u""
-        pos = {"position": {}} # This point is for emulator's positioning-emulation
-        pos["position"]["latitude"] = 61.448268
-        pos["position"]["longitude"] = 23.854067
-        pos["systime"] = time.time()
-        pos["text"] = u"Hervanta"
-        self._calculate_UTM(pos)
-        self.data["pois_downloaded"].append(pos)
-        pos = {"position": {}}
-        pos["position"]["latitude"] = 60.170704
-        pos["position"]["longitude"] = 24.941435
-        pos["systime"] = time.time()
-        pos["text"] = u"Hki assa"
-        self._calculate_UTM(pos)
-        self.data["pois_downloaded"].append(pos)
         # temporary solution to handle speed data (to be removed/changed)
         self.speed_history = []
         # Put all menu entries and views as tuples into a sequence
@@ -142,20 +129,35 @@ class GpsApp:
         # Create a listbox from main_menu and set select-handler
         self.listbox = appuifw.Listbox(self.main_menu, self.handle_select)
         self.activate()
-        self._select_access_point()
         self.beep = self.get_tone(freq=440, duration=500, volume=1.0)
 
-    def _select_access_point(self):
+    def _select_access_point(self, apid = None):
         """
         Shortcut for socket.select_access_point() 
         TODO: save selected access point to the config
         TODO: allow user to change access point later
         """
-        e32.ao_sleep(0.1) # Python crashes if this is not here.
-        self.apid = socket.select_access_point()
+        if apid is not None:
+            self.apid = apid
+        else:
+            access_points = socket.access_points()
+            sort_key = "iapid"
+            decorated = [(dict_[sort_key], dict_) for dict_ in access_points]
+            decorated.sort()
+            access_points = [dict_ for (key, dict_) in decorated]
+            ap_names = [dict_["name"] for dict_ in access_points]
+            ap_ids = [dict_["iapid"] for dict_ in access_points]
+            selected = appuifw.selection_list(ap_names, search_field=1)
+            #print selected, ap_names[selected], ap_ids[selected]
+            if selected is not None:
+                self.apid = ap_ids[selected]
         if self.apid:
             self.apo = socket.access_point(self.apid)
             socket.set_default_access_point(self.apo)
+            self.config["apid"] = self.apid
+            self.save_config()
+            self._update_menu()
+            return self.apid
 
     def read_config(self):
         data = {}
@@ -178,9 +180,11 @@ class GpsApp:
             "track_debug" : False,
             "username" : None,
             "group" : None,
+            "apid" : None,
             "url" : u"http://www.plok.in/poi.php",
         }
         # List here all configuration keys, which must be defined before use
+        # If a config key has key "function", it's called to define value
         mandatory = {
             "username" : {"querytext" : u"Give nickname", 
                           "valuetype" : "text", 
@@ -192,20 +196,31 @@ class GpsApp:
                           "default" : u'',
                           "canceltext" : None,
                           },
+            "apid"    : {"querytext" : u"Select default access point (cancel for no default access point)", 
+                          "valuetype" : "function",
+                          "default" : u'',
+                          "canceltext" : None,
+                          "function" : self._select_access_point,
+                          },
         }
+        # Loop all possible keys (found from defaults)
         for key in defaults.keys():
             if data.has_key(key): # Use the value found from the data
                 defaults[key] = data[key]
             elif mandatory.has_key(key) and defaults[key] is None: # Ask mandatory values from the user
                 value = None
-                while value is None:
-                    value = appuifw.query(mandatory[key]["querytext"], 
-                                          mandatory[key]["valuetype"], 
-                                          mandatory[key]["default"])
-                    if value is None and mandatory[key]["canceltext"]: 
-                        appuifw.note(mandatory[key]["canceltext"], 'error')
-                    elif value is None: # If canceltext is u"", change value None to u""
-                        value = u""
+                if mandatory[key].has_key("function"): # if defined, call the "function"
+                    appuifw.note(mandatory[key]["querytext"], 'info')
+                    value = mandatory[key]["function"]() # "function" must return a value
+                else:
+                    while value is None:
+                        value = appuifw.query(mandatory[key]["querytext"], 
+                                              mandatory[key]["valuetype"], 
+                                              mandatory[key]["default"])
+                        if value is None and mandatory[key]["canceltext"]: 
+                            appuifw.note(mandatory[key]["canceltext"], 'error')
+                        elif value is None: # If canceltext is u"", change value None to u""
+                            value = u""
                 defaults[key] = value
         self.config = defaults
         self.save_config()
@@ -293,6 +308,8 @@ class GpsApp:
                 lambda:self.set_config_var(u"Group", "text", "group")),
             (u"URL (%s)" % self.config["url"], 
                 lambda:self.set_config_var(u"Url (for server connections)", "text", "url")),
+            (u"Access point (%s)" % self.config["apid"], 
+                lambda:self._select_access_point()),
             (u"Reset all values", self.reset_config),
         ))
             
@@ -377,7 +394,7 @@ class GpsApp:
         positioning.set_requestors([{"type":"service", 
                                      "format":"application", 
                                      "data":"test_app"}])
-        positioning.position(course=1,satellites=1, callback=self.read_position, interval=1000000, partial=1) 
+        positioning.position(course=1,satellites=1, callback=self.read_position, interval=500000, partial=1) 
         self._update_menu() # NOTE: this messes up the menu if this function is called from outside of the main view!
         appuifw.note(u"Starting GPS...", 'info')
 
@@ -1279,8 +1296,9 @@ class GpsTrackTab(BaseInfoTab):
             self.ui.text((150, s), u"%.1f m (ldist)" % (dist), font=(u"Series 60 Sans", i), fill=0x000000)
             s = s + i
             self.ui.text((150, s), u"%.1f m (pdist)" % (abs(d)), font=(u"Series 60 Sans", i), fill=0x000000)
-            s = s + i
-            self.ui.text((150, s), u"%.1f m" % (self.Main.data["dist_2_latest"]), font=(u"Series 60 Sans", i), fill=0x000000)
+            if self.Main.data.has_key("dist_2_latest"):
+                s = s + i
+                self.ui.text((150, s), u"%.1f m" % (self.Main.data["dist_2_latest"]), font=(u"Series 60 Sans", i), fill=0x000000)
             
             
             #self.ui.text((160, s), u"%d %d %d %d" % (x0, y0, x, y), font=(u"Series 60 Sans", 10), fill=0x000000)
