@@ -414,7 +414,10 @@ class GpsApp:
         cache_filename_tmp = cache_filename + u".tmp" # FIXME: unique name here
         try:
             os.rename(cache_filename, cache_filename_tmp)
-            log_filename = os.path.join(self.datadir, logname + time.strftime("-%Y%m%d.txt", time.localtime(time.time())))
+            log_dir = os.path.join(self.datadir, logname) # use separate directories
+            if not os.path.exists(log_dir):
+                os.makedirs(log_dir)
+            log_filename = os.path.join(log_dir, logname + time.strftime("-%Y%m%d.txt", time.localtime(time.time())))
             fout = open(log_filename, "at")
             fin = open(cache_filename_tmp, "rt")
             data = fout.write(fin.read())
@@ -423,6 +426,7 @@ class GpsApp:
             fout.close()
         except:
             pass # Failed. TODO: error logging here
+            raise
 
     def read_gsm_location(self):
         """
@@ -1247,17 +1251,17 @@ class GpsTrackTab(BaseInfoTab):
         # self.ui.polygon([15,15,100,100,100,15,50,10], outline=0x0000ff, width=4)
         j = 0
         pos = self.Main.pos # the current position during this update()
-        # p0 is the current center point
+        # pc is the current center point
         if self.center_pos:
-            p0 = self.center_pos
+            pc = self.center_pos
         else:
-            p0 = pos
+            pc = pos
 
         poi_width = 20 / self.meters_per_px # show pois relative to zoom level
         if poi_width < 1: poi_width = 1
         if poi_width > 10: poi_width = 10
         for p in self.Main.data["gsm_location"]:
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
             if p.has_key("x"):
                 self.ui.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0xccccff)
                 self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x9999ff, width=poi_width)
@@ -1267,14 +1271,14 @@ class GpsTrackTab(BaseInfoTab):
         if len(self.Main.data["position"]) > 0 and self.Main.data["position"][-1]["course"].has_key("speed"):
             # Copy latest saved position from history
             p = copy.deepcopy(self.Main.data["position"][-1])
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
             # Project new point from latest point, heading and speed
             p1 = {}
             p1["position"] = {}
             x, y = project_point(p["position"]["e"], p["position"]["n"], p["course"]["speed"]*20, p["course"]["heading"])
             p1["position"]["e"], p1["position"]["n"] = x, y
             try:
-                self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p1)
+                self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p1)
                 x0, y0 = p["x"], p["y"]
                 x, y = p1["x"], p1["y"]
             except:
@@ -1305,14 +1309,14 @@ class GpsTrackTab(BaseInfoTab):
         # draw "heading arrow"
         if self.Main.has_fix(pos) and pos["course"]["heading"] and pos["course"]["speed"]:
             p = copy.deepcopy(pos)
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
             try:
                 p1 = {}
                 p1["position"] = {}
                 p1["position"]["e"], p1["position"]["n"] = project_point(p["position"]["e"], p["position"]["n"], 
                                                                          50*self.meters_per_px, p["course"]["heading"])
 #                                                                         p["course"]["speed"]*20, p["course"]["heading"])
-                self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p1)
+                self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p1)
                 x0, y0 = p["x"], p["y"]
                 x, y = p1["x"], p1["y"]
                 self.ui.line([x0+center_x, y0+center_y, x+center_x, y+center_y], outline=0x0000ff, width=2)
@@ -1326,7 +1330,7 @@ class GpsTrackTab(BaseInfoTab):
             j = j + 1
             if j > 60: break # draw only last x debug points
             p = self.Main.data["position_debug"][i]
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
             try:
             #if self.Main.has_fix(p):
                 self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x000066, width=3)
@@ -1340,7 +1344,7 @@ class GpsTrackTab(BaseInfoTab):
             p1 = self.Main.data["position"][-1]
         for i in range(len(self.Main.data["position"])-1, -1, -1): # draw trackpoints backwards
             p = self.Main.data["position"][i]
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
             if p.has_key("x") and p1.has_key("x"):
                 self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0xff0000, width=5)
                 self.ui.line([p["x"]+center_x, p["y"]+center_y, 
@@ -1349,7 +1353,7 @@ class GpsTrackTab(BaseInfoTab):
         # Draw POIs if there are any
         # TODO: to a function
         for p in self.Main.data["pois_private"]:
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
             if p.has_key("x"):
                 self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x0000ff, width=5)
                 self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
@@ -1357,7 +1361,7 @@ class GpsTrackTab(BaseInfoTab):
                 # There is a bug in image.text (fixed in 1.4.4?), so text must be drawn straight to the canvas
                 self.ui.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x9999ff)
         for p in self.Main.data["pois_downloaded"]:
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, p)
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
             if p.has_key("x"):
                 # Add "seen" key if user was near enough to the point
                 if not p.has_key("seen") and Calculate.distance(pos["position"]["latitude"],
@@ -1401,7 +1405,7 @@ class GpsTrackTab(BaseInfoTab):
             pe = self.Main.pos_estimate
             err_radius = self.Main.config["estimated_error_radius"] # meters
             ell_r = err_radius / self.meters_per_px 
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, p0, pe)
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, pe)
             if pe.has_key("x"):
                 self.ui.ellipse([(pe["x"]+center_x-ell_r,pe["y"]+center_y-ell_r),
                                  (pe["x"]+center_x+ell_r,pe["y"]+center_y+ell_r)], outline=0x9999ff)
