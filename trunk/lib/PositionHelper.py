@@ -13,7 +13,7 @@ def _get_common_attributes(p):
     att["time"] = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", time.localtime(p["satellites"]["time"]))
     att["speed_kmh"] = u"%.2f" % (p["course"]["speed"] * 3.6)
     att["heading"] = u"%.2f" % (p["course"]["heading"])
-    att["dop"] = u"%.2f;%.2f;0" % (p["satellites"]["horizontal_dop"], p["satellites"]["vertical_dop"])
+    att["dop"] = u"%.2f;%.2f;%.2f" % (p["satellites"]["horizontal_dop"], p["satellites"]["vertical_dop"], p["satellites"]["time_dop"])
     return att
 
 def _make_xml_tag(name, att):
