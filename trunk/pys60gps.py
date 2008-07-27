@@ -185,6 +185,7 @@ class GpsApp:
         }
         # List here all configuration keys, which must be defined before use
         # If a config key has key "function", it's called to define value
+        # TODO: make some order for these
         mandatory = {
             "username" : {"querytext" : u"Give nickname", 
                           "valuetype" : "text", 
@@ -196,12 +197,12 @@ class GpsApp:
                           "default" : u'',
                           "canceltext" : None,
                           },
-            "apid"    : {"querytext" : u"Select default access point (cancel for no default access point)", 
-                          "valuetype" : "function",
-                          "default" : u'',
-                          "canceltext" : None,
-                          "function" : self._select_access_point,
-                          },
+#            "apid"    : {"querytext" : u"Select default access point (cancel for no default access point)", 
+#                          "valuetype" : "function",
+#                          "default" : u'',
+#                          "canceltext" : None,
+#                          "function" : self._select_access_point,
+#                          },
         }
         # Loop all possible keys (found from defaults)
         for key in defaults.keys():
