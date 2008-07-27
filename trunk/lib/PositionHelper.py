@@ -1,6 +1,9 @@
 # $Id$
 
 import time
+import re
+xml_attr_re = re.compile("""(\w+)=["']([^"']+)["']""")
+xml_tagname_re = re.compile("^<([a-zA-Z0-9_]+)""")
 
 def _get_common_attributes(p):
     """
@@ -35,3 +38,11 @@ def _make_xml_cellpt(p, p2):
 def _make_xml_trackpt(p):
     att = _get_common_attributes(p)
     return _make_xml_tag("trackpt", att) 
+
+def _parse_xml_tag(line):
+    tag = xml_tagname_re.findall(line)
+    attr_list = xml_attr_re.findall(line)
+    attr_dict = {}
+    for att_tuple in attr_list:
+        attr_dict[att_tuple[0]] = att_tuple[1]
+    return tag, attr_dict
