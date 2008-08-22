@@ -328,8 +328,8 @@ class GpsApp:
         ))
             
         appuifw.app.menu = [
-            (u"GPS %s" % (gps_onoff),self.start_read_position),
             (u"Select",self.handle_select),
+            (u"GPS %s" % (gps_onoff),self.start_read_position),
             set_menu,
             (u"Toggle debug",self.toggle_debug),
             (u"Reboot",self.reboot),
@@ -1550,16 +1550,23 @@ class ImageGallery:
         #appuifw.app.screen = "large"
         self.current_img = -1
         appuifw.app.exit_key_handler = self.handle_close
+        self.imagemenu = []
         self.canvas = appuifw.Canvas(redraw_callback=self.update)
         self.canvas.bind(key_codes.EKeyLeftArrow,lambda: self.next_image(-1))
         self.canvas.bind(key_codes.EKeyRightArrow,lambda: self.next_image(1))
         self.canvas.bind(key_codes.EKeyUpArrow,lambda: self.next_image(0))
         self.canvas.bind(key_codes.EKey1,lambda: self.ask_caption())
+        self.imagemenu.append((u"1. Caption", lambda: self.ask_caption()))
         self.canvas.bind(key_codes.EKey2,lambda: self.ask_tags())
+        self.imagemenu.append((u"2. Tags", lambda: self.ask_tags()))
         self.canvas.bind(key_codes.EKey3,lambda: self.toggle_visibility())
+        self.imagemenu.append((u"3. Visibility", lambda: self.toggle_visibility()))
         self.canvas.bind(key_codes.EKey0,lambda: appuifw.note(u"Sorry, not implemented yet", 'info'))
+        self.imagemenu.append((u"0. Synchronize", lambda: self.toggle_visibility()))
         self.canvas.bind(key_codes.EKeyBackspace,lambda: self.delete_current())
+        self.imagemenu.append((u"C. Delete", lambda: self.delete_current()))
         self.canvas.bind(key_codes.EKeySelect,lambda: self.show_current())
+        self.imagemenu.append((u"Show", lambda: self.show_current()))
         appuifw.app.body = self.canvas
         self.load_image_metadata()
         self.update_filelist()
@@ -1577,7 +1584,10 @@ class ImageGallery:
                                 (u"Close", self.handle_close),
                                 ]
         else:    
-            appuifw.app.menu = [(u"Close", self.handle_close),]
+            default = [(u"Close", self.handle_close),]
+            menu = default + self.imagemenu
+            print menu
+            appuifw.app.menu = menu
 
     def handle_close(self):
         """
