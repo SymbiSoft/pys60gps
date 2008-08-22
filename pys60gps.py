@@ -1562,7 +1562,7 @@ class ImageGallery:
         self.canvas.bind(key_codes.EKey3,lambda: self.toggle_visibility())
         self.imagemenu.append((u"3. Visibility", lambda: self.toggle_visibility()))
         self.canvas.bind(key_codes.EKey0,lambda: appuifw.note(u"Sorry, not implemented yet", 'info'))
-        self.imagemenu.append((u"0. Synchronize", lambda: self.toggle_visibility()))
+        self.imagemenu.append((u"0. Synchronize", lambda: appuifw.note(u"Sorry, not implemented yet", 'info')))
         self.canvas.bind(key_codes.EKeyBackspace,lambda: self.delete_current())
         self.imagemenu.append((u"C. Delete", lambda: self.delete_current()))
         self.canvas.bind(key_codes.EKeySelect,lambda: self.show_current())
@@ -1571,7 +1571,7 @@ class ImageGallery:
         self.load_image_metadata()
         self.update_filelist()
 
-    def update_menu(self):
+    def _update_menu(self):
         """Update left options key to fit current context"""
         if self.current_img < 0:
             sort_menu=(u"Sort images by", (
@@ -1583,10 +1583,9 @@ class ImageGallery:
                                 (u"Search images", self.search_filelist),
                                 (u"Close", self.handle_close),
                                 ]
-        else:    
+        else: # Some image is currently open
             default = [(u"Close", self.handle_close),]
             menu = default + self.imagemenu
-            print menu
             appuifw.app.menu = menu
 
     def handle_close(self):
@@ -1729,7 +1728,7 @@ class ImageGallery:
             #del(small)
         else:
             self.canvas.text((5, 80), u"No images", font=font, fill=0x000066)
-        self.update_menu()
+        self._update_menu()
         self.updating = False
         
     def blit_image(self, canvas, img, data):
