@@ -7,7 +7,10 @@ import cStringIO
 ##    Contact mailto:patrickdlogan@stardecisions.com
 ##
 ##    Slightly modified by Ville H. Tuulos for PyS60
-##    Slightly modified by Aapo Rista for PyS60
+##    Slightly modified by Aapo Rista (2008) for PyS60:
+##    - changed tabs to spaces in the source
+##    - changed %f formatting to %s in floats (broken in PyS60)
+##    - added unicode encoding to UTF-8
 ##
 ##    This library is free software; you can redistribute it and/or
 ##    modify it under the terms of the GNU Lesser General Public
@@ -25,50 +28,50 @@ import cStringIO
 
 
 class _StringGenerator(object):
-	def __init__(self, string):
-		self.string = string
-		self.index = -1
-	def peek(self):
-		i = self.index + 1
-		if i < len(self.string):
-			return self.string[i]
-		else:
-			return None
-	def next(self):
-		self.index += 1
-		if self.index < len(self.string):
-			return self.string[self.index]
-		else:
-			raise StopIteration
-        def putback(self, ch):
-                self.index -= 1
-	def all(self):
-		return self.string
+    def __init__(self, string):
+        self.string = string
+        self.index = -1
+    def peek(self):
+        i = self.index + 1
+        if i < len(self.string):
+            return self.string[i]
+        else:
+            return None
+    def next(self):
+        self.index += 1
+        if self.index < len(self.string):
+            return self.string[self.index]
+        else:
+            raise StopIteration
+    def putback(self, ch):
+        self.index -= 1
+    def all(self):
+        return self.string
 
 class _FileGenerator:
-        def __init__(self, fd):
-                self.fd = fd
-                self.peeked = ""
-                self.buf =  ""
-        def peek(self):
-                if not self.peeked:
-                        self.peeked = self.fd.read(1)
-                return self.peeked
-        def next(self):
-                if self.peeked:
-                        r = self.peeked
-                        self.peeked = ""
-                else:
-                        r = self.fd.read(1)
-                if r:
-                        #self.buf += r
-                        return r
-                else:
-                        raise StopIteration
-        def putback(self, ch):
-                self.peeked = ch
-        def all(self):
-                return self.buf
+    def __init__(self, fd):
+        self.fd = fd
+        self.peeked = ""
+        self.buf =  ""
+    def peek(self):
+        if not self.peeked:
+            self.peeked = self.fd.read(1)
+        return self.peeked
+    def next(self):
+        if self.peeked:
+            r = self.peeked
+            self.peeked = ""
+        else:
+            r = self.fd.read(1)
+        if r:
+            #self.buf += r
+            return r
+        else:
+            raise StopIteration
+    def putback(self, ch):
+        self.peeked = ch
+    def all(self):
+        return self.buf
 
 
 class WriteException(Exception):
@@ -98,7 +101,7 @@ class JsonReader(object):
         if peek == '{':
             return self._readObject()
         elif peek == '[':
-            return self._readArray()            
+            return self._readArray()
         elif peek == '"':
             return self._readString()
         elif peek == '-' or peek.isdigit():
@@ -172,15 +175,15 @@ class JsonReader(object):
                     if ch in 'brnft':
                         ch = self.escapes[ch]
                     elif ch == "u":
-		        ch4096 = next()
-			ch256  = next()
-			ch16   = next()
-			ch1    = next()
-			n = 4096 * self._hexDigitToInt(ch4096)
-			n += 256 * self._hexDigitToInt(ch256)
-			n += 16  * self._hexDigitToInt(ch16)
-			n += self._hexDigitToInt(ch1)
-			ch = unichr(n)
+                        ch4096 = next()
+                        ch256  = next()
+                        ch16   = next()
+                        ch1    = next()
+                        n = 4096 * self._hexDigitToInt(ch4096)
+                        n += 256 * self._hexDigitToInt(ch256)
+                        n += 16  * self._hexDigitToInt(ch16)
+                        n += self._hexDigitToInt(ch1)
+                        ch = unichr(n)
                     elif ch not in '"/\\':
                         raise ReadException, "Not a valid escaped JSON character: '%s' in %s" % (ch, self._generator.all())
                 result.write(ch)
@@ -195,8 +198,8 @@ class JsonReader(object):
         except KeyError:
             try:
                 result = int(ch)
-	    except ValueError:
-	         raise ReadException, "The character %s is not a hex digit." % ch
+            except ValueError:
+                 raise ReadException, "The character %s is not a hex digit." % ch
         return result
 
     def _readComment(self):
@@ -266,7 +269,7 @@ class JsonReader(object):
                 ch = self._next()
                 if ch != ",":
                     raise ReadException, "Not a valid JSON array: '%s' due to: '%s'" % (self._generator.all(), ch)
-	assert self._next() == "}"
+        assert self._next() == "}"
         return result
 
     def _eatWhitespace(self):
@@ -319,26 +322,27 @@ class JsonWriter(object):
             self._append("]")
         elif ty is types.StringType or ty is types.UnicodeType:
             self._append('"')
-	    obj = obj.replace('\\', r'\\')
+            obj = obj.replace('\\', r'\\')
             if self._escaped_forward_slash:
                 obj = obj.replace('/', r'\/')
-	    obj = obj.replace('"', r'\"')
-	    obj = obj.replace('\b', r'\b')
-	    obj = obj.replace('\f', r'\f')
-	    obj = obj.replace('\n', r'\n')
-	    obj = obj.replace('\r', r'\r')
-	    obj = obj.replace('\t', r'\t')
+            obj = obj.replace('"', r'\"')
+            obj = obj.replace('\b', r'\b')
+            obj = obj.replace('\f', r'\f')
+            obj = obj.replace('\n', r'\n')
+            obj = obj.replace('\r', r'\r')
+            obj = obj.replace('\t', r'\t')
 	    if ty is types.UnicodeType:
 	    	obj = obj.encode('utf-8')
             self._append(obj)
             self._append('"')
-        # TODO: add NaN handling somewhere.
+        # TODO: add NaN handling somewhere here.
         elif ty is types.IntType or ty is types.LongType:
             self._append(str(obj))
+        # Symbian string formatting / locale is broken and e.g. 1234567890.123
+        # is formatted as "1 234 567 890.123" (in finnish phone)
+        # So we put floats as plain strings here: %s instead of %f
         elif ty is types.FloatType:
-            # Symbian locale is broken and e.g. 1234567890.123
-            # is formatted "1 234 567 890.123" in finnish phone
-            self._append(("%f" % obj).replace(" ", ""))
+            self._append("%s" % obj)
         elif obj is True:
             self._append("true")
         elif obj is False:
@@ -356,4 +360,3 @@ def read(s):
 
 def read_stream(fd):
     return JsonReader().read_stream(fd)
-
