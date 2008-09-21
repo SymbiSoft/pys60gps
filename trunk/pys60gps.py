@@ -118,6 +118,7 @@ class GpsApp:
         # Data-repository
         self.data = {}
         self.data["gsm_location"] = [] # GSM-cellid history list (location.gsm_location())
+        self.data["wifi"] = [] # Wifi scan history list (wlantools.scan())
         # GPS-position
         self.pos = {} # Contains always the latest position-record
         self.data["position"] = [] # Position history list (positioning.position())
@@ -486,6 +487,55 @@ class GpsApp:
             if len(self.data["gsm_location"]) > 200:
                 self.data["gsm_location"].pop()
                 self.data["gsm_location"].pop()
+
+    def wifiscan(self):
+        """
+        Scan all available wifi networks if wlantools-module is present.
+        """
+        try:
+            import wlantools
+        except:
+            return
+        starttime = time.time()
+        pos = self.pos
+        wlan_devices = wlantools.scan(False)
+        for w in wlan_devices:
+            for k,v in w.items(): # lowercase all keys
+                #del w[k]
+                # Remove possible null-characters
+                #w[k.lower()] = (u"%s" % v).replace('\x00', '')
+                w[k] = (u"%s" % v).replace('\x00', '')
+        data = {"comment": u"",
+                "systime": time.strftime(u"%Y-%m-%dT%H:%M:%S", time.localtime()),
+                "duration": time.time() - starttime,
+                "wifilist" : wlan_devices
+                }
+        if self.has_fix(pos):
+            data["lat"] = pos["position"]["latitude"]
+            data["lon"] = pos["position"]["longitude"]
+        else: # TODO: move this interaction to some other function, e.g in tracktab
+            data["comment"] = appuifw.query(u"No GPS fix, add text comment", "text", u"")
+        if pos: # At least once has got fix
+            if (pos.has_key("satellites") and pos["satellites"].has_key("time")): 
+                data["gpstime"] = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", 
+                                                time.localtime(pos["satellites"]["time"]))
+            if pos.has_key("systime") and starttime - pos["systime"] > 3: 
+                data["gpsage"] = starttime - pos["systime"]
+            if (pos.has_key("course") 
+                    and pos["course"].has_key("speed") 
+                    and pos["course"].has_key("heading")):
+                data["speed"] = pos["course"]["speed"]
+                data["course"] = pos["course"]["heading"]
+            try: 
+                data["alt"] = pos["position"]["altitude"]
+            except:
+                pass
+        self.append_log_cache("wifi", json.write(data))     
+        self.save_log_cache("wifi")
+        pos_copy = copy.deepcopy(pos)
+        pos_copy["text"] = u"%d" % len(wlan_devices)
+        self.data["wifi"].append(pos_copy)
+        return data
 
     def _calculate_UTM(self, pos, LongOrigin=None):
         """
@@ -999,6 +1049,7 @@ class GpsTrackTab(BaseInfoTab):
     center_pos = {}
     toggables = {"track":True,
                  "cellid":False,
+                 "wifi":False,
                 }
 
     def activate(self):
@@ -1024,6 +1075,9 @@ class GpsTrackTab(BaseInfoTab):
         self.canvas.bind(key_codes.EKeySelect, self.save_poi)
         self.canvas.bind(key_codes.EKey1, lambda: self.toggle("track"))
         self.canvas.bind(key_codes.EKey2, lambda: self.toggle("cellid"))
+        self.canvas.bind(key_codes.EKey3, lambda: self.toggle("wifi"))
+        self.canvas.bind(key_codes.EKey4, self.Main.wifiscan)
+
         appuifw.app.menu.insert(0, (u"Send track via bluetooth", self.send_track))
         appuifw.app.menu.insert(0, (u"Send cellids via bluetooth", self.send_cellids))
         appuifw.app.menu.insert(0, (u"Send debug track via bluetooth", self.send_debug))
@@ -1275,13 +1329,51 @@ class GpsTrackTab(BaseInfoTab):
         poi_width = 20 / self.meters_per_px # show pois relative to zoom level
         if poi_width < 1: poi_width = 1
         if poi_width > 10: poi_width = 10
+        
+        ##############################################        
+        # Testing the point estimation 
+        # TODO: to a function
+        if len(self.Main.data["position"]) > 0: 
+            pe = self.Main.pos_estimate
+            err_radius = self.Main.config["estimated_error_radius"] # meters
+            ell_r = err_radius / self.meters_per_px 
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, pe)
+            if pe.has_key("x"):
+                self.ui.ellipse([(pe["x"]+center_x-ell_r,pe["y"]+center_y-ell_r),
+                                 (pe["x"]+center_x+ell_r,pe["y"]+center_y+ell_r)], outline=0x9999ff)
+            # Draw accurancy circle
+            # FIXME: this doesn't draw the circle to the current position, instead to the map center
+            acc_radius = pos["position"]["horizontal_accuracy"]
+            if acc_radius > 0:
+                acc_r = acc_radius / self.meters_per_px 
+                self.ui.ellipse([(center_x-acc_r,center_y-acc_r),
+                                 (center_x+acc_r,center_y+acc_r)], outline=0xccffcc)
+            if self.Main.data["trip_distance"] >= 1000.0:
+                trip = u"%.2f km" % (self.Main.data["trip_distance"] / 1000)
+            else:
+                trip = u"%.1f m" % (self.Main.data["trip_distance"])
+            # TODO REMOVE:
+            # trip = u"%.1f m" % (self.Main.data["trip_distance"])
+            #self.ui.text(([10, 230]), u"%.1f km/h %.1f° %s" % (pos["course"]["speed"]*3.6, pos["course"]["heading"],  trip), 
+            self.ui.text(([10, 230]), u"%.1f m/s %.1f° %s" % (pos["course"]["speed"], pos["course"]["heading"],  trip), 
+                                      font=(u"Series 60 Sans", 18), fill=0x000000)
+        
+        ##############################################        
+        # Draw GSM points
         for p in self.Main.data["gsm_location"]:
             self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
             if p.has_key("x"):
-                self.ui.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0xccccff)
+                self.ui.text(([p["x"]+center_x+10, p["y"]+center_y+5]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0xccccff)
                 self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x9999ff, width=poi_width)
+        ##############################################        
+        # Draw Wifi points
+        for p in self.Main.data["wifi"]:
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
+            if p.has_key("x"):
+                self.ui.text(([p["x"]+center_x+10, p["y"]+center_y+5]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x0000ff)
+                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x0000ff, width=poi_width)
 
-
+        ##############################################        
         # TESTING direction line
         if len(self.Main.data["position"]) > 0 and self.Main.data["position"][-1]["course"].has_key("speed"):
             # Copy latest saved position from history
@@ -1322,6 +1414,7 @@ class GpsTrackTab(BaseInfoTab):
             
             #self.ui.text((160, s), u"%d %d %d %d" % (x0, y0, x, y), font=(u"Series 60 Sans", 10), fill=0x000000)
         # draw "heading arrow"
+        ##############################################        
         if self.Main.has_fix(pos) and pos["course"]["heading"] and pos["course"]["speed"]:
             p = copy.deepcopy(pos)
             self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
@@ -1341,6 +1434,7 @@ class GpsTrackTab(BaseInfoTab):
 
         # New style: use main apps data structures directly and _calculate_canvas_xy() to get pixel xy.
         # TODO: to a function
+        ##############################################        
         for i in range(len(self.Main.data["position_debug"])-1, -1, -1):
             j = j + 1
             if j > 60: break # draw only last x debug points
@@ -1413,33 +1507,6 @@ class GpsTrackTab(BaseInfoTab):
             self.ui.point([10, 10], outline=0xff0000, width=10)
         if self.Main.downloading_pois_test:
             self.ui.point([20, 10], outline=0xffff00, width=10)
-        ##############################################        
-        # Testing the point estimation 
-        # TODO: to a function
-        if len(self.Main.data["position"]) > 0: 
-            pe = self.Main.pos_estimate
-            err_radius = self.Main.config["estimated_error_radius"] # meters
-            ell_r = err_radius / self.meters_per_px 
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, pe)
-            if pe.has_key("x"):
-                self.ui.ellipse([(pe["x"]+center_x-ell_r,pe["y"]+center_y-ell_r),
-                                 (pe["x"]+center_x+ell_r,pe["y"]+center_y+ell_r)], outline=0x9999ff)
-            # Draw accurancy circle
-            # FIXME: this doesn't draw the circle to the current position, instead to the map center
-            acc_radius = pos["position"]["horizontal_accuracy"]
-            if acc_radius > 0:
-                acc_r = acc_radius / self.meters_per_px 
-                self.ui.ellipse([(center_x-acc_r,center_y-acc_r),
-                                 (center_x+acc_r,center_y+acc_r)], outline=0xccffcc)
-            if self.Main.data["trip_distance"] >= 1000.0:
-                trip = u"%.2f km" % (self.Main.data["trip_distance"] / 1000)
-            else:
-                trip = u"%.1f m" % (self.Main.data["trip_distance"])
-            # TODO REMOVE:
-            # trip = u"%.1f m" % (self.Main.data["trip_distance"])
-            #self.ui.text(([10, 230]), u"%.1f km/h %.1f° %s" % (pos["course"]["speed"]*3.6, pos["course"]["heading"],  trip), 
-            self.ui.text(([10, 230]), u"%.1f m/s %.1f° %s" % (pos["course"]["speed"], pos["course"]["heading"],  trip), 
-                                      font=(u"Series 60 Sans", 18), fill=0x000000)
                                       
         ###########################################
         # Draw scale bar
