@@ -449,7 +449,7 @@ class GpsApp:
         Read gsm_location/cellid changes and save them to the gsm history list.
         """
         # Take the latest position and append gsm data into it if neccessary
-        pos = self.pos 
+        pos = self.pos  # TODO copy.deepcopy here instead???
         if not pos: return
         l = location.gsm_location()
         if e32.in_emulator(): # Do some random cell changes if in emulator
@@ -459,34 +459,86 @@ class GpsApp:
         # NOTE: gsm_location() may return None in certain circumstances!
         if l is not None and len(l) == 4:
             gsm_location = {'cellid': l}
-            try: # This needs some capability (ReadDeviceData?)
-                gsm_location["signal_bars"] = sysinfo.signal_bars()
-                gsm_location["signal_dbm"] = sysinfo.signal_dbm()
-            except:
-                gsm_location["signal_bars"] = None
-                gsm_location["signal_dbm"] = None
-            # Append gsm_location if current differs from the last saved...
-            # TODO: append also to the log file
-            if len(self.data["gsm_location"]) > 0 and l != self.data["gsm_location"][-1]['gsm']['cellid']:
+            # Add new gsm_location if it differs from the previous one (or there is not previous)
+            # TODO: if the distance to the latest point exceeds 
+            # some configurable limit (e.g. 1000 meters), then append a new point too
+            if (len(self.data["gsm_location"]) == 0
+                or (len(self.data["gsm_location"]) > 0 and 
+                    l != self.data["gsm_location"][-1]['gsm']['cellid'])):
+                data = self.simplify_position(pos)
+                # Make times isotime
+                # TODO: add timezone to systime (e.g. +0300) use altzone 
+                try:
+                    data["systime"] = time.strftime(u"%Y-%m-%dT%H:%M:%S", time.localtime(data["systime"]))
+                    data["gpstime"] = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", time.localtime(data["gpstime"]))                
+                except:
+                    pass
+                data["cellid"] = "%s,%s,%s,%s" % (l)
+                try: # This needs some capability (ReadDeviceData?)
+                    data["signal_bars"] = sysinfo.signal_bars()
+                    data["signal_dbm"] = sysinfo.signal_dbm()
+                except:
+                    data["signal_bars"] = None
+                    data["signal_dbm"] = None
                 pos["gsm"] = gsm_location
                 pos["text"] = l[3]
-                self.append_log_cache("cellid", PositionHelper._make_xml_cellpt(self.data["gsm_location"][-1], pos))
+                self.append_log_cache("cellid", json.write(data))
                 self.data["gsm_location"].append(pos)
             elif len(self.data["gsm_location"]) == 0: # ...or the history is empty: append the 1st record
                 pos["gsm"] = gsm_location
                 pos["text"] = l[3]
                 self.data["gsm_location"].append(pos)
-            if len(self.data["gsm_location"]) % 20 == 0: # save cellids after 20 lines
+            # save cellids after n lines
+            if len(self.data["gsm_location"]) % 3 == 0: 
                 self.save_log_cache("cellid")
-            #else: print len(self.data["gsm_location"]) % 5
-            # TODO: if the distance to the latest point exceeds 
-            # some configurable limit (e.g. 1000 meters), then append a new point too
-            
             # Remove the oldest records if the length exceeds limit
             # TODO: make limit configurable
             if len(self.data["gsm_location"]) > 200:
                 self.data["gsm_location"].pop()
                 self.data["gsm_location"].pop()
+
+# TODO: check and test this
+    def simplify_position(self, pos):
+        """
+        Extract common values from a positioning's position object.
+        NOTE: some values may be in certain situations NaN:s,
+        """
+        att = {}
+        if not pos: return att
+        if pos.has_key("systime"): 
+            att["systime"] = pos["systime"]
+        if pos.has_key("position"):
+            if (pos["position"].has_key("latitude") 
+                  and -90 <= pos["position"]["latitude"] <= 90):        
+                att["lat"] = pos["position"]["latitude"]
+                att["lon"] = pos["position"]["longitude"]
+            if (pos["position"].has_key("altitude") 
+                  and pos["position"]["altitude"] > -10000):        
+                att["alt_m"] = pos["position"]["altitude"]
+        if pos.has_key("course"):
+            if pos["course"].has_key("speed"): 
+                att["speed_kmh"] = pos["course"]["speed"] * 3.6
+            if pos["course"].has_key("heading"): 
+                att["heading"] = pos["course"]["heading"]
+        if pos.has_key("satellites"):
+            if pos["satellites"].has_key("time"): 
+                att["gpstime"] = pos["satellites"]["time"]
+            try:
+                att["hdop"] = pos["satellites"]["horizontal_dop"]
+                att["vdop"] = pos["satellites"]["vertical_dop"]
+                att["tdop"] = pos["satellites"]["time_dop"]
+            except:
+                pass
+                
+#            if pos["satellites"].has_key("time"): 
+#                att["gpstime"] = pos["satellites"]["time"])
+#            try:
+#                att["gpstime"] = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", 
+#                                               time.localtime(pos["satellites"]["time"]))
+#                att["dop"] = u"%.2f;%.2f;%.2f" % (pos["satellites"]["horizontal_dop"], 
+#                                                  pos["satellites"]["vertical_dop"], 
+#                                                  pos["satellites"]["time_dop"])
+        return att
 
     def wifiscan(self):
         """
@@ -501,37 +553,19 @@ class GpsApp:
         wlan_devices = wlantools.scan(False)
         for w in wlan_devices:
             for k,v in w.items(): # lowercase all keys
-                #del w[k]
+                del w[k]
                 # Remove possible null-characters
-                #w[k.lower()] = (u"%s" % v).replace('\x00', '')
-                w[k] = (u"%s" % v).replace('\x00', '')
-        data = {"comment": u"",
-                "systime": time.strftime(u"%Y-%m-%dT%H:%M:%S", time.localtime()),
-                "duration": time.time() - starttime,
-                "wifilist" : wlan_devices
-                }
-        if self.has_fix(pos):
-            data["lat"] = pos["position"]["latitude"]
-            data["lon"] = pos["position"]["longitude"]
-        else: # TODO: move this interaction to some other function, e.g in tracktab
+                w[k.lower()] = (u"%s" % v).replace('\x00', '')
+                #w[k] = (u"%s" % v).replace('\x00', '')
+        data = self.simplify_position(pos)
+        data["comment"] = u""
+        data["duration"] = time.time() - starttime
+        data["wifilist"] = wlan_devices
+        if not self.has_fix(pos): # TODO: move this interaction to some other function, e.g in tracktab
             data["comment"] = appuifw.query(u"No GPS fix, add text comment", "text", u"")
-        if pos: # At least once has got fix
-            if (pos.has_key("satellites") and pos["satellites"].has_key("time")): 
-                data["gpstime"] = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", 
-                                                time.localtime(pos["satellites"]["time"]))
-            if pos.has_key("systime") and starttime - pos["systime"] > 3: 
-                data["gpsage"] = starttime - pos["systime"]
-            if (pos.has_key("course") 
-                    and pos["course"].has_key("speed") 
-                    and pos["course"].has_key("heading")):
-                data["speed"] = pos["course"]["speed"]
-                data["course"] = pos["course"]["heading"]
-            try: 
-                data["alt"] = pos["position"]["altitude"]
-            except:
-                pass
         self.append_log_cache("wifi", json.write(data))     
         self.save_log_cache("wifi")
+        # Add a pos to be drawn on the canvas
         pos_copy = copy.deepcopy(pos)
         pos_copy["text"] = u"%d" % len(wlan_devices)
         self.data["wifi"].append(pos_copy)
