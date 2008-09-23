@@ -115,6 +115,12 @@ class GpsApp:
             self._select_access_point(self.config["apid"])
         # Center meridian
         self.LongOrigin = None
+        # Some counters
+        self.counters = {"cellid":0,
+                         "wifi":0,
+                         "track":0,
+                         }
+
         # Data-repository
         self.data = {}
         self.data["gsm_location"] = [] # GSM-cellid history list (location.gsm_location())
@@ -144,6 +150,7 @@ class GpsApp:
         self.listbox = appuifw.Listbox(self.main_menu, self.handle_select)
         self.activate()
         self.beep = self.get_tone(freq=440, duration=500, volume=1.0)
+        #print self.read_log_cache_filenames("track")
 
     def _select_access_point(self, apid = None):
         """
@@ -414,7 +421,7 @@ class GpsApp:
         appuifw.note(u"Starting GPS...", 'info')
 
     def _get_log_cache_filename(self, logname):
-        return os.path.join(self.cachedir, u"%s.txt" % logname)
+        return os.path.join(self.cachedir, u"%s.json" % logname)
         
     def append_log_cache(self, logname, data):
         """Append data to name log cache file."""
@@ -433,7 +440,7 @@ class GpsApp:
             log_dir = os.path.join(self.datadir, logname) # use separate directories
             if not os.path.exists(log_dir):
                 os.makedirs(log_dir)
-            log_filename = os.path.join(log_dir, logname + time.strftime("-%Y%m%d.txt", time.localtime(time.time())))
+            log_filename = os.path.join(log_dir, logname + time.strftime("-%Y%m%d.json", time.localtime(time.time())))
             fout = open(log_filename, "at")
             fin = open(cache_filename_tmp, "rt")
             data = fout.write(fin.read())
@@ -444,6 +451,70 @@ class GpsApp:
             pass # Failed. TODO: error logging here
             raise
 
+#    def read_log_cache_filenames(self, logname):
+#        """Get a list of cache files."""
+#        log_dir = os.path.join(self.datadir, logname) # use separate directories
+#        if os.path.isdir(log_dir):
+#            files = os.listdir(log_dir)
+#            selected = appuifw.multi_selection_list(files, style="checkbox", search_field=1)
+#            return files 
+#        else:
+#            return []
+
+    # TODO: put this into some generic tool module
+    def _get_timezone(self):
+        """Return timezone with prefix, e.g. +0300"""
+        if time.altzone <= 0: prefix = "+"
+        else: prefix = "-"
+        hours = ("%2d" % (abs(time.altzone / (60 * 60)))).replace(" ", "0")
+        mins = ("%2d" % (abs(time.altzone / 60) % 60)).replace(" ", "0")
+        if int(mins) > 0:
+            return "%s%s%s" % (prefix, hours, mins)
+        else:
+            return "%s%s" % (prefix, hours)
+
+    # TODO: check and test this
+    def simplify_position(self, pos, isotime=False):
+        """
+        Extract common values from a positioning's position object.
+        NOTE: some values may be in certain situations NaN:s,
+        """
+        data = {}
+        if not pos: return data
+        if pos.has_key("systime"): 
+            if isotime:
+                data["systime"] = time.strftime(u"%Y-%m-%dT%H:%M:%S", time.localtime(pos["systime"])) + self._get_timezone()
+            else:
+                data["systime"] = pos["systime"]
+        if pos.has_key("position"):
+            if (pos["position"].has_key("latitude") 
+                  and -90 <= pos["position"]["latitude"] <= 90):        
+                data["lat"] = pos["position"]["latitude"]
+                data["lon"] = pos["position"]["longitude"]
+            if (pos["position"].has_key("altitude") 
+                  and pos["position"]["altitude"] > -10000):        
+                data["alt_m"] = pos["position"]["altitude"]
+        if pos.has_key("course"):
+            if pos["course"].has_key("speed"): 
+                data["speed_kmh"] = pos["course"]["speed"] * 3.6
+            if pos["course"].has_key("heading"): 
+                data["heading"] = pos["course"]["heading"]
+        if pos.has_key("satellites"):
+            if pos["satellites"].has_key("time"):
+                if isotime:
+                    data["gpstime"] = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", 
+                                                    time.localtime(pos["satellites"]["time"]))
+                else:
+                    data["gpstime"] = pos["satellites"]["time"]
+            try:
+                data["hdop"] = pos["satellites"]["horizontal_dop"]
+                data["vdop"] = pos["satellites"]["vertical_dop"]
+                data["tdop"] = pos["satellites"]["time_dop"]
+            except:
+                pass
+        return data
+
+    # TODO: rename gsmscan ? (alike wifiscan, btscan)
     def read_gsm_location(self):
         """
         Read gsm_location/cellid changes and save them to the gsm history list.
@@ -458,6 +529,7 @@ class GpsApp:
                 l = ('244','123','29000',random.randint(1,2**24))
         # NOTE: gsm_location() may return None in certain circumstances!
         if l is not None and len(l) == 4:
+            data = {}
             gsm_location = {'cellid': l}
             # Add new gsm_location if it differs from the previous one (or there is not previous)
             # TODO: if the distance to the latest point exceeds 
@@ -465,85 +537,34 @@ class GpsApp:
             if (len(self.data["gsm_location"]) == 0
                 or (len(self.data["gsm_location"]) > 0 and 
                     l != self.data["gsm_location"][-1]['gsm']['cellid'])):
-                data = self.simplify_position(pos)
-                # Make times isotime
-                # TODO: add timezone to systime (e.g. +0300) use altzone 
-                try:
-                    data["systime"] = time.strftime(u"%Y-%m-%dT%H:%M:%S", time.localtime(data["systime"]))
-                    data["gpstime"] = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", time.localtime(data["gpstime"]))                
-                except:
-                    pass
+                data = self.simplify_position(pos, isotime=True)
                 data["cellid"] = "%s,%s,%s,%s" % (l)
                 try: # This needs some capability (ReadDeviceData?)
                     data["signal_bars"] = sysinfo.signal_bars()
                     data["signal_dbm"] = sysinfo.signal_dbm()
                 except:
-                    data["signal_bars"] = None
-                    data["signal_dbm"] = None
+                    #data["signal_bars"] = None
+                    #data["signal_dbm"] = None
+                    pass
                 pos["gsm"] = gsm_location
                 pos["text"] = l[3]
                 self.append_log_cache("cellid", json.write(data))
                 self.data["gsm_location"].append(pos)
-            elif len(self.data["gsm_location"]) == 0: # ...or the history is empty: append the 1st record
-                pos["gsm"] = gsm_location
-                pos["text"] = l[3]
-                self.data["gsm_location"].append(pos)
-            # save cellids after n lines
-            if len(self.data["gsm_location"]) % 3 == 0: 
-                self.save_log_cache("cellid")
-            # Remove the oldest records if the length exceeds limit
-            # TODO: make limit configurable
-            if len(self.data["gsm_location"]) > 200:
-                self.data["gsm_location"].pop()
-                self.data["gsm_location"].pop()
-
-# TODO: check and test this
-    def simplify_position(self, pos):
-        """
-        Extract common values from a positioning's position object.
-        NOTE: some values may be in certain situations NaN:s,
-        """
-        att = {}
-        if not pos: return att
-        if pos.has_key("systime"): 
-            att["systime"] = pos["systime"]
-        if pos.has_key("position"):
-            if (pos["position"].has_key("latitude") 
-                  and -90 <= pos["position"]["latitude"] <= 90):        
-                att["lat"] = pos["position"]["latitude"]
-                att["lon"] = pos["position"]["longitude"]
-            if (pos["position"].has_key("altitude") 
-                  and pos["position"]["altitude"] > -10000):        
-                att["alt_m"] = pos["position"]["altitude"]
-        if pos.has_key("course"):
-            if pos["course"].has_key("speed"): 
-                att["speed_kmh"] = pos["course"]["speed"] * 3.6
-            if pos["course"].has_key("heading"): 
-                att["heading"] = pos["course"]["heading"]
-        if pos.has_key("satellites"):
-            if pos["satellites"].has_key("time"): 
-                att["gpstime"] = pos["satellites"]["time"]
-            try:
-                att["hdop"] = pos["satellites"]["horizontal_dop"]
-                att["vdop"] = pos["satellites"]["vertical_dop"]
-                att["tdop"] = pos["satellites"]["time_dop"]
-            except:
-                pass
-                
-#            if pos["satellites"].has_key("time"): 
-#                att["gpstime"] = pos["satellites"]["time"])
-#            try:
-#                att["gpstime"] = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", 
-#                                               time.localtime(pos["satellites"]["time"]))
-#                att["dop"] = u"%.2f;%.2f;%.2f" % (pos["satellites"]["horizontal_dop"], 
-#                                                  pos["satellites"]["vertical_dop"], 
-#                                                  pos["satellites"]["time_dop"])
-        return att
+                self.counters["cellid"] = self.counters["cellid"] + 1
+                # save cellids after n lines
+                if self.counters["cellid"] % 5 == 0:
+                    self.save_log_cache("cellid")
+                # Remove the oldest records if the length exceeds limit
+                # TODO: make limit configurable
+                if len(self.data["gsm_location"]) > 50:
+                    self.data["gsm_location"].pop()
+            return data
 
     def wifiscan(self):
         """
         Scan all available wifi networks if wlantools-module is present.
         """
+        # TODO: add lock here or immediate return if previous scan is still active / hanged
         try:
             import wlantools
         except:
@@ -552,19 +573,18 @@ class GpsApp:
         pos = self.pos
         wlan_devices = wlantools.scan(False)
         for w in wlan_devices:
-            for k,v in w.items(): # lowercase all keys
+            for k,v in w.items(): # Lowercase all keys and Remove possible null-characters 
                 del w[k]
-                # Remove possible null-characters
                 w[k.lower()] = (u"%s" % v).replace('\x00', '')
-                #w[k] = (u"%s" % v).replace('\x00', '')
-        data = self.simplify_position(pos)
-        data["comment"] = u""
+        data = self.simplify_position(pos, isotime=True)
+        #data["comment"] = u""
         data["duration"] = time.time() - starttime
         data["wifilist"] = wlan_devices
         if not self.has_fix(pos): # TODO: move this interaction to some other function, e.g in tracktab
             data["comment"] = appuifw.query(u"No GPS fix, add text comment", "text", u"")
-        self.append_log_cache("wifi", json.write(data))     
-        self.save_log_cache("wifi")
+        self.append_log_cache("wifi", json.write(data))
+        if self.counters["wifi"] % 5 == 0:
+            self.save_log_cache("wifi")
         # Add a pos to be drawn on the canvas
         pos_copy = copy.deepcopy(pos)
         pos_copy["text"] = u"%d" % len(wlan_devices)
@@ -687,15 +707,18 @@ class GpsApp:
               or ((dist > mindist) and (anglediff > minanglediff)) \
               or (timediff > maxtimediff): 
                 self.data["position"].append(pos)
-                self.append_log_cache("track", PositionHelper._make_xml_trackpt(pos))
-                # FIXME: this does not work after self.config["max_trackpoints"] has been reached
-                if len(self.data["position"]) % 20 == 0: # save trackpoints after 20 lines
-                    self.save_log_cache("track") 
-            
-        # If data["position"] is too long, remove some of the oldest points
-        if len(self.data["position"]) > self.config["max_trackpoints"]:
-            self.data["position"].pop(0)
-            self.data["position"].pop(0) # pop twice to reduce the number of points
+                #####################################################
+                data = self.simplify_position(pos, isotime=True)
+                try: del data["systime"]
+                except: pass
+                self.append_log_cache("track", json.write(data))
+                self.counters["track"] = self.counters["track"] + 1
+                # save cellids after n lines
+                if self.counters["track"] % 10 == 0: 
+                    self.save_log_cache("track")
+                # If data["position"] is too long, remove some of the oldest points
+                if len(self.data["position"]) > self.config["max_trackpoints"]:
+                    self.data["position"].pop(0) # pop twice to reduce the number of points
         # Calculate the distance between the newest and the previous pos and add it to trip_distance
         try: # TODO: do not add if time between positions is more than e.g. 120 sec
             if pos["satellites"]["time"] - self.pos["satellites"]["time"] < 120:
@@ -1485,14 +1508,26 @@ class GpsTrackTab(BaseInfoTab):
         track = self.Main.data["position"]
         if len(self.Main.data["position"]) > 0:
             p1 = self.Main.data["position"][-1]
+        lines_drawn = 0
         for i in range(len(self.Main.data["position"])-1, -1, -1): # draw trackpoints backwards
             p = self.Main.data["position"][i]
             self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
-            if p.has_key("x") and p1.has_key("x"):
+            max_timediff = 120 # seconds
+            timediff = abs(p["satellites"]["time"] - p1["satellites"]["time"])
+            # Draw only lines which are inside canvas/screen
+            # FIXME: no hardcoded values here
+            if (p.has_key("x") 
+               and p1.has_key("x") 
+               and (-120 < p["x"] < 120 or -120 < p1["x"] < 120) 
+               and (-120 < p["y"] < 120 or -120 < p1["y"] < 120) 
+               and timediff <= max_timediff):
                 self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0xff0000, width=5)
                 self.ui.line([p["x"]+center_x, p["y"]+center_y, 
                               p1["x"]+center_x, p1["y"]+center_y], outline=0x00ff00, width=2)
+                lines_drawn = lines_drawn + 1
             p1 = p
+        # Debug: show how many track line parts has been drawn
+        # self.ui.text(([130, 130]), u"%d" % lines_drawn, font=(u"Series 60 Sans", 10), fill=0x9999ff)
         # Draw POIs if there are any
         # TODO: to a function
         for p in self.Main.data["pois_private"]:
@@ -1514,7 +1549,7 @@ class GpsTrackTab(BaseInfoTab):
                                       ) < 20: # temporary hardcoded
                                       # self.Main.config["estimated_error_radius"]
                     if not p.has_key("seen"): # play only the first time
-                        self.Main.play_tone()
+                        #self.Main.play_tone()
                         self.seen_counter = self.seen_counter + 1
                     p["seen"] = 1
 
@@ -1896,7 +1931,13 @@ class ImageGallery:
         try: # TODO: dummy try/except here for now, in the future error logging here
             image = graphics.Image.open(imagefilename)
         except:
-            raise
+            appuifw.note(u"Could not open %s" % (imagefilename), 'error')
+            self.delete_current()
+            self.current_img = 0
+            #self.IMG_LIST.pop(self.current_img)
+            return
+            #appuifw.note(u"TODO: ask here if user wants to delete it.", 'info')
+            #raise
         thumb = "%dx%d" % (size)
         thumbdir = os.path.join(thumbbasedir, thumb)
         if not os.path.isdir(thumbdir):
