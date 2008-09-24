@@ -565,10 +565,11 @@ class GpsApp:
         Scan all available wifi networks if wlantools-module is present.
         """
         # TODO: add lock here or immediate return if previous scan is still active / hanged
+        # FIXME: remove all appuifw stuff -- in future this may be called from non-UI-thread
         try:
             import wlantools
-        except:
-            return
+        except Exception, error:
+            appuifw.note(unicode(error), 'error')
         starttime = time.time()
         pos = self.pos
         wlan_devices = wlantools.scan(False)
@@ -2033,11 +2034,37 @@ class ImageGallery:
         """Return a list of photos without caption"""
         pass
 
-# TODO: add exception harness for test versions
-oldbody = appuifw.app.body
-myApp = GpsApp()
-myApp.run()
+# Exception harness for test versions
+try:
+    oldbody = appuifw.app.body
+    myApp = GpsApp()
+    myApp.run()
+    appuifw.app.body = oldbody
+    positioning.stop_position()
+except:
+    # Exception harness
+    positioning.stop_position()
+    import sys
+    import traceback
+    import e32
+    import appuifw
+    appuifw.app.screen = "normal"               # Restore screen to normal size.
+    appuifw.app.focus = None                    # Disable focus callback.
+    body = appuifw.Text()
+    appuifw.app.body = body                     # Create and use a text control.
+    exitlock = e32.Ao_lock()
+    def exithandler(): exitlock.signal()
+    appuifw.app.exit_key_handler = exithandler  # Override softkey handler.
+    appuifw.app.menu = [(u"Exit", exithandler)] # Override application menu.
+    body.set(unicode("\n".join(traceback.format_exception(*sys.exc_info()))))
+    try:
+        body.add(u"\n".join(App.log))
+    except:
+        pass
+        #body.set(unicode("\n".join(traceback.format_exception(*sys.exc_info()))))
+    exitlock.wait()                             # Wait for exit key press.
+    
 positioning.stop_position()
-appuifw.app.body = oldbody
+e32.ao_sleep(1)
 # For SIS-packaged version uncomment this:
 # appuifw.app.set_exit()
