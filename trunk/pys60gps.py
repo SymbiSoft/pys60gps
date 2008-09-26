@@ -538,14 +538,16 @@ class GpsApp:
                 or (len(self.data["gsm_location"]) > 0 and 
                     l != self.data["gsm_location"][-1]['gsm']['cellid'])):
                 data = self.simplify_position(pos, isotime=True)
-                data["cellid"] = "%s,%s,%s,%s" % (l)
+                cell = {"cellid" : "%s,%s,%s,%s" % (l)}
                 try: # This needs some capability (ReadDeviceData?)
-                    data["signal_bars"] = sysinfo.signal_bars()
-                    data["signal_dbm"] = sysinfo.signal_dbm()
+                    cell["signal_bars"] = sysinfo.signal_bars()
+                    cell["signal_dbm"] = sysinfo.signal_dbm()
                 except:
                     #data["signal_bars"] = None
                     #data["signal_dbm"] = None
                     pass
+                # We put this gsm cellid in a list, because in the future there may be several (like in wifi)
+                data["gsmlist"] = [cell]
                 pos["gsm"] = gsm_location
                 pos["text"] = l[3]
                 self.append_log_cache("cellid", json.write(data))
