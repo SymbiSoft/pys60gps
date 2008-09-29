@@ -118,13 +118,17 @@ class GpsApp:
         # Some counters
         self.counters = {"cellid":0,
                          "wifi":0,
+                         "bluetooth":0,
                          "track":0,
                          }
-
+        self.scanning = {"wifi":False,
+                         "bluetooth":False,
+                         }
         # Data-repository
         self.data = {}
         self.data["gsm_location"] = [] # GSM-cellid history list (location.gsm_location())
         self.data["wifi"] = [] # Wifi scan history list (wlantools.scan())
+        self.data["bluetooth"] = [] # Bluetooth scan history list (lightblue.finddevices())
         # GPS-position
         self.pos = {} # Contains always the latest position-record
         self.data["position"] = [] # Position history list (positioning.position())
@@ -572,8 +576,13 @@ class GpsApp:
             import wlantools
         except Exception, error:
             appuifw.note(unicode(error), 'error')
+            return False
+        if self.scanning["wifi"]:
+            appuifw.note(u"Wifi scan already running!", 'error')
+            return False
+        self.scanning["wifi"] = True
         starttime = time.time()
-        pos = self.pos
+        pos = copy.deepcopy(self.pos)
         wlan_devices = wlantools.scan(False)
         for w in wlan_devices:
             for k,v in w.items(): # Lowercase all keys and Remove possible null-characters 
@@ -589,9 +598,53 @@ class GpsApp:
         if self.counters["wifi"] % 5 == 0:
             self.save_log_cache("wifi")
         # Add a pos to be drawn on the canvas
-        pos_copy = copy.deepcopy(pos)
-        pos_copy["text"] = u"%d" % len(wlan_devices)
-        self.data["wifi"].append(pos_copy)
+        pos["text"] = u"%d" % len(wlan_devices)
+        self.data["wifi"].append(pos)
+        self.scanning["wifi"] = False
+        return data
+
+    def bluetoothscan(self):
+        """
+        Scan all available bluetooth networks if wlantools-module is present.
+        """
+        # TODO: add lock here or immediate return if previous scan is still active / hanged
+        # FIXME: remove all appuifw stuff -- in future this may be called from non-UI-thread
+        try:
+            import lightblue
+        except Exception, error:
+            appuifw.note(unicode(error), 'error')
+            return False
+        if self.scanning["bluetooth"]:
+            appuifw.note(u"Bluetooth scan already running!", 'error')
+            return False
+        self.scanning["bluetooth"] = True
+        pos = copy.deepcopy(self.pos)
+        if not self.has_fix(pos): # TODO: move this interaction to some other function, e.g in tracktab
+            # Query this before, because finddevices() may take several minutes
+            comment = appuifw.query(u"No GPS fix, add text comment", "text", u"")
+        else:
+            comment = u""
+        starttime = time.time()
+        bt_devices = lightblue.finddevices()
+        data = self.simplify_position(pos, isotime=True)
+        data["duration"] = time.time() - starttime
+        if comment != u"": data["comment"] = comment
+        btlist = []
+        for d in bt_devices:
+            #(major_serv, major_dev, minor_dev) = lightblue.splitclass(d[2])
+            bt = {u'class' : u"%d,%d,%d" % lightblue.splitclass(d[2]),
+                  u'mac' : d[0],
+                  u'name' : d[1],
+                 }
+            btlist.append(bt)
+        data["btlist"] = btlist
+        self.append_log_cache("bluetooth", json.write(data))
+        if self.counters["bluetooth"] % 1 == 0:
+            self.save_log_cache("bluetooth")
+        # Add a pos to be drawn on the canvas
+        pos["text"] = u"%d" % len(data["btlist"])
+        self.data["bluetooth"].append(pos)
+        self.scanning["bluetooth"] = False
         return data
 
     def _calculate_UTM(self, pos, LongOrigin=None):
@@ -1137,6 +1190,7 @@ class GpsTrackTab(BaseInfoTab):
         self.canvas.bind(key_codes.EKey2, lambda: self.toggle("cellid"))
         self.canvas.bind(key_codes.EKey3, lambda: self.toggle("wifi"))
         self.canvas.bind(key_codes.EKey4, self.Main.wifiscan)
+        self.canvas.bind(key_codes.EKey6, self.Main.bluetoothscan)
 
         appuifw.app.menu.insert(0, (u"Send track via bluetooth", self.send_track))
         appuifw.app.menu.insert(0, (u"Send cellids via bluetooth", self.send_cellids))
