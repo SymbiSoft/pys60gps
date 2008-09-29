@@ -485,7 +485,9 @@ class GpsApp:
         """
         data = {}
         if not pos: return data
-        if pos.has_key("systime"): 
+        if pos.has_key("systime"):
+            if (time.time() - pos["systime"]) > 1: # If position is more than 1 seconds old
+                data["gpsage"] = time.time() - pos["systime"]
             if isotime:
                 data["systime"] = time.strftime(u"%Y-%m-%dT%H:%M:%S", time.localtime(pos["systime"])) + self._get_timezone()
             else:
@@ -581,7 +583,7 @@ class GpsApp:
             appuifw.note(u"Wifi scan already running!", 'error')
             return False
         self.scanning["wifi"] = True
-        starttime = time.time()
+        starttime = time.clock()
         pos = copy.deepcopy(self.pos)
         wlan_devices = wlantools.scan(False)
         for w in wlan_devices:
@@ -590,7 +592,7 @@ class GpsApp:
                 w[k.lower()] = (u"%s" % v).replace('\x00', '')
         data = self.simplify_position(pos, isotime=True)
         #data["comment"] = u""
-        data["duration"] = time.time() - starttime
+        data["duration"] = time.clock() - starttime
         data["wifilist"] = wlan_devices
         if not self.has_fix(pos): # TODO: move this interaction to some other function, e.g in tracktab
             data["comment"] = appuifw.query(u"No GPS fix, add text comment", "text", u"")
@@ -624,10 +626,10 @@ class GpsApp:
             comment = appuifw.query(u"No GPS fix, add text comment", "text", u"")
         else:
             comment = u""
-        starttime = time.time()
+        starttime = time.clock()
         bt_devices = lightblue.finddevices()
         data = self.simplify_position(pos, isotime=True)
-        data["duration"] = time.time() - starttime
+        data["duration"] = time.clock() - starttime
         if comment != u"": data["comment"] = comment
         btlist = []
         for d in bt_devices:
@@ -673,7 +675,7 @@ class GpsApp:
             return True
         else:
             return False
-    
+
     def read_position(self, pos):
         """
         positioning.position() callback.
@@ -719,7 +721,6 @@ class GpsApp:
                 # Difference of heading between current and the latest saved position
                 anglediff = Calculate.anglediff(p0["course"]["heading"], pos["course"]["heading"])
                 # Time difference between current and the latest saved position
-                # timediff = pos['systime'] - p0['systime']
                 timediff = pos["satellites"]["time"] - p0["satellites"]["time"]
                 
                 # Project a location estimation point (pe) using speed and heading from the latest saved point
@@ -1081,10 +1082,10 @@ class GpsInfoTab(BaseInfoTab):
         self.t.cancel()
         lines = self._get_lines()
         self.canvas.clear()
-        if self.Main.pos and time.time() - self.Main.pos["systime"] < 3:
+        if self.Main.pos and time.time() - self.Main.pos["systime"] > 1:
+            textcolor = 0xb0b0b0 # use gray font color if position is older than 1 sec
+        else: 
             textcolor = 0x000000
-        else: # use gray font color if position is too old (3 sec)
-            textcolor = 0xb0b0b0
         self.blit_lines(lines, color=textcolor)
         if self.active:
             self.t.after(0.5, self.update)
