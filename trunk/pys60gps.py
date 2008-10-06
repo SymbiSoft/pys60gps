@@ -559,13 +559,13 @@ class GpsApp:
                 self.append_log_cache("cellid", json.write(data))
                 self.data["gsm_location"].append(pos)
                 self.counters["cellid"] = self.counters["cellid"] + 1
-                # save cellids after n lines
-                if self.counters["cellid"] % 5 == 0:
+                # save cached cellids to a permanent file after n lines
+                if self.counters["cellid"] % 4 == 0:
                     self.save_log_cache("cellid")
                 # Remove the oldest records if the length exceeds limit
                 # TODO: make limit configurable
-                if len(self.data["gsm_location"]) > 50:
-                    self.data["gsm_location"].pop()
+                if len(self.data["gsm_location"]) >= 50:
+                    self.data["gsm_location"].pop(0)
             return data
 
     def wifiscan(self):
@@ -602,6 +602,8 @@ class GpsApp:
         # Add a pos to be drawn on the canvas
         pos["text"] = u"%d" % len(wlan_devices)
         self.data["wifi"].append(pos)
+        # TODO: Remove the oldest records if the length exceeds limit
+        # TODO: make limit configurable
         self.scanning["wifi"] = False
         return data
 
