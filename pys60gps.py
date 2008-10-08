@@ -465,6 +465,16 @@ class GpsApp:
 #        else:
 #            return []
 
+
+    # TODO: put this into some generic tool module
+    def get_iso_systime(self):
+        """
+        Return current system time in ISO format, 
+        e.g. 2008-10-08T16:29:30+03
+        """
+        return time.strftime(u"%Y-%m-%dT%H:%M:%S", 
+                             time.localtime(time.time())) + self._get_timezone()
+
     # TODO: put this into some generic tool module
     def _get_timezone(self):
         """Return timezone with prefix, e.g. +0300"""
@@ -587,15 +597,28 @@ class GpsApp:
         pos = copy.deepcopy(self.pos)
         wlan_devices = wlantools.scan(False)
         for w in wlan_devices:
-            for k,v in w.items(): # Lowercase all keys and Remove possible null-characters 
+            # Lowercase all keys and Remove possible null-characters, hidden SSID shows as nulls
+            for k,v in w.items():
                 del w[k]
                 w[k.lower()] = (u"%s" % v).replace('\x00', '')
+        # s60 seems to cache wifi scans so do not save new scan point if previous scan was exactly the same
+        try:  self.wlan_devices_latest # test if variable exists
+        except: self.wlan_devices_latest = None
+        if self.wlan_devices_latest == wlan_devices:
+            self.scanning["wifi"] = False
+            appuifw.note(u"Wifi scan too fast, skipping this one!", 'info')
+            return False
+        self.wlan_devices_latest = wlan_devices
         data = self.simplify_position(pos, isotime=True)
         #data["comment"] = u""
         data["duration"] = time.clock() - starttime
         data["wifilist"] = wlan_devices
         if not self.has_fix(pos): # TODO: move this interaction to some other function, e.g in tracktab
             data["comment"] = appuifw.query(u"No GPS fix, add text comment", "text", u"")
+        if not data.has_key("systime"):
+            # FIXME: create function to get ISO systime string
+            # TODO: use above function here and everywhere
+            data["systime"] = self.get_iso_systime()
         self.append_log_cache("wifi", json.write(data))
         if self.counters["wifi"] % 5 == 0:
             self.save_log_cache("wifi")
