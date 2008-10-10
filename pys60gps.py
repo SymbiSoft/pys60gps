@@ -1497,8 +1497,9 @@ class GpsTrackTab(BaseInfoTab):
                 trip = u"%.1f m" % (self.Main.data["trip_distance"])
             # TODO REMOVE:
             # trip = u"%.1f m" % (self.Main.data["trip_distance"])
-            #self.ui.text(([10, 230]), u"%.1f km/h %.1f° %s" % (pos["course"]["speed"]*3.6, pos["course"]["heading"],  trip), 
-            self.ui.text(([10, 230]), u"%.1f m/s %.1f° %s" % (pos["course"]["speed"], pos["course"]["heading"],  trip), 
+            #self.ui.text(([10, 230]), u"%.1f km/h %.1f' %s" % (pos["course"]["speed"]*3.6, pos["course"]["heading"],  trip),
+            # TODO: replace ' with hex representation of degree sign (ASCII b0, UNICODE ?) 
+            self.ui.text(([10, 230]), u"%.1f m/s %.1f' %s" % (pos["course"]["speed"], pos["course"]["heading"],  trip), 
                                       font=(u"Series 60 Sans", 18), fill=0x000000)
         
         ##############################################        
