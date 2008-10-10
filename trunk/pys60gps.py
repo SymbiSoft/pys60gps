@@ -601,10 +601,13 @@ class GpsApp:
             for k,v in w.items():
                 del w[k]
                 w[k.lower()] = (u"%s" % v).replace('\x00', '')
-        # s60 seems to cache wifi scans so do not save new scan point if previous scan was exactly the same
-        try:  self.wlan_devices_latest # test if variable exists
+        # s60 seems to cache wifi scans so do not save 
+        # new scan point if previous scan was exactly the same
+        try:  self.wlan_devices_latest # First test if "latest" exists
         except: self.wlan_devices_latest = None
-        if self.wlan_devices_latest == wlan_devices:
+        # Save new scan point always if latest's result was empty  
+        if ( (self.wlan_devices_latest != {}) 
+         and (self.wlan_devices_latest == wlan_devices) ):
             self.scanning["wifi"] = False
             appuifw.note(u"Wifi scan too fast, skipping this one!", 'info')
             return False
