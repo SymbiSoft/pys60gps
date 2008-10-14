@@ -594,27 +594,28 @@ class GpsApp:
             return False
         self.scanning["wifi"] = True
         starttime = time.clock()
-        pos = copy.deepcopy(self.pos)
         wlan_devices = wlantools.scan(False)
+        duration = time.clock() - starttime
+        pos = copy.deepcopy(self.pos)
         for w in wlan_devices:
             # Lowercase all keys and Remove possible null-characters, hidden SSID shows as nulls
             for k,v in w.items():
                 del w[k]
                 w[k.lower()] = (u"%s" % v).replace('\x00', '')
         # s60 seems to cache wifi scans so do not save 
-        # new scan point if previous scan was exactly the same
+        # new scan point if previous scan resulted exactly the same wifi list
         try:  self.wlan_devices_latest # First test if "latest" exists
         except: self.wlan_devices_latest = None
         # Save new scan point always if latest's result was empty  
-        if ( (self.wlan_devices_latest != {}) 
-         and (self.wlan_devices_latest == wlan_devices) ):
-            self.scanning["wifi"] = False
-            appuifw.note(u"Wifi scan too fast, skipping this one!", 'info')
-            return False
+        if (wlan_devices != {}):
+            if (self.wlan_devices_latest == wlan_devices):
+                self.scanning["wifi"] = False
+                appuifw.note(u"Wifi scan too fast, skipping this one!", 'info')
+                return False
         self.wlan_devices_latest = wlan_devices
         data = self.simplify_position(pos, isotime=True)
         #data["comment"] = u""
-        data["duration"] = time.clock() - starttime
+        data["duration"] = duration
         data["wifilist"] = wlan_devices
         if not self.has_fix(pos): # TODO: move this interaction to some other function, e.g in tracktab
             data["comment"] = appuifw.query(u"No GPS fix, add text comment", "text", u"")
