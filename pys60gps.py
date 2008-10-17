@@ -280,13 +280,16 @@ class GpsApp:
                   "user" : self.config["username"],
                   "group" : self.config["group"],
                   }
-        if (len(self.data["position"]) > 0): # TODO: use has_fix here?
-            pos = self.data["position"][-1]
-            params["lat"] = pos["position"]["latitude"]
-            params["lon"] = pos["position"]["longitude"]
-        else:
-            appuifw.note(u"Can't download POIs, current position unknown.", 'error')
-            return
+        if pos == None:
+            if self.has_fix(self.pos):
+                pos = self.pos
+            if (len(self.data["position"]) > 0): # TODO: use has_fix here?
+                pos = self.data["position"][-1]
+                params["lat"] = pos["position"]["latitude"]
+                params["lon"] = pos["position"]["longitude"]
+            else:
+                appuifw.note(u"Can't download POIs, current position unknown.", 'error')
+                return
         e32.ao_sleep(0.05) # let the querypopup disappear
         params = urllib.urlencode(params)
         try: # FIXME: hardcoded url TODO: centralized communication to the server
@@ -605,9 +608,9 @@ class GpsApp:
         # s60 seems to cache wifi scans so do not save 
         # new scan point if previous scan resulted exactly the same wifi list
         try:  self.wlan_devices_latest # First test if "latest" exists
-        except: self.wlan_devices_latest = None
+        except: self.wlan_devices_latest = None # TODO: this should be done in init
         # Save new scan point always if latest's result was empty  
-        if (wlan_devices != {}):
+        if (wlan_devices != []):
             if (self.wlan_devices_latest == wlan_devices):
                 self.scanning["wifi"] = False
                 appuifw.note(u"Wifi scan too fast, skipping this one!", 'info')
