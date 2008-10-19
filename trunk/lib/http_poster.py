@@ -13,16 +13,16 @@ http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/146306
 """
 
 __version__ = u'$Id$'
-user_agent = "http_poster.py"
+user_agent = "http_poster.py/$Rev$"
 
-def post_multipart(host, selector, fields, files, headers={}):
+def post_multipart(host, selector, params, files, headers={}):
     """
-    Post fields and files to an http host as multipart/form-data.
-    fields is a sequence of (name, value) elements for regular form fields.
+    Post params and files to an http host as multipart/form-data.
+    params is a dictionary of elements for regular form fields.
     files is a sequence of (name, filename, value) elements for data to be uploaded as files
     Return the server's response page.
     """
-    content_type, body = encode_multipart_formdata(fields, files)
+    content_type, body = encode_multipart_formdata(params, files)
     h = httplib.HTTPConnection(host)
     if not headers.has_key('User-Agent'):
         headers['User-Agent'] = user_agent
@@ -34,30 +34,28 @@ def post_multipart(host, selector, fields, files, headers={}):
     h.close()
     return status, reason, data
 
-def encode_multipart_formdata(fields, files):
+def encode_multipart_formdata(params, files):
     """
-    fields is a sequence of (name, value) elements for regular form fields.
-    files is a sequence of (name, filename, value) elements for data to be uploaded as files
-    Return (content_type, body) ready for httplib.HTTP instance
+    params is a dictionary of elements for regular form fields.
+    Value must be supported by plain %s conversion so ensure to 
+    encode unicode values to string-type.
+    files is a sequence of (name, filename, value) elements for data to be uploaded as files.
+    Return (content_type, body) ready for httplib.HTTP instance.
     """
     BOUNDARY = '----------ThIs_Is_tHe_bouNdaRY_$'
     CRLF = '\r\n'
     L = []
-    # FIXME: key/value should be value.encode('latin-1') :d here or something
-    # Really FIXME: if some of elements in L is unicode, resulting
-    # string is also unicode and if it contains non valid charachters
-    # Join() raises an exception
-    for (key, value) in fields:
+    for (key, value) in params.items():
         L.append('--' + BOUNDARY)
         L.append('Content-Disposition: form-data; name="%s"' % key)
         L.append('')
-        L.append("%s" % value) # DO NOT put value directly to L
+        L.append("%s" % value)
     for (key, filename, value) in files:
         L.append('--' + BOUNDARY)
         L.append('Content-Disposition: form-data; name="%s"; filename="%s"' % (key, filename))
         L.append('Content-Type: %s' % get_content_type(filename))
         L.append('')
-        L.append("%s" % value) # DO NOT put value directly to L
+        L.append("%s" % value)
     L.append('--' + BOUNDARY + '--')
     L.append('')
     body = CRLF.join(L)
@@ -89,13 +87,13 @@ if __name__ == "__main__":
     f=open(filename, 'r')
     filedata = f.read()
     f.close()
-    
     # Create "files"-list which contains all files to send
-    #files = [("plokfile", filename, plokdata)]
     files = [("file1", filename, filedata)]
-    fields = [("param1", "foo"), ("param2", "bar")]
+    params = {"param1":"foo", 
+              "param2":"bar",
+              }
     try:
-        ret = post_multipart(host, script, fields, files)
+        ret = post_multipart(host, script, params, files)
         print ret[0]
         print ret[2]
     except:
