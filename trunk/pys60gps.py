@@ -41,6 +41,8 @@ draw_startup_screen(canvas, u"pys60_json")
 import pys60_json as json
 draw_startup_screen(canvas, u"PositionHelper")
 import PositionHelper
+draw_startup_screen(canvas, u"http_poster")
+import http_poster
 
 ####################################
 # FIXME: move these to an own module
@@ -207,6 +209,8 @@ class GpsApp:
             "group" : None,
             "apid" : None,
             "url" : u"http://www.plok.in/poi.php",
+            "host" : u"",
+            "script" : u"",
         }
         # List here all configuration keys, which must be defined before use
         # If a config key has key "function", it's called to define value
@@ -281,9 +285,10 @@ class GpsApp:
                   "group" : self.config["group"],
                   }
         if pos == None:
+            # FIXME. there is a bug somewhere, self.pos doesn't contain valid lat+lon?
             if self.has_fix(self.pos):
                 pos = self.pos
-            elif (len(self.data["position"]) > 0 and self.has_fix(self.data["position"][-1])):
+            if (len(self.data["position"]) > 0 and self.has_fix(self.data["position"][-1])):
                 pos = self.data["position"][-1]
                 params["lat"] = pos["position"]["latitude"]
                 params["lon"] = pos["position"]["longitude"]
@@ -337,6 +342,10 @@ class GpsApp:
                 lambda:self.set_config_var(u"Group", "text", "group")),
             (u"URL (%s)" % self.config["url"], 
                 lambda:self.set_config_var(u"Url (for server connections)", "text", "url")),
+            (u"Host (%s)" % self.config["host"], 
+                lambda:self.set_config_var(u"Host[:port]", "text", "host")),
+            (u"Script (%s)" % self.config["script"], 
+                lambda:self.set_config_var(u"Script", "text", "script")),
             (u"Access point (%s)" % self.config["apid"], 
                 lambda:self._select_access_point()),
             (u"Reset all values", self.reset_config),
@@ -1790,8 +1799,8 @@ class ImageGallery:
         self.imagemenu.append((u"2. Tags", lambda: self.ask_tags()))
         self.canvas.bind(key_codes.EKey3,lambda: self.toggle_visibility())
         self.imagemenu.append((u"3. Visibility", lambda: self.toggle_visibility()))
-        self.canvas.bind(key_codes.EKey0,lambda: appuifw.note(u"Sorry, not implemented yet", 'info'))
-        self.imagemenu.append((u"0. Synchronize", lambda: appuifw.note(u"Sorry, not implemented yet", 'info')))
+        self.canvas.bind(key_codes.EKey0,lambda: self.sync_server())
+        self.imagemenu.append((u"0. Synchronize", lambda: self.sync_server()))
         self.canvas.bind(key_codes.EKeyBackspace,lambda: self.delete_current())
         self.imagemenu.append((u"C. Delete", lambda: self.delete_current()))
         self.canvas.bind(key_codes.EKeySelect,lambda: self.show_current())
@@ -1938,8 +1947,10 @@ class ImageGallery:
             else: text = u""
             self.canvas.text((margin, textline), u"3 %s" % (text), font=font, fill=0x000066)
             textline = textline + lineheight
-            # Dummy sync text
-            self.canvas.text((margin, textline), u"0 Synchronize with the server", font=font, fill=0x000066)
+            # Sync text
+            if i.has_key("status"): text = i["status"]
+            else: text = u"not sync'ed"
+            self.canvas.text((margin, textline), u"0 Sync with server (%s)" % text, font=font, fill=0x000066)
             textline = textline + lineheight
             # Show image
             thumbs = self.find_thumbnails(i["path"])
@@ -2077,6 +2088,33 @@ class ImageGallery:
             i = 0
         self.IMG_LIST[self.current_img]["visibility"] = self.visibilities[i]
         self.update()
+
+    def sync_server(self):
+        """Send image to the server. Initial/test version."""
+        if self.current_img >= 0:
+            current_img = self.IMG_LIST[self.current_img]
+            current_img["status"] = u"synchronizing"
+            filename = current_img["path"]
+            host = self.Main.config["host"]
+            script = self.Main.config["script"]
+            headers = {} # set useragent etc
+            f=open(filename, 'r')
+            filedata = f.read()
+            f.close()
+            # Create "files"-list which contains all files to send
+            files = [("file1", filename, filedata)]
+            params = {"caption":current_img["caption"].encode("utf-8"), 
+                      "tags":current_img["tags"].encode("utf-8"),
+                      "visibility":current_img["visibility"].encode("utf-8"),
+                      }
+            res = http_poster.post_multipart(host, script, params, files, headers)
+            if res[0] == 200:
+                current_img["status"] = u"synchronized"
+            else:
+                current_img["status"] = u"sync failed"
+            print res[2][:200]
+            #self.update()
+
 
     def delete_current(self):
         """Delete current image permanently."""
