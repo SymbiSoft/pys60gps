@@ -283,7 +283,7 @@ class GpsApp:
         if pos == None:
             if self.has_fix(self.pos):
                 pos = self.pos
-            if (len(self.data["position"]) > 0): # TODO: use has_fix here?
+            elif (len(self.data["position"]) > 0 and self.has_fix(self.data["position"][-1])):
                 pos = self.data["position"][-1]
                 params["lat"] = pos["position"]["latitude"]
                 params["lon"] = pos["position"]["longitude"]
@@ -531,6 +531,8 @@ class GpsApp:
                 data["tdop"] = pos["satellites"]["time_dop"]
             except:
                 pass
+            data["satellites"] = "%d/%d"  % (pos["satellites"]["used_satellites"], 
+                                             pos["satellites"]["satellites"])
         return data
 
     # TODO: rename gsmscan ? (alike wifiscan, btscan)
