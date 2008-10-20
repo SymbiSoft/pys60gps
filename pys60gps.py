@@ -4,6 +4,22 @@
 import appuifw
 import e32
 appuifw.app.orientation = 'portrait'
+import time
+
+class Logger:
+    def __init__ (self, filename = 'D:\\pys60gps.log'):
+        self.fname = filename
+    def write(self, obj):
+        timestamp = time.strftime("%Y%m%d-%H%M%S\r\n")
+        log = open(self.fname, 'at')
+        log.write(timestamp)
+        log.write(obj)
+        log.write("\r\n")
+        log.close()
+    def flush(self):
+        pass
+
+
 #### STARTUP "splash screen"
 def startup_screen(dummy=(0, 0, 0, 0)):
     pass
@@ -20,6 +36,10 @@ canvas = appuifw.Canvas(redraw_callback=startup_screen)
 appuifw.app.body = canvas
 draw_startup_screen(canvas, u"sys, os, socket, sysinfo, re")
 import sys
+
+my_log = Logger()
+sys.stderr = sys.stdout = my_log
+
 import os
 import socket
 import sysinfo
@@ -1783,9 +1803,12 @@ class ImageGallery:
         self.p_ext = re.compile(r"\.("+"|".join(self.extensions)+")$", re.IGNORECASE)
         self.gmtime = time.time() + time.altzone
 
-
+    def start_sync(self):
+        self.t.after(0.1, self.sync_server)
+        
     def activate(self):
         #appuifw.app.screen = "large"
+        self.t = e32.Ao_timer()
         self.current_img = -1
         appuifw.app.exit_key_handler = self.handle_close
         self.imagemenu = []
@@ -1793,14 +1816,14 @@ class ImageGallery:
         self.canvas.bind(key_codes.EKeyLeftArrow,lambda: self.next_image(-1))
         self.canvas.bind(key_codes.EKeyRightArrow,lambda: self.next_image(1))
         self.canvas.bind(key_codes.EKeyUpArrow,lambda: self.next_image(0))
+        self.canvas.bind(key_codes.EKey0,lambda: self.start_sync())
+        self.imagemenu.append((u"0. Synchronize", lambda: self.start_sync()))
         self.canvas.bind(key_codes.EKey1,lambda: self.ask_caption())
         self.imagemenu.append((u"1. Caption", lambda: self.ask_caption()))
         self.canvas.bind(key_codes.EKey2,lambda: self.ask_tags())
         self.imagemenu.append((u"2. Tags", lambda: self.ask_tags()))
         self.canvas.bind(key_codes.EKey3,lambda: self.toggle_visibility())
         self.imagemenu.append((u"3. Visibility", lambda: self.toggle_visibility()))
-        self.canvas.bind(key_codes.EKey0,lambda: self.sync_server())
-        self.imagemenu.append((u"0. Synchronize", lambda: self.sync_server()))
         self.canvas.bind(key_codes.EKeyBackspace,lambda: self.delete_current())
         self.imagemenu.append((u"C. Delete", lambda: self.delete_current()))
         self.canvas.bind(key_codes.EKeySelect,lambda: self.show_current())
