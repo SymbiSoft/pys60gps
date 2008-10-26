@@ -7,7 +7,7 @@ appuifw.app.orientation = 'portrait'
 import time
 
 class Logger:
-    def __init__ (self, filename = 'D:\\pys60gps.log'):
+    def __init__ (self, filename = 'C:\\data\\pys60gps.log'):
         self.fname = filename
     def write(self, obj):
         timestamp = time.strftime("%Y%m%d-%H%M%S\r\n")
