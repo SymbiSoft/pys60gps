@@ -2,7 +2,7 @@
 
 = Introduction =
 
-Pys60gps is aimed to be a gps screen in a s60-mobile phone.
+Pys60gps is aimed to be a gps screen in a s60-mobile phone. It has been tested only in 3rd edition models and probably will not work in 2nd editon models.
 
 = Details =
 
@@ -13,7 +13,8 @@ Current functionality
   * send saved track to the other device via bluetooth
   * add a POI/waypoint
   * show POIs on the screen
-  * show current speed and some speed history in a graph
+  * scan available gsm and wifi (and bluetooth) networks and save results to a log file
+  * show current speed and some speed history in a graph (ugly test version)
 
 Future functionality
    * plugin functionality
