@@ -160,6 +160,10 @@ class GpsApp:
         self.data["pois_private"] = []
         self.data["pois_downloaded"] = []
         self.key = u""
+        # Timers
+        # TODO put all started timers here so they can be cancelled when leaving program
+        #self.timers = {}
+
         # temporary solution to handle speed data (to be removed/changed)
         self.speed_history = []
         # Put all menu entries and views as tuples into a sequence
@@ -222,8 +226,13 @@ class GpsApp:
             "min_trackpoint_distance" : 300, # meters
             "estimated_error_radius" : 20, # meters
             "max_estimation_vector_distance" : 10, # meters
-            "max_trackpoints" : 500, 
-            "max_debugpoints" : 500, 
+            "max_trackpoints" : 500,
+            "max_debugpoints" : 500,
+            "max_cellid_time" : 600,
+            "max_cellid_dist" : 500,
+            "min_wifi_time" : 6,
+            "max_wifi_time" : 600,
+            "max_wifi_dist" : 100,
             "track_debug" : False,
             "username" : None,
             "group" : None,
@@ -356,6 +365,22 @@ class GpsApp:
                 lambda:self.set_config_var(u"Trackpoint dist", "number", "max_estimation_vector_distance")),
             (u"Estimation circle (%d)" % self.config["estimated_error_radius"], 
                 lambda:self.set_config_var(u"Estimation circle", "number", "estimated_error_radius")),
+
+            (u"max_cellid_time (%d)" % self.config["max_cellid_time"], 
+                lambda:self.set_config_var(u"max_cellid_time", "number", "max_cellid_time")),
+                
+            (u"max_cellid_dist (%d)" % self.config["max_cellid_dist"], 
+                lambda:self.set_config_var(u"max_cellid_dist ", "number", "max_cellid_dist")),
+                
+            (u"max_wifi_time (%d)" % self.config["max_wifi_time"], 
+                lambda:self.set_config_var(u"max_wifi_time ", "number", "max_wifi_time")),
+                
+            (u"min_wifi_time (%d)" % self.config["min_wifi_time"], 
+                lambda:self.set_config_var(u"Estimation ", "number", "estimated_error_radius")),
+                
+            (u"max_wifi_dist (%d)" % self.config["max_wifi_dist"], 
+                lambda:self.set_config_var(u"max_wifi_dist ", "number", "max_wifi_dist")),
+
             (u"Nickname (%s)" % self.config["username"], 
                 lambda:self.set_config_var(u"Nickname", "text", "username")),
             (u"Group (%s)" % self.config["group"], 
@@ -569,9 +594,10 @@ class GpsApp:
         """
         Read gsm_location/cellid changes and save them to the gsm history list.
         """
-        # Take the latest position and append gsm data into it if neccessary
-        pos = self.pos  # TODO copy.deepcopy here instead???
-        if not pos: return
+        if not self.pos: return
+        # Take the latest position and append gsm data into it if necessary
+        # TODO: is it necessary to save cellid if there is no fix? 
+        pos = copy.deepcopy(self.pos)
         l = location.gsm_location()
         if e32.in_emulator(): # Do some random cell changes if in emulator
             import random
@@ -584,9 +610,30 @@ class GpsApp:
             # Add new gsm_location if it differs from the previous one (or there is not previous)
             # TODO: if the distance to the latest point exceeds 
             # some configurable limit (e.g. 1000 meters), then append a new point too
+            dist_time_flag = False
+            dist = 0
+            if len(self.data["gsm_location"]) > 0:
+                p0 = self.data["gsm_location"][-1] # use the latest saved point in history
+                # Time difference between current and the latest saved position
+                timediff = pos["satellites"]["time"] - p0["satellites"]["time"]
+                # Distance between current and the latest saved position
+                if self.has_fix(pos):
+                    dist = Calculate.distance(p0["position"]["latitude"],
+                                              p0["position"]["longitude"],
+                                              pos["position"]["latitude"],
+                                              pos["position"]["longitude"],
+                                             )
+                # NOTE: pos["position"]["latitude"] may be a NaN!
+                # NaN >= 500 is True
+                # NaN > 500 is False in Python 2.2!!!
+                if ((dist > self.config["max_cellid_dist"]) or
+                    (timediff > self.config["max_cellid_time"])):
+                    dist_time_flag = True
+            
             if (len(self.data["gsm_location"]) == 0
                 or (len(self.data["gsm_location"]) > 0 and 
-                    l != self.data["gsm_location"][-1]['gsm']['cellid'])):
+                   (l != self.data["gsm_location"][-1]['gsm']['cellid']))
+                or dist_time_flag):
                 data = self.simplify_position(pos, isotime=True)
                 cell = {"cellid" : "%s,%s,%s,%s" % (l)}
                 try: # This needs some capability (ReadDeviceData?)
@@ -612,20 +659,50 @@ class GpsApp:
                     self.data["gsm_location"].pop(0)
             return data
 
-    def wifiscan(self):
+    def auto_wifiscan(self):
+        """
+        Do automatically _wifiscan() if certain contitions are met.
+        """
+        pos = self.pos
+        if self.has_fix(pos) is False:
+            return # Do not save scan automatically, if there is no fix
+        dist_time_flag = False
+        dist = 0
+        if len(self.data["wifi"]) > 0:
+            p0 = self.data["wifi"][-1] # use the latest saved point in history
+            # Time difference between current and the latest saved position
+            timediff = pos["satellites"]["time"] - p0["satellites"]["time"]
+            # Distance between current and the latest saved position
+            if self.has_fix(pos): # obsolete "if"
+                dist = Calculate.distance(p0["position"]["latitude"],
+                                          p0["position"]["longitude"],
+                                          pos["position"]["latitude"],
+                                          pos["position"]["longitude"],
+                                         )
+            # NOTE: pos["position"]["latitude"] may be a NaN!
+            # NaN >= 500 is True
+            # NaN > 500 is False in Python 2.2!!!
+            if ((dist > self.config["max_wifi_dist"] 
+                or timediff > self.config["max_wifi_time"])
+                and timediff > 6):
+                dist_time_flag = True
+        
+        if ((len(self.data["wifi"]) == 0
+            or dist_time_flag)):
+            # Start wifiscan in background
+            e32.ao_sleep(0.01, self._wifiscan)
+
+    def _wifiscan(self):
         """
         Scan all available wifi networks if wlantools-module is present.
         """
         # TODO: add lock here or immediate return if previous scan is still active / hanged
-        # FIXME: remove all appuifw stuff -- in future this may be called from non-UI-thread
         try:
             import wlantools
         except Exception, error:
-            appuifw.note(unicode(error), 'error')
-            return False
+            return {"error":unicode(error)}
         if self.scanning["wifi"]:
-            appuifw.note(u"Wifi scan already running!", 'error')
-            return False
+            return {"error" : u"Wifi scan already running!"}
         self.scanning["wifi"] = True
         starttime = time.clock()
         wlan_devices = wlantools.scan(False)
@@ -644,15 +721,14 @@ class GpsApp:
         if (wlan_devices != []):
             if (self.wlan_devices_latest == wlan_devices):
                 self.scanning["wifi"] = False
-                appuifw.note(u"Wifi scan too fast, skipping this one!", 'info')
-                return False
+                return {"info":u"Wifi scan too fast, skipping this one!"}
         self.wlan_devices_latest = wlan_devices
         data = self.simplify_position(pos, isotime=True)
         #data["comment"] = u""
         data["duration"] = duration
         data["wifilist"] = wlan_devices
-        if not self.has_fix(pos): # TODO: move this interaction to some other function, e.g in tracktab
-            data["comment"] = appuifw.query(u"No GPS fix, add text comment", "text", u"")
+        #if not self.has_fix(pos): # TODO: move this interaction to some other function, e.g in tracktab
+        #    data["comment"] = appuifw.query(u"No GPS fix, add text comment", "text", u"")
         if not data.has_key("systime"):
             # FIXME: create function to get ISO systime string
             # TODO: use above function here and everywhere
@@ -663,10 +739,21 @@ class GpsApp:
         # Add a pos to be drawn on the canvas
         pos["text"] = u"%d" % len(wlan_devices)
         self.data["wifi"].append(pos)
-        # TODO: Remove the oldest records if the length exceeds limit
-        # TODO: make limit configurable
         self.scanning["wifi"] = False
         return data
+
+    def wifiscan(self, comment = None):
+        data = self._wifiscan()
+        if "error" in data:
+            appuifw.note(data["error"], 'error')
+            return {}
+        elif "info" in data:
+            appuifw.note(data["info"], 'info')
+            return {}
+        if not self.has_fix(self.pos): # TODO: move this interaction to some other function, e.g in tracktab
+            data["comment"] = appuifw.query(u"No GPS fix, add text comment", "text", u"")
+        return data            
+
 
     def bluetoothscan(self):
         """
@@ -855,7 +942,9 @@ class GpsApp:
         self.pos = pos
         # Read gsm-cell changes
         self.read_gsm_location()
-
+        # Scan wifi's automatically
+        self.auto_wifiscan()
+        # TODO: wifiscan() here if it is time to do it
         # Experimental speed history, to be rewritten
         speed_key = (u'%d'%time.time())[:-1]
          # If speed_history is empty add the first item or key has changed (every 10th second)
@@ -1048,6 +1137,7 @@ class SysinfoView(BaseView):
         self.init_ram = sysinfo.free_ram()
         self.tabs = []
         self.tabs.append((u"Gsm", GsmTab(self)))
+        self.tabs.append((u"Wifi", WifiTab(self)))
         self.tabs.append((u"SysInfo", SysInfoTab(self)))
         self.tabs.append((u"E32", E32InfoTab(self)))
         self.tabs.append((u"Mem", MemTab(self)))
@@ -1111,6 +1201,20 @@ class GsmTab(BaseInfoTab):
             try:
                 lines.append(u"%s" % time.strftime("%H:%M:%S ", time.localtime(l["systime"]))
                            + u"%s,%s,%s,%s" % (l['gsm']["cellid"]))
+            except:
+                lines.append(u"Error in gsm data")
+        return lines
+
+class WifiTab(BaseInfoTab):
+    """Show a few last wifi's."""
+    def _get_lines(self):
+        lines = [u"Wifis: %d lines" % len(self.Main.data["wifi"])]
+        last = self.Main.data["wifi"][-13:]
+        last.reverse()
+        for l in last:
+            try:
+                lines.append(u"%s" % time.strftime("%H:%M:%S ", time.localtime(l["systime"]))
+                            + u"  %s wifis found" % (l['text']))
             except:
                 lines.append(u"Error in gsm data")
         return lines
@@ -1538,21 +1642,6 @@ class GpsTrackTab(BaseInfoTab):
                                       font=(u"Series 60 Sans", 18), fill=0x000000)
         
         ##############################################        
-        # Draw GSM points
-        for p in self.Main.data["gsm_location"]:
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
-            if p.has_key("x"):
-                self.ui.text(([p["x"]+center_x+10, p["y"]+center_y+5]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0xccccff)
-                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x9999ff, width=poi_width)
-        ##############################################        
-        # Draw Wifi points
-        for p in self.Main.data["wifi"]:
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
-            if p.has_key("x"):
-                self.ui.text(([p["x"]+center_x+10, p["y"]+center_y+5]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x0000ff)
-                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x0000ff, width=poi_width)
-
-        ##############################################        
         # TESTING direction line
         if len(self.Main.data["position"]) > 0 and self.Main.data["position"][-1]["course"].has_key("speed"):
             # Copy latest saved position from history
@@ -1592,6 +1681,7 @@ class GpsTrackTab(BaseInfoTab):
             
             
             #self.ui.text((160, s), u"%d %d %d %d" % (x0, y0, x, y), font=(u"Series 60 Sans", 10), fill=0x000000)
+
         # draw "heading arrow"
         ##############################################        
         if self.Main.has_fix(pos) and pos["course"]["heading"] and pos["course"]["speed"]:
@@ -1610,6 +1700,21 @@ class GpsTrackTab(BaseInfoTab):
             except:
                 # Probably speed or heading was missing?
                 pass
+
+        ##############################################        
+        # Draw GSM points
+        for p in self.Main.data["gsm_location"]:
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
+            if p.has_key("x"):
+                self.ui.text(([p["x"]+center_x+10, p["y"]+center_y+5]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0xccccff)
+                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x9999ff, width=poi_width)
+        ##############################################        
+        # Draw Wifi points
+        for p in self.Main.data["wifi"]:
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
+            if p.has_key("x"):
+                self.ui.text(([p["x"]+center_x+10, p["y"]+center_y+5]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x0000ff)
+                self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x0000ff, width=poi_width)
 
         # New style: use main apps data structures directly and _calculate_canvas_xy() to get pixel xy.
         # TODO: to a function
@@ -1888,7 +1993,7 @@ class ImageGallery:
         f = open(self.image_metadatafile, "wt")
         f.write(repr(self.IMG_LIST))
         f.close()
-        print "Saved metadata of %d images to %s" % (len(self.IMG_LIST), self.image_metadatafile)
+        # print "Saved metadata of %d images to %s" % (len(self.IMG_LIST), self.image_metadatafile)
 
     def load_image_metadata(self):
         """Load cached image metadata from file if found"""
@@ -1909,7 +2014,7 @@ class ImageGallery:
             missing.reverse()
             for j in missing:
                 self.IMG_LIST.pop(j)
-            print "Read metadata of %d images from %s.\nMissing %d" % (len(self.IMG_LIST), self.image_metadatafile, len(missing))
+            #print "Read metadata of %d images from %s.\nMissing %d" % (len(self.IMG_LIST), self.image_metadatafile, len(missing))
         else:
             print "Cached metadata %s not found" % (self.image_metadatafile)
 
