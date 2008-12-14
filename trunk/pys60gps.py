@@ -301,6 +301,31 @@ class GpsApp:
             appuifw.app.exit_key_handler = None
             appuifw.app.set_tabs([u"Back to normal"], lambda x: None)
 
+    def set_scan_config(self, profile):
+        """
+        First attempt to make more easily changeable scanning profile.
+        TODO: a form to create and manage profiles (for advanged users) 
+        """
+        profiles = {}
+        profiles["lazy"] = {
+            "max_cellid_time" : 600,
+            "max_cellid_dist" : 500,
+            "min_wifi_time" : 6,
+            "max_wifi_time" : 600,
+            "max_wifi_dist" : 1000,
+        }
+        profiles["turbo"] = {
+            "max_cellid_time" : 180,
+            "max_cellid_dist" : 100,
+            "min_wifi_time" : 6,
+            "max_wifi_time" : 60,
+            "max_wifi_dist" : 50,
+        }
+        for key in profiles[profile]:
+            self.config[key] = profiles[profile][key]
+        self.save_config()
+        self._update_menu()
+
     def download_pois_test(self, pos = None):
         """
         Test function for downloading POI-object from the internet
@@ -356,7 +381,12 @@ class GpsApp:
             gps_onoff = u"OFF"
         else:
             gps_onoff = u"ON"
-        set_menu=(u"Set", (
+        profile_menu = (u"Scan profile", (
+            (u"Lazy", lambda:self.set_scan_config("lazy")),
+            (u"Turbo", lambda:self.set_scan_config("turbo")),
+        ))
+        
+        set_menu = (u"Set", (
             (u"Max trackpoints (%d)" % self.config["max_trackpoints"], 
                 lambda:self.set_config_var(u"Max points", "number", "max_trackpoints")),
             (u"Trackpoint dist (%d)" % self.config["min_trackpoint_distance"], 
@@ -399,6 +429,7 @@ class GpsApp:
         appuifw.app.menu = [
             (u"Select",self.handle_select),
             (u"GPS %s" % (gps_onoff),self.start_read_position),
+            profile_menu,
             set_menu,
             (u"Toggle debug",self.toggle_debug),
             (u"Reboot",self.reboot),
