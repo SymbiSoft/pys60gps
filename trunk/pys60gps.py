@@ -233,6 +233,7 @@ class GpsApp:
             "min_wifi_time" : 6,
             "max_wifi_time" : 600,
             "max_wifi_dist" : 100,
+            "max_wifi_speed" : 70,
             "track_debug" : False,
             "username" : None,
             "group" : None,
@@ -311,8 +312,8 @@ class GpsApp:
             "max_cellid_time" : 600,
             "max_cellid_dist" : 500,
             "min_wifi_time" : 6,
-            "max_wifi_time" : 600,
-            "max_wifi_dist" : 1000,
+            "max_wifi_time" : 3600,
+            "max_wifi_dist" : 10000,
         }
         profiles["turbo"] = {
             "max_cellid_time" : 180,
@@ -410,6 +411,9 @@ class GpsApp:
                 
             (u"max_wifi_dist (%d)" % self.config["max_wifi_dist"], 
                 lambda:self.set_config_var(u"max_wifi_dist ", "number", "max_wifi_dist")),
+
+            (u"max_wifi_speed (%d) km/h" % self.config["max_wifi_speed"], 
+                lambda:self.set_config_var(u"max_wifi_speed ", "number", "max_wifi_speed")),
 
             (u"Nickname (%s)" % self.config["username"], 
                 lambda:self.set_config_var(u"Nickname", "text", "username")),
@@ -715,9 +719,9 @@ class GpsApp:
             # NaN > 500 is False in Python 2.2!!!
             if ((dist > self.config["max_wifi_dist"] 
                 or timediff > self.config["max_wifi_time"])
-                and timediff > 6):
+                and timediff > 6
+                and pos["course"]["speed"]*3.6 < self.config["max_wifi_speed"]):
                 dist_time_flag = True
-        
         if ((len(self.data["wifi"]) == 0
             or dist_time_flag)):
             # Start wifiscan in background

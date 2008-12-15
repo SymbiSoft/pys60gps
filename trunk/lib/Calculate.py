@@ -1,6 +1,9 @@
 # -*- coding: iso-8859-15 -*-
 # $Id$
 
+# TODO: read this:
+# http://discussion.forum.nokia.com/forum/showthread.php?t=153165
+
 import math
 
 nauticalmile = 1852.0 # Nautical mile in meters
