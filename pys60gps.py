@@ -44,9 +44,12 @@ import os
 import socket
 import sysinfo
 import re
-draw_startup_screen(canvas, u"time, copy, positioning, location")
+draw_startup_screen(canvas, u"time, copy")
 import time
 import copy
+draw_startup_screen(canvas, u"zipfile")
+import zipfile
+draw_startup_screen(canvas, u"positioning, location")
 import positioning
 import location
 draw_startup_screen(canvas, u"key_codes, graphics, audio")
@@ -142,6 +145,7 @@ class GpsApp:
                          "wifi":0,
                          "bluetooth":0,
                          "track":0,
+                         "delivery":0,
                          }
         self.scanning = {"wifi":False,
                          "bluetooth":False,
@@ -151,6 +155,12 @@ class GpsApp:
         self.data["gsm_location"] = [] # GSM-cellid history list (location.gsm_location())
         self.data["wifi"] = [] # Wifi scan history list (wlantools.scan())
         self.data["bluetooth"] = [] # Bluetooth scan history list (lightblue.finddevices())
+        # New simplified style: TODO remove old ones and rename new ones to old name
+        self.data["cellid_new"] = [] # GSM-cellid history list (location.gsm_location())
+        self.data["wifi_new"] = [] # Wifi scan history list (wlantools.scan())
+        self.data["bluetooth_new"] = [] # Bluetooth scan history list (lightblue.finddevices())
+        self.data["track_new"] = [] # Position history list (positioning.position())
+        self.data["delivery_new"] = [] # All data to be sent to the server
         # GPS-position
         self.pos = {} # Contains always the latest position-record
         self.data["position"] = [] # Position history list (positioning.position())
@@ -233,14 +243,14 @@ class GpsApp:
             "min_wifi_time" : 6,
             "max_wifi_time" : 600,
             "max_wifi_dist" : 100,
-            "max_wifi_speed" : 70,
+            "max_wifi_speed" : 60,
             "track_debug" : False,
             "username" : None,
             "group" : None,
             "apid" : None,
             "url" : u"http://www.plok.in/poi.php",
-            "host" : u"",
-            "script" : u"",
+            "host" : u"opennetmap.org",
+            "script" : u"/fileupload/",
         }
         # List here all configuration keys, which must be defined before use
         # If a config key has key "function", it's called to define value
@@ -436,6 +446,7 @@ class GpsApp:
             profile_menu,
             set_menu,
             (u"Toggle debug",self.toggle_debug),
+            (u"Send data",self.send_delivery_data),
             (u"Reboot",self.reboot),
             (u"Version", lambda:appuifw.note(self.__version__, 'info')),
             (u"Close", self.lock.signal),
@@ -518,16 +529,82 @@ class GpsApp:
 
     def _get_log_cache_filename(self, logname):
         return os.path.join(self.cachedir, u"%s.json" % logname)
-        
-    def append_log_cache(self, logname, data):
-        """Append data to name log cache file."""
+
+    def append_log_cache(self, logname, data, delivery = True):
+        """
+        Append json'ized data to named log cache file.
+        If "delivery" is True, append data also to list which contents
+        will be flushed to a file and sent to the server (if sending is
+        enabled. 
+        """
+        if delivery:
+            self.append_delivery_data(data)
         filename = self._get_log_cache_filename(logname)
         f = open(filename, "at")
-        f.write(data + "\n")
+        f.write(json.write(data) + "\n")
         f.close()
+
+    def append_delivery_data(self, data):
+        """
+        Append data item into the delivery list.
+        If the length of delivery list is big enough, flush data into a zipfile.
+        """
+        delivery_key = "delivery_new"
+        max_data_items = 25
+        self.data[delivery_key].append(data)
+        # Flush delivery data into a zip file
+        if len(self.data[delivery_key]) >= max_data_items:
+            self.flush_delivery_data()
     
-    def save_log_cache(self, logname):
-        """Save cached log data to persistent disk (C:)."""
+    def flush_delivery_data(self):
+        # FIXME: docstring
+        # FIXME: errorhandling
+        delivery_key = "delivery_new"
+        filename = os.path.join(self.datadir, "delivery.zip")
+        if os.path.isfile(filename):
+            mode = "a"
+        else:
+            mode = "w"
+        current_time = time.time()
+        now = time.localtime(current_time)[:6]
+        name = time.strftime("delivery-%Y%m%d-%H%M%S.json", time.localtime(current_time))
+        file = zipfile.ZipFile(filename, mode)
+        info = zipfile.ZipInfo(name)
+        info.date_time = now
+        info.compress_type = zipfile.ZIP_DEFLATED
+        json_data = []
+        while len(self.data[delivery_key]) > 0:
+            data = self.data[delivery_key].pop(0)
+            json_data.append(json.write(data))
+        file.writestr(info, "\n".join(json_data))
+        file.close()
+
+    def send_delivery_data(self):
+        # FIXME: docstring
+        # FIXME: errorhandling
+        filename = os.path.join(self.datadir, "delivery.zip")
+        tempfile = "delivery.zip-%d" % (time.time())
+        temppath = os.path.join(self.datadir, tempfile)
+        os.rename(filename, temppath)
+        f = open(temppath, 'r')
+        filedata = f.read()
+        f.close()
+        # Create "files"-list which contains all files to send
+        files = [("file1", "delivery.zip", filedata)]
+        params = {"user" : str(self.config["username"]),
+                  "group" : str(self.config["group"]),
+                  }
+        params = {}
+        ret = http_poster.post_multipart(str(self.config["host"]), str(self.config["script"]), params, files)
+        appuifw.note(unicode(ret[0]), 'info')
+        
+        # On success os.remove(temppath)
+    
+    def save_log_cache(self, logname, namepattern = "-%Y%m%d"):
+        """
+        Save cached log data to persistent disk (C:).
+        Default namepattern can be overridden.
+        """
         cache_filename = self._get_log_cache_filename(logname)
         cache_filename_tmp = cache_filename + u".tmp" # FIXME: unique name here
         if not os.path.isfile(cache_filename): return # cache file was not found
@@ -536,7 +613,7 @@ class GpsApp:
             log_dir = os.path.join(self.datadir, logname) # use separate directories
             if not os.path.exists(log_dir):
                 os.makedirs(log_dir)
-            log_filename = os.path.join(log_dir, logname + time.strftime("-%Y%m%d.json", time.localtime(time.time())))
+            log_filename = os.path.join(log_dir, logname + time.strftime(namepattern + ".json", time.localtime(time.time())))
             fout = open(log_filename, "at")
             fin = open(cache_filename_tmp, "rt")
             data = fout.write(fin.read())
@@ -682,7 +759,7 @@ class GpsApp:
                 data["gsmlist"] = [cell]
                 pos["gsm"] = gsm_location
                 pos["text"] = l[3]
-                self.append_log_cache("cellid", json.write(data))
+                self.append_log_cache("cellid", data)
                 self.data["gsm_location"].append(pos)
                 self.counters["cellid"] = self.counters["cellid"] + 1
                 # save cached cellids to a permanent file after n lines
@@ -768,7 +845,7 @@ class GpsApp:
             # FIXME: create function to get ISO systime string
             # TODO: use above function here and everywhere
             data["systime"] = self.get_iso_systime()
-        self.append_log_cache("wifi", json.write(data))
+        self.append_log_cache("wifi", data)
         if self.counters["wifi"] % 5 == 0:
             self.save_log_cache("wifi")
         # Add a pos to be drawn on the canvas
@@ -792,7 +869,7 @@ class GpsApp:
 
     def bluetoothscan(self):
         """
-        Scan all available bluetooth networks if wlantools-module is present.
+        Scan all available bluetooth networks if lightblue-module is present.
         """
         # TODO: add lock here or immediate return if previous scan is still active / hanged
         # FIXME: remove all appuifw stuff -- in future this may be called from non-UI-thread
@@ -825,7 +902,7 @@ class GpsApp:
                  }
             btlist.append(bt)
         data["btlist"] = btlist
-        self.append_log_cache("bluetooth", json.write(data))
+        self.append_log_cache("bluetooth", data)
         if self.counters["bluetooth"] % 1 == 0:
             self.save_log_cache("bluetooth")
         # Add a pos to be drawn on the canvas
@@ -953,7 +1030,7 @@ class GpsApp:
                 data = self.simplify_position(pos, isotime=True)
                 try: del data["systime"]
                 except: pass
-                self.append_log_cache("track", json.write(data))
+                self.append_log_cache("track", data)
                 self.counters["track"] = self.counters["track"] + 1
                 # save cellids after n lines
                 if self.counters["track"] % 10 == 0: 
@@ -1020,8 +1097,10 @@ class GpsApp:
             self.lock.signal()
 
     def close(self):
+        self.flush_delivery_data()
         self.save_log_cache("track")
         self.save_log_cache("cellid") 
+        self.save_log_cache("wifi") 
         self.running = False
         appuifw.app.exit_key_handler = None
         appuifw.app.set_tabs([u"Back to normal"], lambda x: None)
@@ -1325,7 +1404,7 @@ class GpsInfoTab(BaseInfoTab):
             lines.append(u"Accuracy (heading): %.1f " % (c["heading_accuracy"]))
         # Satellites-data
         if str(s["time"]) != "NaN":
-            lines.append(u"GPS-Time: %s" % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(s["time"] - time.altzone)))
+            lines.append(u"GPS-Time: %s" % time.strftime("%Y-%m-%d %H:%M:%SZ", time.localtime(s["time"])))
         lines.append(u"Sys-Time: %s" % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
         lines.append(u"Satellites: %s/%s" % (s["used_satellites"],s["satellites"]))
         lines.append(u"DOP (H/V/T) %.1f/%.1f/%.1f" % (s["horizontal_dop"],s["vertical_dop"],s["time_dop"]))
@@ -1590,7 +1669,7 @@ class GpsTrackTab(BaseInfoTab):
         
         pos = self.Main.pos
         # Default name is gps timestamp (UTC) with timezone info (time.altzone)
-        ts = unicode(time.strftime(u"%H:%M:%S ", time.localtime(pos["satellites"]["time"] - time.altzone)))
+        ts = unicode(time.strftime(u"%H:%M:%SZ ", time.localtime(pos["satellites"]["time"])))
         # print pos
         pos["text"] = appuifw.query(u"Name", "text", ts)
         if pos["text"] is not None: # user did not press Cancel
@@ -1941,7 +2020,7 @@ class ImageGallery:
         self.IMG_NAMES = {}
         #self.extensions = ["jpg", "mp4", "3gp", "wav", "amr"]
         self.p_ext = re.compile(r"\.("+"|".join(self.extensions)+")$", re.IGNORECASE)
-        self.gmtime = time.time() + time.altzone
+        self.gmtime = time.time() + time.altzone # FIXME: altzone is broken (finland, normaltime, elisa)
 
     def start_sync(self):
         self.t.after(0.1, self.sync_server)
