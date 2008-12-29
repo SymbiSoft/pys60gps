@@ -20,7 +20,7 @@ def post_multipart(host, selector, params, files, headers={}):
     Post params and files to an http host as multipart/form-data.
     params is a dictionary of elements for regular form fields.
     files is a sequence of (name, filename, value) elements for data to be uploaded as files
-    Return the server's response page.
+    Return a HTTPResponse.
     """
     content_type, body = encode_multipart_formdata(params, files)
     h = httplib.HTTPConnection(host)
@@ -29,10 +29,9 @@ def post_multipart(host, selector, params, files, headers={}):
     if not headers.has_key('Content-Type'):
         headers['Content-Type'] = content_type
     h.request('POST', selector, body, headers)
-    res = h.getresponse()
-    status, reason, data = res.status, res.reason, res.read()
+    response = h.getresponse()
     h.close()
-    return status, reason, data
+    return response
 
 def encode_multipart_formdata(params, files):
     """
@@ -58,7 +57,12 @@ def encode_multipart_formdata(params, files):
         L.append("%s" % value)
     L.append('--' + BOUNDARY + '--')
     L.append('')
-    body = CRLF.join(L)
+    try:
+        body = CRLF.join(L)
+    except: # Which Error we except here?
+        print "Are you having unicode strings in L?"
+        print "Check all keys AND values for that."
+        raise
     content_type = 'multipart/form-data; boundary=%s' % BOUNDARY
     return content_type, body
 
@@ -74,7 +78,7 @@ if __name__ == "__main__":
     script = "/dump/"
     if len(sys.argv) <= 2:  # Print error if less than 2 arguments
         print "Usage %s <URL> <filename>" % sys.argv[0]
-        print "Example:\n%s http://%s%s file.xml" % (sys.argv[0], host, script)
+        print "Example:\n%s %s%s file.xml" % (sys.argv[0], host, script)
         sys.exit()
     # Parse host and script variables
     url = sys.argv[1]
