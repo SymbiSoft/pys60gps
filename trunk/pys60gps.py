@@ -234,11 +234,11 @@ class GpsApp:
         # List here ALL POSSIBLE configuration keys, so they will be initialized
         defaults = {
             "max_speed_history_points" : 200,
-            "min_trackpoint_distance" : 300, # meters
-            "estimated_error_radius" : 20, # meters
+            "min_trackpoint_distance" : 1000, # meters
+            "estimated_error_radius" : 50, # meters
             "max_estimation_vector_distance" : 10, # meters
-            "max_trackpoints" : 500,
-            "max_debugpoints" : 500,
+            "max_trackpoints" : 300,
+            "max_debugpoints" : 120,
             "max_cellid_time" : 600,
             "max_cellid_dist" : 500,
             "min_wifi_time" : 6,
@@ -251,7 +251,7 @@ class GpsApp:
             "apid" : None,
             "url" : u"http://www.plok.in/poi.php",
             "host" : u"opennetmap.org",
-            "script" : u"/fileupload/",
+            "script" : u"/api/",
         }
         # List here all configuration keys, which must be defined before use
         # If a config key has key "function", it's called to define value
@@ -399,15 +399,7 @@ class GpsApp:
         ))
         
         set_menu = (u"Set", (
-            (u"Max trackpoints (%d)" % self.config["max_trackpoints"], 
-                lambda:self.set_config_var(u"Max points", "number", "max_trackpoints")),
-            (u"Trackpoint dist (%d)" % self.config["min_trackpoint_distance"], 
-                lambda:self.set_config_var(u"Trackpoint dist", "number", "min_trackpoint_distance")),
-            (u"Est.vector dist (%d)" % self.config["max_estimation_vector_distance"], 
-                lambda:self.set_config_var(u"Trackpoint dist", "number", "max_estimation_vector_distance")),
-            (u"Estimation circle (%d)" % self.config["estimated_error_radius"], 
-                lambda:self.set_config_var(u"Estimation circle", "number", "estimated_error_radius")),
-
+            # CELL ID settings
             (u"max_cellid_time (%d)" % self.config["max_cellid_time"], 
                 lambda:self.set_config_var(u"max_cellid_time", "number", "max_cellid_time")),
                 
@@ -425,6 +417,15 @@ class GpsApp:
 
             (u"max_wifi_speed (%d) km/h" % self.config["max_wifi_speed"], 
                 lambda:self.set_config_var(u"max_wifi_speed ", "number", "max_wifi_speed")),
+
+            (u"Max trackpoints (%d)" % self.config["max_trackpoints"], 
+                lambda:self.set_config_var(u"Max points", "number", "max_trackpoints")),
+            (u"Trackpoint dist (%d)" % self.config["min_trackpoint_distance"], 
+                lambda:self.set_config_var(u"Trackpoint dist", "number", "min_trackpoint_distance")),
+            (u"Est.vector dist (%d)" % self.config["max_estimation_vector_distance"], 
+                lambda:self.set_config_var(u"Trackpoint dist", "number", "max_estimation_vector_distance")),
+            (u"Estimation circle (%d)" % self.config["estimated_error_radius"], 
+                lambda:self.set_config_var(u"Estimation circle", "number", "estimated_error_radius")),
 
             (u"Nickname (%s)" % self.config["username"], 
                 lambda:self.set_config_var(u"Nickname", "text", "username")),
@@ -778,7 +779,7 @@ class GpsApp:
                     self.save_log_cache("cellid")
                 # Remove the oldest records if the length exceeds limit
                 # TODO: make limit configurable
-                if len(self.data["gsm_location"]) >= 50:
+                if len(self.data["gsm_location"]) > 50:
                     self.data["gsm_location"].pop(0)
             return data
 
@@ -862,6 +863,8 @@ class GpsApp:
         # Add a pos to be drawn on the canvas
         pos["text"] = u"%d" % len(wlan_devices)
         self.data["wifi"].append(pos)
+        if len(self.data["wifi"]) > 100:
+            self.data["wifi"].pop(0)
         self.scanning["wifi"] = False
         return data
 
