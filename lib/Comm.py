@@ -54,7 +54,7 @@ def parse_json_response(response):
     try:
         data = json.read(json_data)
     except ReadException, error:
-        message = "%s[...]" % str(error)#[:100]
+        message = "%s[...]" % str(error)[:100]
         data = {"status" : "error", "message" : message}
     except:
         message = "Unprocessed error (server status code %s)" \
@@ -122,13 +122,15 @@ class Comm:
         # convert all params keys and values to utf-8, 
         # post_multipart expects a list of tuples
         for key in params.keys():
-            param_list.append((csetconv.to_utf8(key), 
-                               csetconv.to_utf8(params[key])))
+            params[key] = csetconv.to_utf8(params[key])
+        #for key in params.keys():
+        #    param_list.append((csetconv.to_utf8(key), 
+        #                       csetconv.to_utf8(params[key])))
         headers = {"User-Agent": self.useragent, }
         if self.sessionid != None:
             headers["Cookie"] = "sessionid=%s;" % self.sessionid
         response  = http_poster.post_multipart(self.host, self.script, 
-                                               param_list, files, headers)
+                                               params, files, headers)
         data = parse_json_response(response)
         return data, response
  
