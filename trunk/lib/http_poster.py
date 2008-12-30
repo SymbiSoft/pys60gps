@@ -13,7 +13,7 @@ http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/146306
 """
 
 __version__ = u'$Id$'
-user_agent = "http_poster.py/$Rev$"
+user_agent = "http_poster.py/$Rev: 104 $"
 
 def post_multipart(host, selector, params, files, headers={}):
     """
@@ -23,15 +23,16 @@ def post_multipart(host, selector, params, files, headers={}):
     Return a HTTPResponse.
     """
     content_type, body = encode_multipart_formdata(params, files)
-    h = httplib.HTTPConnection(host)
-    if not headers.has_key('User-Agent'):
+    conn = httplib.HTTPConnection(host)
+    if 'User-Agent' not in headers:
         headers['User-Agent'] = user_agent
-    if not headers.has_key('Content-Type'):
+    if 'Content-Type' not in headers:
         headers['Content-Type'] = content_type
-    h.request('POST', selector, body, headers)
-    response = h.getresponse()
-    h.close()
-    return response
+    conn.request('POST', selector, body, headers)
+    response = conn.getresponse()
+    data = response.read()
+    conn.close()
+    return data, response
 
 def encode_multipart_formdata(params, files):
     """
