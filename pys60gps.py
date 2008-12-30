@@ -1,6 +1,8 @@
 # -*- coding: iso-8859-1 -*-
 # $Id$
 
+SIS_VERSION = "0.3.0"
+
 import appuifw
 import e32
 appuifw.app.orientation = 'portrait'
@@ -110,7 +112,8 @@ def distance_from_line(x0, y0, x1, y1, x, y):
 
 
 class GpsApp:
-    __version__ = u'$Id$'
+    __id__ = u'$Id$'
+    __version__ = __id__
 
     def __init__(self):
         self.startgmtime = time.time() + time.altzone # Startup time

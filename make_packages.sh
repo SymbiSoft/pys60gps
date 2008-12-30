@@ -45,6 +45,8 @@ then
 fi;
 
 # http://www.forum.nokia.com/main/platforms/s60/capability_descriptions.html
-# TODO: 
-${ENSYMBLE} py2sis --uid=0xE00184F0 --appname=Pys60GPS --version=0.2.1 --lang=EN --shortcaption="Pys60GPS" --caption="PyS60 GPS"  --drive=C --caps=ALL-TCB-DRM-AllFiles-CommDD-MultimediaDD-NetworkControl-DiskAdmin --vendor="Plokaus Oy" --runinstall --verbose sis pys60gps_unsigned_testrange.sis
+# Create unsigned testrange package
+${ENSYMBLE} py2sis --uid=0xE00184F0 --appname=Pys60GPS --lang=EN --shortcaption="Pys60GPS" --caption="PyS60 GPS"  --drive=C --caps=ALL-TCB-DRM-AllFiles-CommDD-MultimediaDD-NetworkControl-DiskAdmin --vendor="Plokaus Oy" --runinstall --verbose sis pys60gps_unsigned_testrange.sis
+# Create signed version
+# TODO...
 
