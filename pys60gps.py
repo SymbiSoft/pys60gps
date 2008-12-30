@@ -64,8 +64,8 @@ draw_startup_screen(canvas, u"pys60_json")
 import pys60_json as json
 draw_startup_screen(canvas, u"PositionHelper")
 import PositionHelper
-draw_startup_screen(canvas, u"http_poster")
-import http_poster
+draw_startup_screen(canvas, u"Comm")
+import Comm
 
 ####################################
 # FIXME: move these to an own module
@@ -191,6 +191,7 @@ class GpsApp:
         self.activate()
         self.beep = self.get_tone(freq=440, duration=500, volume=1.0)
         #print self.read_log_cache_filenames("track")
+        self.comm = Comm.Comm(self.config["host"], self.config["script"])
 
     def _select_access_point(self, apid = None):
         """
@@ -583,22 +584,32 @@ class GpsApp:
         # FIXME: docstring
         # FIXME: errorhandling
         filename = os.path.join(self.datadir, "delivery.zip")
-        tempfile = "delivery.zip-%d" % (time.time())
-        temppath = os.path.join(self.datadir, tempfile)
-        os.rename(filename, temppath)
-        f = open(temppath, 'r')
-        filedata = f.read()
-        f.close()
-        # Create "files"-list which contains all files to send
-        files = [("file1", "delivery.zip", filedata)]
-        params = {"user" : str(self.config["username"]),
-                  "group" : str(self.config["group"]),
-                  }
-        params = {}
-        ret = http_poster.post_multipart(str(self.config["host"]), str(self.config["script"]), params, files)
-        appuifw.note(unicode(ret[0]), 'info')
-        
-        # On success os.remove(temppath)
+        if os.path.isfile(filename):
+            deliverydir = os.path.join(self.datadir, "delivery")
+            if not os.path.isdir(deliverydir):
+                os.makedirs(deliverydir)
+            tempfile = "delivery.zip-%d" % (time.time())
+            temppath = os.path.join(deliverydir, tempfile)
+            os.rename(filename, temppath)
+            f = open(temppath, 'r')
+            filedata = f.read()
+            f.close()
+            # Create "files"-list which contains all files to send
+            files = [("file1", "delivery.zip", filedata)]
+            params = {"user" : str(self.config["username"]),
+                      "group" : str(self.config["group"]),
+                      }
+            data, response = self.comm._send_multipart_request("fileupload", 
+                                                               params, files)
+#            response = http_poster.post_multipart(str(self.config["host"]), 
+#                                                  str(self.config["script"]), 
+#                                                  params, files)
+            if response.status == 200:
+                os.remove(temppath)
+            message = u"Send status %s %s" % (response.status, data["message"])
+        else:
+            message = u"Not found: %s" % filename
+        appuifw.note(message, 'info')
     
     def save_log_cache(self, logname, namepattern = "-%Y%m%d"):
         """

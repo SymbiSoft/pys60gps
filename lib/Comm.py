@@ -48,9 +48,9 @@ def rpc_name():
     """Return the name of calling function."""
     return sys._getframe(1).f_code.co_name
 
-def parse_json_response(response):
+def parse_json_response(json_data, response):
     """Decode JSON response and return the data in a dictionary."""
-    json_data = response.read()
+    #json_data = response.read()
     try:
         data = json.read(json_data)
     except ReadException, error:
@@ -61,8 +61,6 @@ def parse_json_response(response):
                 % response.status
         data = {"status" : "error", "message" : message}
     return data
-
-
 
 class Comm:
     """Base class for all HTTP-communication classes."""
@@ -107,8 +105,9 @@ class Comm:
         except: # socket.gaierror, error: FIXME: handle errors here
             raise
         response = conn.getresponse()
+        data = response.read()
+        data = parse_json_response(data, response)
         conn.close()
-        data = parse_json_response(response)
         return data, response
 
     def _send_multipart_request(self, operation, params, files):
@@ -129,9 +128,9 @@ class Comm:
         headers = {"User-Agent": self.useragent, }
         if self.sessionid != None:
             headers["Cookie"] = "sessionid=%s;" % self.sessionid
-        response  = http_poster.post_multipart(self.host, self.script, 
-                                               params, files, headers)
-        data = parse_json_response(response)
+        data, response  = http_poster.post_multipart(self.host, self.script, 
+                                                     params, files, headers)
+        data = parse_json_response(data, response)
         return data, response
  
     def login(self, username, password):
