@@ -1,101 +1,102 @@
 # -*- coding: iso-8859-15 -*-
-# $Id: Comm.py 1374 2007-04-13 05:22:01Z arista $
+# $Id$
 # Copyright Aapo Rista 2006 - 2009
 
-"""Generic session handling and communication module."""
+"""
+Generic session handling and communication module.
 
-# python native imports
-import time
+Comm offers two internal POST-request functions: plain and multipart, latter
+allows posting file attachments.
+
+In addition login() and logout() calls are provided. After successful login() 
+Comm keeps sessionid and uses it until logout is performed.
+
+All other functions should be defined in deriving class.
+
+All API functions should return decoded data (dict) and HTTPResponse object.
+Data should have at least keys
+
+data = {
+    "status" : 'ok' | 'error', 
+    "message" : 'Clear text explanation',
+}
+
+Server should return raw JSON.
+
+csetconv is used to ensure all param keys and values are UTF8 encoded.
+
+TODO:
+- support for gzipped response (and request) to reduce 
+  the amount of transferred data 
+- support for encrypted response and request
+"""
+
 import httplib
 import urllib
 import sys
-import re
-import md5
-import sha
+#import time
+#import re
+#import md5
 
+# import sha
 import http_poster
 import csetconv
 import pys60_json as json
+from pys60_json import ReadException
 
-# Seems obsolete:
+def rpc_name():
+    """Return the name of calling function."""
+    return sys._getframe(1).f_code.co_name
 
-############## URLLIB STUFF START #################################
-# Override urrlib's default useragent header
-#class AppURLopener(urllib.FancyURLopener):
-#    __version__ = u'$Id: Comm.py 1374 2007-04-13 05:22:01Z arista $' # DO NOT modify Id-string
-#    def __init__(self, *args):
-#        try: # Parse revision and last change date
-#            ida = self.__version__.split(u" ")
-#            self.revision = ida[2]
-#            self.lastchangeddate = ida[3]
-#        except:
-#            self.revision = u'undefined'
-#            self.lastchangeddate = u'undefined'
-#        self.version = 'Plok.In/%s/%s' % (self.revision, self.lastchangeddate)
-#        urllib.FancyURLopener.__init__(self, *args)
+def parse_json_response(response):
+    """Decode JSON response and return the data in a dictionary."""
+    json_data = response.read()
+    try:
+        data = json.read(json_data)
+    except ReadException, error:
+        message = "%s[...]" % str(error)#[:100]
+        data = {"status" : "error", "message" : message}
+    except:
+        message = "Unprocessed error (server status code %s)" \
+                % response.status
+        data = {"status" : "error", "message" : message}
+    return data
 
-#urllib._urlopener = AppURLopener()
-############## URLLIB STUFF END ###################################
 
-# TODO: Change _send*request()-functions to return result unmodified
-#       and put xml-parsing to client functions.
-# TODO: Change Plok-texts from this file to some more generic
 
 class Comm:
-    """
-    Comm is a base class for subclass which handles all 
-    communication (RPC-calls) to the server. 
-    Comm offers 2 methods to send data to the HTTP-server:
-    Comm._send_request and Comm._send_multipart_request.
+    """Base class for all HTTP-communication classes."""
     
-    All RPC-calls return XML. Consult documentation for details.
-    See example methods below. 
-    
-    After successful login() Comm keeps session id and uses it
-    until logout is performed.
-    """
+    __id__ = u'$Id$'
 
-    __id__ = u'$Id: Comm.py 1374 2007-04-13 05:22:01Z arista $'
-
-    def __init__(self, host, script, useragent=None):
+    def __init__(self, host, script, useragent = None):
         try: # Parse revision and last change date
             ida = self.__id__.split(u" ")
             self.revision = ida[2]
             self.lastchangeddate = ida[3]
-        except:
+        except IndexError:
             self.revision = u'undefined'
             self.lastchangeddate = u'undefined'
         if useragent is None:
-            self.ua = 'Comm.py/%s/%s' % (self.revision, self.lastchangeddate)
+            self.useragent = 'Comm.py/%s/%s' % (self.revision, 
+                                                self.lastchangeddate)
         self.host = host
         self.script = script
-        self.url = "http://%s%s" % (host, script)
+        # self.url = "http://%s%s" % (host, script)
         self.sessionid = None
         
-    def rpc_name(self):
-        """
-        Return the name of caller function.
-        It is used when making a remote procedure call (RPC) to Plok-server. 
-        """
-        return sys._getframe(1).f_code.co_name
-    
     def _send_request(self, operation, params):
-        # NOTE: TEMPORARY TEST HERE:
-        ##############################################################
-        #return self._send_multipart_request(operation, params, {})
-        ###############################################################
         """
-        Send HTTP-request to the server using httplib and 
-        return a HTTPResponse object.
+        Send HTTP POST request to the server using httplib, 
+        return decoded data and a HTTPResponse object.
         """
         params['operation'] = operation
-        # convert all params-values to utf-8
+        # convert all params-values to utf-8, keys should be ASCII
         for key in params.keys():
             params[key] = csetconv.to_utf8(params[key])
         params = urllib.urlencode(params)
-        # print params
         headers = {"Content-type": "application/x-www-form-urlencoded",
-                   "User-Agent": self.ua,
+                   "User-Agent": self.useragent,
                    }
         # Send session id in headers as a cookie
         if self.sessionid != None:
@@ -103,84 +104,84 @@ class Comm:
         conn = httplib.HTTPConnection(self.host)
         try:
             conn.request("POST", self.script, params, headers)
-        except:
+        except: # socket.gaierror, error: FIXME: handle errors here
             raise
         response = conn.getresponse()
         conn.close()
-        #print response.read()
-        #print response.getheaders()
-        return response
+        data = parse_json_response(response)
+        return data, response
 
     def _send_multipart_request(self, operation, params, files):
         """
         Send multipart HTTP-request to the server using http_poster.
         Request can contain file attachments.
-        Return parsed request in an array.
-        NOTE: please unicode only! All params must be unicode!
+        Return decoded response data and a HTTPResponse object.
         """
         params['operation'] = operation
         param_list = []
+        # convert all params keys and values to utf-8, 
+        # post_multipart expects a list of tuples
         for key in params.keys():
-            param_list.append((csetconv.to_utf8(key), csetconv.to_utf8(params[key])))
-        headers = {"User-Agent": self.ua,
-                  }
+            param_list.append((csetconv.to_utf8(key), 
+                               csetconv.to_utf8(params[key])))
+        headers = {"User-Agent": self.useragent, }
         if self.sessionid != None:
             headers["Cookie"] = "sessionid=%s;" % self.sessionid
-        response  = http_poster.post_multipart(self.host, self.script, param_list, files, headers)
-        #print response.read()
-        #print response.getheaders()
-        return response
+        response  = http_poster.post_multipart(self.host, self.script, 
+                                               param_list, files, headers)
+        data = parse_json_response(response)
+        return data, response
  
-    
     def login(self, username, password):
         """
         Do login with given username and password.
+        Return decoded response data and a HTTPResponse object.
         """
         params = {'username': username, 'password' : password}
-        response = self._send_request(self.rpc_name(), params)
-        json_data = response.read()
-        data = json.read(json_data)
+        data, response = self._send_request(rpc_name(), params)
         if "status" in data and data["status"] == "ok":
             self.sessionid = data["sessionid"]
         else:
             self.sessionid = None
-        return data
+        return data, response
 
     # TODO: login_sha()
-    def login_md5(self, login, md5pw):
+    def login_sha(self, login, shapw):
         """
-        Send login and md5 encoded password to the server and
-        return session id (32 hex) if login was successful. 
-        Otherwise return error.
+        Send login and sha encoded password to the server.
+        Return decoded response data and a HTTPResponse object.
         """
+        # TODO: consider how to get salt from the server
         pass
 
     def logout(self):
         """
         End current session.
+        Return decoded response data and a HTTPResponse object.
         """
-        # TODO: Here we might want to check if sessionid exists
+        if self.sessionid is None:
+            return {"status" : "error", 
+                    "message" : "Session is not active"}, None
         params = {} # Session id is in cookie
-        response = self._send_request(self.rpc_name(), params)
-        json_data = response.read()
-        data = json.read(json_data)
+        data, response = self._send_request(rpc_name(), params)
         if "status" in data and data["status"] == "ok":
             self.sessionid = None
-        return data
+        return data, response
 
     def sessioninfo(self):
+        """
+        Get some information of session from the server.
+        Return decoded response data and a HTTPResponse object.
+        """
         params = {}
-        response = self._send_request(self.rpc_name(), params)
-        json_data = response.read()
-        data = json.read(json_data)
-        return data
-
+        data, response = self._send_request(rpc_name(), params)
+        return data, response
 
 if __name__ == '__main__':
-    server = u"localhost:8000"
-    script = u'/api/'
-    comm = Comm(server, script)
-    x = comm.login(u"user", u"password")
-    print x
-    x = comm.logout()
-    print x
+    SERVER = u"localhost:8000"
+    SCRIPT = u'/api/'
+    COMM = Comm(SERVER, SCRIPT)
+    DATA, RESPONSE = COMM.login(u"user", u"password")
+    print DATA
+    DATA, RESPONSE = COMM.logout()
+    print DATA
