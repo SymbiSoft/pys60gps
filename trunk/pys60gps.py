@@ -564,25 +564,26 @@ class GpsApp:
     def flush_delivery_data(self):
         # FIXME: docstring
         # FIXME: errorhandling
-        delivery_key = "delivery_new"
-        filename = os.path.join(self.datadir, "delivery.zip")
-        if os.path.isfile(filename):
-            mode = "a"
-        else:
-            mode = "w"
-        current_time = time.time()
-        now = time.localtime(current_time)[:6]
-        name = time.strftime("delivery-%Y%m%d-%H%M%S.json", time.localtime(current_time))
-        file = zipfile.ZipFile(filename, mode)
-        info = zipfile.ZipInfo(name)
-        info.date_time = now
-        info.compress_type = zipfile.ZIP_DEFLATED
-        json_data = []
-        while len(self.data[delivery_key]) > 0:
-            data = self.data[delivery_key].pop(0)
-            json_data.append(json.write(data))
-        file.writestr(info, "\n".join(json_data))
-        file.close()
+        if len(self.data[delivery_key]) > 0:
+            delivery_key = "delivery_new"
+            filename = os.path.join(self.datadir, "delivery.zip")
+            if os.path.isfile(filename):
+                mode = "a"
+            else:
+                mode = "w"
+            current_time = time.time()
+            now = time.localtime(current_time)[:6]
+            name = time.strftime("delivery-%Y%m%d-%H%M%S.json", time.localtime(current_time))
+            file = zipfile.ZipFile(filename, mode)
+            info = zipfile.ZipInfo(name)
+            info.date_time = now
+            info.compress_type = zipfile.ZIP_DEFLATED
+            json_data = []
+            while len(self.data[delivery_key]) > 0:
+                data = self.data[delivery_key].pop(0)
+                json_data.append(json.write(data))
+            file.writestr(info, "\n".join(json_data))
+            file.close()
 
     def send_delivery_data(self):
         # FIXME: docstring
