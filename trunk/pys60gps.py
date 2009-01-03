@@ -586,8 +586,13 @@ class GpsApp:
             file.close()
 
     def send_delivery_data(self):
-        # FIXME: docstring
-        # FIXME: errorhandling
+        """
+        Send all delivery data to the server using 
+        Comm-module's _send_multipart_request().
+        TODO : 
+        """
+        # TODO: errorhandling
+        self.flush_delivery_data()
         filename = os.path.join(self.datadir, "delivery.zip")
         if os.path.isfile(filename):
             deliverydir = os.path.join(self.datadir, "delivery")
