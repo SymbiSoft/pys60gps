@@ -564,8 +564,8 @@ class GpsApp:
     def flush_delivery_data(self):
         # FIXME: docstring
         # FIXME: errorhandling
+        delivery_key = "delivery_new"
         if len(self.data[delivery_key]) > 0:
-            delivery_key = "delivery_new"
             filename = os.path.join(self.datadir, "delivery.zip")
             if os.path.isfile(filename):
                 mode = "a"
