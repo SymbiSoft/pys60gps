@@ -606,14 +606,13 @@ class GpsApp:
             f.close()
             # Create "files"-list which contains all files to send
             files = [("file1", "delivery.zip", filedata)]
-            params = {"user" : str(self.config["username"]),
+            params = {"username" : str(self.config["username"]),
                       "group" : str(self.config["group"]),
                       }
             data, response = self.comm._send_multipart_request("fileupload", 
                                                                params, files)
-#            response = http_poster.post_multipart(str(self.config["host"]), 
-#                                                  str(self.config["script"]), 
-#                                                  params, files)
+            # TODO: in the future:
+            # self.comm.fileupload(params, files)
             if response.status == 200:
                 os.remove(temppath)
             message = u"Send status %s %s" % (response.status, data["message"])
