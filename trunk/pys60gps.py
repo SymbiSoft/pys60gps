@@ -1,7 +1,8 @@
 # -*- coding: iso-8859-1 -*-
 # $Id$
 
-SIS_VERSION = "0.3.0"
+# DO NOT remove this
+SIS_VERSION = "0.3.1"
 
 import appuifw
 import e32
@@ -453,7 +454,8 @@ class GpsApp:
             (u"Toggle debug",self.toggle_debug),
             (u"Send data",self.send_delivery_data),
             (u"Reboot",self.reboot),
-            (u"Version", lambda:appuifw.note(self.__version__, 'info')),
+            (u"Version", lambda:appuifw.note("Version: " + SIS_VERSION + 
+                                             "\n" + self.__version__, 'info')),
             (u"Close", self.lock.signal),
             ]
 

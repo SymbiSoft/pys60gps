@@ -6,17 +6,23 @@
 # install pys60gps to a s60-phone.
 #############################################################
 
+# Find out version string
+
+SIS_VERSION=$(perl -ne 'if (/SIS_VERSION\s*=\s*"([\d\.]+)"/) {print "-$1";}' pys60gps.py)
+REVISION=$(perl -ne 'if (/\$Id: pys60gps.py (\d+)/) {print "-rev$1";exit()}' pys60gps.py)
+
 # Cleanup old stuff
 
-rm -f pys60gps.zip
+rm -f pys60gps*.zip
 rm -Rf sis
+rm -Rf *.sis
 
 # Create a zip-package.
 # Installation:
 # 1. transfer it to the phone
 # 2. extract it into E:\Python with phone's ZipManager
 
-find pys60gps.py lib  -name "*.py" | zip -@ pys60gps.zip
+find pys60gps.py lib  -name "*.py" | zip -@ pys60gps${REVISION}.zip
 
 # Create a directory hierarchy for SIS-package
 
@@ -46,7 +52,16 @@ fi;
 
 # http://www.forum.nokia.com/main/platforms/s60/capability_descriptions.html
 # Create unsigned testrange package
-${ENSYMBLE} py2sis --uid=0xE00184F0 --appname=Pys60GPS --lang=EN --shortcaption="Pys60GPS" --caption="PyS60 GPS"  --drive=C --caps=ALL-TCB-DRM-AllFiles-CommDD-MultimediaDD-NetworkControl-DiskAdmin --vendor="Plokaus Oy" --runinstall --verbose sis pys60gps_unsigned_testrange.sis
+${ENSYMBLE} py2sis --uid=0xE00184F0 --appname=Pys60Gps --lang=EN --shortcaption="Pys60Gps" --caption="PyS60 GPS (opennetmap.org)"  --drive=C --caps=ALL-TCB-DRM-AllFiles-CommDD-MultimediaDD-NetworkControl-DiskAdmin --vendor="Plokaus Oy" --runinstall --verbose sis pys60gps${SIS_VERSION}_unsigned_testrange.sis
+
+if [ -z $1 ];
+then 
+  echo NOTE: If you want to create signed version, 
+  echo give the file body of your cers as an argument.
+  echo sh $0 mycert # you must have mycert.cer and mycert.key
+  exit 0
+fi
+
 # Create signed version
-# TODO...
+${ENSYMBLE} py2sis --uid=0x200184F0 --appname=Pys60Gps --lang=EN --shortcaption="Pys60Gps" --caption="PyS60 GPS (opennetmap.org)"  --drive=C --caps=ALL-TCB-DRM-AllFiles --vendor="Plokaus Oy" --runinstall --verbose --cert=$1.cer  --privkey=$1.key sis pys60gps${SIS_VERSION}-signed-$1.sis
 
