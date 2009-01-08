@@ -243,6 +243,7 @@ class GpsApp:
             "max_estimation_vector_distance" : 10, # meters
             "max_trackpoints" : 300,
             "max_debugpoints" : 120,
+            "min_cellid_time" : 20,
             "max_cellid_time" : 600,
             "max_cellid_dist" : 500,
             "min_wifi_time" : 6,
@@ -406,6 +407,9 @@ class GpsApp:
             # CELL ID settings
             (u"max_cellid_time (%d)" % self.config["max_cellid_time"], 
                 lambda:self.set_config_var(u"max_cellid_time", "number", "max_cellid_time")),
+                
+            (u"min_cellid_time (%d)" % self.config["min_cellid_time"], 
+                lambda:self.set_config_var(u"min_cellid_time", "number", "min_cellid_time")),
                 
             (u"max_cellid_dist (%d)" % self.config["max_cellid_dist"], 
                 lambda:self.set_config_var(u"max_cellid_dist ", "number", "max_cellid_dist")),
@@ -760,8 +764,13 @@ class GpsApp:
                 # NOTE: pos["position"]["latitude"] may be a NaN!
                 # NaN >= 500 is True
                 # NaN > 500 is False in Python 2.2!!!
-                if ((dist > self.config["max_cellid_dist"]) or
-                    (timediff > self.config["max_cellid_time"])):
+                # Check that at least min_cellid_time secods have passed
+                # and distance is greater than max_cellid_dist meters
+                #  or max_cellid_time has passed from the latest point 
+                # to save new point
+                if ((timediff > self.config["min_cellid_time"]) and
+                     (dist > self.config["max_cellid_dist"]) or
+                     (timediff > self.config["max_cellid_time"])):
                     dist_time_flag = True
             
             if (len(self.data["gsm_location"]) == 0
