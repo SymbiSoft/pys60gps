@@ -63,5 +63,5 @@ then
 fi
 
 # Create signed version
-${ENSYMBLE} py2sis --uid=0x200184F0 --appname=Pys60Gps --lang=EN --shortcaption="Pys60Gps" --caption="PyS60 GPS (opennetmap.org)"  --drive=C --caps=ALL-TCB-DRM-AllFiles --vendor="Plokaus Oy" --runinstall --verbose --cert=$1.cer  --privkey=$1.key sis pys60gps${SIS_VERSION}-signed-$1.sis
+${ENSYMBLE} py2sis --uid=0x200184F0 --appname=Pys60Gps --lang=EN --shortcaption="Pys60Gps" --caption="PyS60 GPS (opennetmap.org)"  --drive=C --caps=ALL-TCB-DRM-AllFiles --vendor="Plokaus Oy" --runinstall --verbose --cert=$1.cer  --privkey=$1.key sis $1-pys60gps${SIS_VERSION}-signed.sis
 
