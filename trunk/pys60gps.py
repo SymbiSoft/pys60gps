@@ -2,7 +2,7 @@
 # $Id$
 
 # DO NOT remove this
-SIS_VERSION = "0.3.1"
+SIS_VERSION = "0.3.2"
 
 import appuifw
 import e32
@@ -196,6 +196,9 @@ class GpsApp:
         self.beep = self.get_tone(freq=440, duration=500, volume=1.0)
         #print self.read_log_cache_filenames("track")
         self.comm = Comm.Comm(self.config["host"], self.config["script"])
+
+    def get_sis_version(self):
+        return SIS_VERSION
 
     def _select_access_point(self, apid = None):
         """
@@ -458,7 +461,7 @@ class GpsApp:
             (u"Toggle debug",self.toggle_debug),
             (u"Send data",self.send_delivery_data),
             (u"Reboot",self.reboot),
-            (u"Version", lambda:appuifw.note("Version: " + SIS_VERSION + 
+            (u"Version", lambda:appuifw.note("Version: " + self.get_sis_version() + 
                                              "\n" + self.__version__, 'info')),
             (u"Close", self.lock.signal),
             ]
@@ -649,6 +652,7 @@ class GpsApp:
         files = [("file1", "delivery.zip", filedata)]
         params = {"username" : str(self.config["username"]),
                   "group" : str(self.config["group"]),
+                  "pys60gps_version" : self.get_sis_version(),
                   }
         # if "md5" in data and data["md5"] == md5.new(filedata
         data, response = self.comm._send_multipart_request("fileupload", 
