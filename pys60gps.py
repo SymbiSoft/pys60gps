@@ -595,9 +595,9 @@ class GpsApp:
         """
         Send all delivery data to the server using 
         Comm-module's _send_multipart_request().
-        TODO : 
         """
         # TODO: errorhandling
+        # FIXME: this is messy
         self.flush_delivery_data()
         filename = os.path.join(self.datadir, "delivery.zip")
         if os.path.isfile(filename):
@@ -607,25 +607,63 @@ class GpsApp:
             tempfile = "delivery.zip-%d" % (time.time())
             temppath = os.path.join(deliverydir, tempfile)
             os.rename(filename, temppath)
-            f = open(temppath, 'r')
-            filedata = f.read()
-            f.close()
-            # Create "files"-list which contains all files to send
-            files = [("file1", "delivery.zip", filedata)]
-            params = {"username" : str(self.config["username"]),
-                      "group" : str(self.config["group"]),
-                      }
-            data, response = self.comm._send_multipart_request("fileupload", 
-                                                               params, files)
+            data, response = self.temp_fileupload(temppath)
             # TODO: in the future:
             # self.comm.fileupload(params, files)
             if response.status == 200:
+                # TODO: remove file only if also checksum matches:
+                # and data["md5"] == md5(temppath)
+                # TODO: create function which handles it
                 os.remove(temppath)
-            message = u"Send status %s %s" % (response.status, data["message"])
+                # Successfully sent, check if there are any old files 
+                # laying in deliverydir 
+                unsent_files = os.listdir(deliverydir)
+                if len(unsent_files) == 0:
+                    message = u"Send status %s %s" % (response.status, data["message"])
+                    appuifw.note(message, 'info')
+                else:
+                    message = u"%s, do you like to send %d unsent files now aswell?" % (
+                                       data["message"], len(unsent_files))
+                    if appuifw.query(message, 'query'):
+                        for delivery in unsent_files:
+                            temppath = os.path.join(deliverydir, delivery)
+                            appuifw.note(u"Sending %s" % (temppath), 'info')
+                            data, response = self.temp_fileupload(temppath)
+                            if response.status == 200:
+                                os.remove(temppath) 
+                            else:
+                                break
+            else:
+                message = u"Send status %s %s" % (response.status, data["message"])
+                appuifw.note(message, 'info')
         else:
             message = u"Not found: %s" % filename
-        appuifw.note(message, 'info')
-    
+            appuifw.note(message, 'info')
+
+    # TODO: put this in Comm/OnmComm-module
+    def temp_fileupload(self, filepath):
+        f = open(filepath, 'rb')
+        filedata = f.read()
+        f.close()
+        # Create "files"-list which contains all files to send
+        files = [("file1", "delivery.zip", filedata)]
+        params = {"username" : str(self.config["username"]),
+                  "group" : str(self.config["group"]),
+                  }
+        # if "md5" in data and data["md5"] == md5.new(filedata
+        data, response = self.comm._send_multipart_request("fileupload", 
+                                                           params, files)
+        # FIXME: temporary testing solution
+        import md5
+        filedata_md5 = md5.new(filedata).hexdigest()
+        try:
+            ok = filedata_md5 == data["md5"]
+        except:
+            ok = "exception"
+        appuifw.note(u"MD5 check: %s" % (ok), 'info')
+        #appuifw.note(u"%s" % (filedata_md5), 'info')
+        return data, response
+
     def save_log_cache(self, logname, namepattern = "-%Y%m%d"):
         """
         Save cached log data to persistent disk (C:).

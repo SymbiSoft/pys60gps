@@ -22,7 +22,7 @@ rm -Rf *.sis
 # 1. transfer it to the phone
 # 2. extract it into E:\Python with phone's ZipManager
 
-find pys60gps.py lib  -name "*.py" | zip -@ pys60gps${REVISION}.zip
+find pys60gps.py lib  -name "*.py" | zip -@ pys60gps${SIS_VERSION}${REVISION}.zip
 
 # Create a directory hierarchy for SIS-package
 
