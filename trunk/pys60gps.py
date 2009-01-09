@@ -608,7 +608,7 @@ class GpsApp:
             # FIXME: this asking should be in another function
             if ask_first:
                 query = u"You have some unsent data, would you like send it now?"
-                if appuifw.query(query, 'query') is False:
+                if appuifw.query(query, 'query') == None:
                     return
             deliverydir = os.path.join(self.datadir, "delivery")
             if not os.path.isdir(deliverydir):
