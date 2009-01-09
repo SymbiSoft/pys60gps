@@ -594,16 +594,22 @@ class GpsApp:
             file.writestr(info, "\n".join(json_data))
             file.close()
 
-    def send_delivery_data(self):
+    def send_delivery_data(self, ask_first = False):
         """
         Send all delivery data to the server using 
         Comm-module's _send_multipart_request().
+        If ask_first is True, ask user first.
         """
         # TODO: errorhandling
         # FIXME: this is messy
         self.flush_delivery_data()
         filename = os.path.join(self.datadir, "delivery.zip")
         if os.path.isfile(filename):
+            # FIXME: this asking should be in another function
+            if ask_first:
+                query = u"You have some unsent data, would you like send it now?"
+                if appuifw.query(query, 'query') is False:
+                    return
             deliverydir = os.path.join(self.datadir, "delivery")
             if not os.path.isdir(deliverydir):
                 os.makedirs(deliverydir)
@@ -639,9 +645,17 @@ class GpsApp:
             else:
                 message = u"Send status %s %s" % (response.status, data["message"])
                 appuifw.note(message, 'info')
-        else:
+        elif ask_first is False:
             message = u"Not found: %s" % filename
             appuifw.note(message, 'info')
+
+    def check_for_unsent_delivery_data(self):
+        """
+        Check if there is any unsent data laying around 
+        and send it if user wants to
+        """
+        pass
+
 
     # TODO: put this in Comm/OnmComm-module
     def temp_fileupload(self, filepath):
@@ -661,7 +675,10 @@ class GpsApp:
         import md5
         filedata_md5 = md5.new(filedata).hexdigest()
         try:
-            ok = filedata_md5 == data["md5"]
+            if filedata_md5 == data["md5"]:
+                ok = "success"
+            else:
+                ok = "failed"
         except:
             ok = "exception"
         appuifw.note(u"MD5 check: %s" % (ok), 'info')
@@ -1172,12 +1189,14 @@ class GpsApp:
             self.lock.signal()
 
     def close(self):
+        positioning.stop_position()
+        appuifw.app.exit_key_handler = None
+        self.running = False
         self.flush_delivery_data()
         self.save_log_cache("track")
         self.save_log_cache("cellid") 
         self.save_log_cache("wifi") 
-        self.running = False
-        appuifw.app.exit_key_handler = None
+        self.send_delivery_data(True)
         appuifw.app.set_tabs([u"Back to normal"], lambda x: None)
 
     def get_tone(self, freq=440, duration=1000, volume=0.5):
