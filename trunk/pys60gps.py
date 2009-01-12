@@ -255,6 +255,7 @@ class GpsApp:
             "max_wifi_speed" : 60,
             "track_debug" : False,
             "username" : None,
+            "password" : u"",
             "group" : None,
             "apid" : None,
             "url" : u"http://www.plok.in/poi.php",
@@ -440,6 +441,9 @@ class GpsApp:
 
             (u"Nickname (%s)" % self.config["username"], 
                 lambda:self.set_config_var(u"Nickname", "text", "username")),
+            (u"Password (%s)" % u"*****", 
+                lambda:self.set_config_var(u"Password", "code", "password")),
+
             (u"Group (%s)" % self.config["group"], 
                 lambda:self.set_config_var(u"Group", "text", "group")),
             (u"URL (%s)" % self.config["url"], 
@@ -460,6 +464,7 @@ class GpsApp:
             set_menu,
             (u"Toggle debug",self.toggle_debug),
             (u"Send data",self.send_delivery_data),
+            (u"Login",self.login),
             (u"Reboot",self.reboot),
             (u"Version", lambda:appuifw.note("Version: " + self.get_sis_version() + 
                                              "\n" + self.__version__, 'info')),
@@ -649,13 +654,19 @@ class GpsApp:
             message = u"Not found: %s" % filename
             appuifw.note(message, 'info')
 
+    def login(self):
+        data, response = self.comm.login(self.config["username"], 
+                                         self.config["password"])
+        message = u"Login request HTTP-status %s.\n%s" % (response.status, data["message"])
+        appuifw.note(message, 'info')
+
+    # TODO: check is this relevant
     def check_for_unsent_delivery_data(self):
         """
         Check if there is any unsent data laying around 
         and send it if user wants to
         """
         pass
-
 
     # TODO: put this in Comm/OnmComm-module
     def temp_fileupload(self, filepath):
