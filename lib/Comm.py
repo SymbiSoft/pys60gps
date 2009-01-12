@@ -116,27 +116,29 @@ class Comm:
             headers["Cookie"] = "sessionid=%s;" % self.sessionid
         conn = httplib.HTTPConnection(self.host)
         import socket
-        try:
-            conn.request("POST", self.script, params, headers)
-            response = conn.getresponse()
-            reason = csetconv.to_unicode(response.reason)
-            if response.status == 200:
-                data = response.read()
-                data = parse_json_response(data, response)
-            else:
-                data = {"status" : "error:server", 
-                        "message" : u"Server responded: %s %s" % (
-                                    response.status, reason)}
-        except socket.gaierror, error:
-            message = u"Server not found. '%s'" % csetconv.to_unicode(error[1])
-            data = {"status" : "error:communication:gaierror", 
-                    "message" : message}
-            response = None
-        except socket.error, error:
-            message = u"Service not available. '%s'" % csetconv.to_unicode(error[1])
-            data = {"status" : "error:communication:error", 
-                    "message" : message}
-            response = None
+        # This is nested because Python 2.2 doesn't support try/except/finally
+        try: 
+            try:
+                conn.request("POST", self.script, params, headers)
+                response = conn.getresponse()
+                reason = csetconv.to_unicode(response.reason)
+                if response.status == 200:
+                    data = response.read()
+                    data = parse_json_response(data, response)
+                else:
+                    data = {"status" : "error:server", 
+                            "message" : u"Server responded: %s %s" % (
+                                        response.status, reason)}
+            except socket.gaierror, error:
+                message = u"Server not found. '%s'" % csetconv.to_unicode(error[1])
+                data = {"status" : "error:communication:gaierror", 
+                        "message" : message}
+                response = None
+            except socket.error, error:
+                message = u"Service not available. '%s'" % csetconv.to_unicode(error[1])
+                data = {"status" : "error:communication:error", 
+                        "message" : message}
+                response = None
         finally:
             conn.close()
         return data, response
