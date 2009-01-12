@@ -1,6 +1,12 @@
 Pys60Gps Changelog
 
+2008-01-12 version 0.3.3
+
+Added Login into the main menu.
+Splitted Set menu to scan related and other settings.
+
 2008-01-09 version 0.3.2
-	Added query to send data which sending failed in the past.
-	Added query to send unsent data just before exit.
+
+Added query to send data which sending failed in the past.
+Added query to send unsent data just before exit.
 
