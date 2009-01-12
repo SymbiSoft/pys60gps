@@ -2,7 +2,7 @@
 # $Id$
 
 # DO NOT remove this
-SIS_VERSION = "0.3.2"
+SIS_VERSION = "0.3.3"
 
 import appuifw
 import e32
@@ -402,12 +402,13 @@ class GpsApp:
             gps_onoff = u"OFF"
         else:
             gps_onoff = u"ON"
+
         profile_menu = (u"Scan profile", (
             (u"Lazy", lambda:self.set_scan_config("lazy")),
             (u"Turbo", lambda:self.set_scan_config("turbo")),
         ))
         
-        set_menu = (u"Set", (
+        set_scan_params_menu = (u"Set scan params", (
             # CELL ID settings
             (u"max_cellid_time (%d)" % self.config["max_cellid_time"], 
                 lambda:self.set_config_var(u"max_cellid_time", "number", "max_cellid_time")),
@@ -430,6 +431,10 @@ class GpsApp:
             (u"max_wifi_speed (%d) km/h" % self.config["max_wifi_speed"], 
                 lambda:self.set_config_var(u"max_wifi_speed ", "number", "max_wifi_speed")),
 
+        ))
+
+        set_menu = (u"Set", (
+            (u"Toggle debug", self.toggle_debug),
             (u"Max trackpoints (%d)" % self.config["max_trackpoints"], 
                 lambda:self.set_config_var(u"Max points", "number", "max_trackpoints")),
             (u"Trackpoint dist (%d)" % self.config["min_trackpoint_distance"], 
@@ -443,7 +448,6 @@ class GpsApp:
                 lambda:self.set_config_var(u"Nickname", "text", "username")),
             (u"Password (%s)" % u"*****", 
                 lambda:self.set_config_var(u"Password", "code", "password")),
-
             (u"Group (%s)" % self.config["group"], 
                 lambda:self.set_config_var(u"Group", "text", "group")),
             (u"URL (%s)" % self.config["url"], 
@@ -452,17 +456,19 @@ class GpsApp:
                 lambda:self.set_config_var(u"Host[:port]", "text", "host")),
             (u"Script (%s)" % self.config["script"], 
                 lambda:self.set_config_var(u"Script", "text", "script")),
-            (u"Access point (%s)" % self.config["apid"], 
+            (u"Access point (%s)" % self.config["apid"], # TODO: show the name instead of apid 
                 lambda:self._select_access_point()),
-            (u"Reset all values", self.reset_config),
         ))
+            
+
             
         appuifw.app.menu = [
             (u"Select",self.handle_select),
             (u"GPS %s" % (gps_onoff),self.start_read_position),
             profile_menu,
+            set_scan_params_menu,
             set_menu,
-            (u"Toggle debug",self.toggle_debug),
+            (u"Reset config", self.reset_config),
             (u"Send data",self.send_delivery_data),
             (u"Login",self.login),
             (u"Reboot",self.reboot),
@@ -655,10 +661,22 @@ class GpsApp:
             appuifw.note(message, 'info')
 
     def login(self):
-        data, response = self.comm.login(self.config["username"], 
-                                         self.config["password"])
-        message = u"Login request HTTP-status %s.\n%s" % (response.status, data["message"])
-        appuifw.note(message, 'info')
+        """
+        Perform login using Comm-module. 
+        Query password if is not found in settings.
+        """
+        if ("password" not in self.config or 
+            not self.config["password"]): # is "", False, None
+            if appuifw.query(u"Password is not set! Would you like to set it now?", 'query'):
+                self.set_config_var(u"Password", "code", "password")
+                appuifw.note(u"Perform login again now.", 'info')
+            else:
+                appuifw.note(u"You can set it in\nSet->Password menu", 'info')
+        else:
+            data, response = self.comm.login(self.config["username"], 
+                                             self.config["password"])
+            message = u"Login request HTTP-status %s.\n%s" % (response.status, data["message"])
+            appuifw.note(message, 'info')
 
     # TODO: check is this relevant
     def check_for_unsent_delivery_data(self):
