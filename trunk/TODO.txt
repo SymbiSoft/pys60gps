@@ -1,3 +1,10 @@
+2008-01-10
+Consider time resolution decreasing just before send_delivery_data()
+p=re.compile(r"(\d{4})\-(\d{2})\-(\d{2})\T(\d{2})\:(\d{2})\:(\d{2})")
+print p.sub(r"\1-\2-\3T00:00:00", '"2009-01-10T09:17:47Z"' )
+'"2009-01-10T00:00:00Z"'
+
+
 Directory size function:
 
 import os
