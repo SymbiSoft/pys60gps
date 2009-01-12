@@ -17,11 +17,14 @@ All API functions should return decoded data (dict) and HTTPResponse object.
 Data should have at least keys
 
 data = {
-    "status" : 'ok' | 'error', 
+    "status" : 'ok' | 'error[:errortype]', 
     "message" : 'Clear text explanation',
 }
 
-Server should return raw JSON.
+In error situation status is "error[:errortype]" and message may contain
+some additional info of error (e.g. exception's error text).
+
+Server must always return raw, valid JSON.
 
 csetconv is used to ensure all param keys and values are UTF8 encoded.
 
@@ -54,12 +57,15 @@ def parse_json_response(json_data, response):
     try:
         data = json.read(json_data)
     except ReadException, error:
-        message = "%s[...]" % str(error)[:100]
-        data = {"status" : "error", "message" : message}
+        # Server gave a valid HTTP response, but it is not JSON
+        message = csetconv.to_unicode(str(error))
+        if len(message) > 50:
+            message = "%s[...]" % message[:50]
+        data = {"status" : "error:decode", "message" : message}
     except:
-        message = "Unprocessed error (server status code %s)" \
+        message = u"Unprocessed error (server status code %s)" \
                 % response.status
-        data = {"status" : "error", "message" : message}
+        data = {"status" : "error:unknown", "message" : message}
     return data
 
 class Comm:
@@ -80,8 +86,17 @@ class Comm:
                                                 self.lastchangeddate)
         self.host = host
         self.script = script
+        self.session_cookie_name = "sessionid"
         # self.url = "http://%s%s" % (host, script)
         self.sessionid = None
+        self.errorcode_help = {
+            "302" : {"reason" : u"Server tries to redirect request.",
+                     "fix" : u"Check if your url-path needs trailing slash '/'."},
+            "404" : {"reason" : u"Url-path was not found from the server.",
+                     "fix" : u"Check that url-path is correct in the settings."},
+            "500" : {"reason" : u"Server is misconfigured.",
+                     "fix" : u"Contact the server's administrator."},
+        }
         
     def _send_request(self, operation, params):
         """
@@ -100,14 +115,30 @@ class Comm:
         if self.sessionid != None:
             headers["Cookie"] = "sessionid=%s;" % self.sessionid
         conn = httplib.HTTPConnection(self.host)
+        import socket
         try:
             conn.request("POST", self.script, params, headers)
-        except: # socket.gaierror, error: FIXME: handle errors here
-            raise
-        response = conn.getresponse()
-        data = response.read()
-        data = parse_json_response(data, response)
-        conn.close()
+            response = conn.getresponse()
+            reason = csetconv.to_unicode(response.reason)
+            if response.status == 200:
+                data = response.read()
+                data = parse_json_response(data, response)
+            else:
+                data = {"status" : "error:server", 
+                        "message" : u"Server responded: %s %s" % (
+                                    response.status, reason)}
+        except socket.gaierror, error:
+            message = u"Server not found. '%s'" % csetconv.to_unicode(error[1])
+            data = {"status" : "error:communication:gaierror", 
+                    "message" : message}
+            response = None
+        except socket.error, error:
+            message = u"Service not available. '%s'" % csetconv.to_unicode(error[1])
+            data = {"status" : "error:communication:error", 
+                    "message" : message}
+            response = None
+        finally:
+            conn.close()
         return data, response
 
     def _send_multipart_request(self, operation, params, files):
@@ -122,9 +153,6 @@ class Comm:
         # post_multipart expects a list of tuples
         for key in params.keys():
             params[key] = csetconv.to_utf8(params[key])
-        #for key in params.keys():
-        #    param_list.append((csetconv.to_utf8(key), 
-        #                       csetconv.to_utf8(params[key])))
         headers = {"User-Agent": self.useragent, }
         if self.sessionid != None:
             headers["Cookie"] = "sessionid=%s;" % self.sessionid
@@ -136,12 +164,15 @@ class Comm:
     def login(self, username, password):
         """
         Do login with given username and password.
+        Server must return sessionid in data.
         Return decoded response data and a HTTPResponse object.
         """
         params = {'username': username, 'password' : password}
         data, response = self._send_request(rpc_name(), params)
-        if "status" in data and data["status"] == "ok":
-            self.sessionid = data["sessionid"]
+        if ("status" in data 
+            and data["status"] == "ok" 
+            and self.session_cookie_name in data):
+            self.sessionid = data[self.session_cookie_name]
         else:
             self.sessionid = None
         return data, response
@@ -163,7 +194,7 @@ class Comm:
         if self.sessionid is None:
             return {"status" : "error", 
                     "message" : "Session is not active"}, None
-        params = {} # Session id is in cookie
+        params = {} # No params, Session id is in cookie
         data, response = self._send_request(rpc_name(), params)
         if "status" in data and data["status"] == "ok":
             self.sessionid = None
