@@ -605,7 +605,7 @@ class GpsApp:
             file.writestr(info, "\n".join(json_data))
             file.close()
 
-    def send_delivery_data(self, ask_first = False):
+    def send_delivery_data(self, ask_first = False, ask_login = False):
         """
         Send all delivery data to the server using 
         Comm-module's _send_multipart_request().
@@ -621,6 +621,11 @@ class GpsApp:
                 query = u"You have some unsent data, would you like send it now?"
                 if appuifw.query(query, 'query') == None:
                     return
+            # Ask for login, if there is no sessionid
+            if ask_login and not self.comm.sessionid:
+                if appuifw.query(u"You have no active session, would you like to login first?", 'query'):
+                    self.login()
+
             deliverydir = os.path.join(self.datadir, "delivery")
             if not os.path.isdir(deliverydir):
                 os.makedirs(deliverydir)
@@ -1224,8 +1229,8 @@ class GpsApp:
         self.flush_delivery_data()
         self.save_log_cache("track")
         self.save_log_cache("cellid") 
-        self.save_log_cache("wifi") 
-        self.send_delivery_data(True)
+        self.save_log_cache("wifi")
+        self.send_delivery_data(True, True)
         appuifw.app.set_tabs([u"Back to normal"], lambda x: None)
 
     def get_tone(self, freq=440, duration=1000, volume=0.5):

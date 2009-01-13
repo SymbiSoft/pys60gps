@@ -4,6 +4,7 @@ Pys60Gps Changelog
 
 Added Login into the main menu.
 Splitted Set menu to scan related and other settings.
+Added query to Login on exit if user has no active session and there is data to send.
 
 2008-01-09 version 0.3.2
 
