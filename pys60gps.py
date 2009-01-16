@@ -1,8 +1,7 @@
-# -*- coding: iso-8859-1 -*-
 # $Id$
 
 # DO NOT remove this
-SIS_VERSION = "0.3.3"
+SIS_VERSION = "0.3.4"
 
 import appuifw
 import e32
@@ -41,7 +40,7 @@ draw_startup_screen(canvas, u"sys, os, socket, sysinfo, re")
 import sys
 
 my_log = Logger()
-sys.stderr = sys.stdout = my_log
+#sys.stderr = sys.stdout = my_log
 
 import os
 import socket
@@ -173,6 +172,7 @@ class GpsApp:
         # POIs
         self.data["pois_private"] = []
         self.data["pois_downloaded"] = []
+        self.data["pois_downloaded_new"] = []
         self.key = u""
         # Timers
         # TODO put all started timers here so they can be cancelled when leaving program
@@ -347,54 +347,49 @@ class GpsApp:
         self.save_config()
         self._update_menu()
 
-    def download_pois_test(self, pos = None):
+    def download_pois_new(self, pos = None):
         """
-        Test function for downloading POI-object from the internet
+        Download geojson objects from the internet using Comm-module.
         """
         self.downloading_pois_test = True
-        import urllib
         self.key = appuifw.query(u"Keyword", "text", self.key)
-        if self.key is None: self.key = u""
-        params = {"key" : self.key, 
-                  "user" : self.config["username"],
-                  "group" : self.config["group"],
+        if self.key is None: 
+            self.downloading_pois_test = False
+            return
+        params = {"key" : self.key,
+                  "username" : str(self.config["username"]),
+                  "group" : str(self.config["group"]),
+                  "pys60gps_version" : self.get_sis_version(),
                   }
         if pos == None:
-            # FIXME. there is a bug somewhere, self.pos doesn't contain valid lat+lon?
             if self.has_fix(self.pos):
                 pos = self.pos
-            if (len(self.data["position"]) > 0 and self.has_fix(self.data["position"][-1])):
+            elif (len(self.data["position"]) > 0 and self.has_fix(self.data["position"][-1])):
                 pos = self.data["position"][-1]
-                params["lat"] = pos["position"]["latitude"]
-                params["lon"] = pos["position"]["longitude"]
             else:
-                appuifw.note(u"Can't download POIs, current position unknown.", 'error')
+                appuifw.note(u"Can't download POIs, position unknown.", 'error')
                 return
+        params["lat"] = "%.6f" % pos["position"]["latitude"]
+        params["lon"] = "%.6f" % pos["position"]["longitude"]
+        # Testing
+        # params["lat"] = "60.275"
+        # params["lon"] = "24.98"
         e32.ao_sleep(0.05) # let the querypopup disappear
-        params = urllib.urlencode(params)
-        try: # FIXME: hardcoded url TODO: centralized communication to the server
-            f = urllib.urlopen(self.config["url"], params)
-            jsondata = f.read() 
-            # print jsondata.decode("utf-8")
-            # NOTE: all strings in "pois" are now plain utf-8 encoded strings
-            # so they are not valid arguments for canvas.text() or appuifw.note() !
-            pois = json.read(jsondata) 
-            f.close()
-            for pos in pois:
-                self._calculate_UTM(pos)
-                try:
-                    pos["text"] = pos["text"].decode("utf-8")
-                except:
-                    print pos["text"]
-                    # pos["text"] = u"Decode_failed!"
-                    appuifw.note(u"Decode_failed!", 'error')
-                    raise
-            self.data["pois_downloaded"] = pois
-        except Exception, error:
-            appuifw.note(unicode(error), 'error')
-            self.downloading_pois_test = False
-            raise # let the traceback go to the console
+        data, response = self.comm._send_request("get_scans", params)
+        geometries = []
+        if data["status"].startswith("error"): 
+            appuifw.note(u"Error occurred: %s" % data["message"], 'error')
+        elif "geojson" in data:
+            appuifw.note(u"Got %s objects!" % len(data["geojson"]), 'info')
+            geometries = data["geojson"]
+        else:
+            appuifw.note(u"Did not find geojson from response. Maybe wrong keyword or no objects in neighborhood?", 'error')
+        for geom in geometries:
+            lon, lat = geom["coordinates"]
+            (z, e, n) = self._WGS84_UTM(lat, lon, LongOrigin=None)
+            geom["coordinates_en"] = [e, n]
         self.downloading_pois_test = False
+        self.data["pois_downloaded_new"] = geometries
 
     def _update_menu(self):
         """Update main view's left menu."""
@@ -1040,22 +1035,32 @@ class GpsApp:
     def _calculate_UTM(self, pos, LongOrigin=None):
         """
         Calculate UTM coordinates and append them to pos. 
-        pos["position"]["latitude"] and pos["position"]["longitude"] must exist and be float.
+        pos["position"]["latitude"] and 
+        pos["position"]["longitude"] must exist and be float.
         """
         if self.LongOrigin:
              LongOrigin = self.LongOrigin
         try:
             (pos["position"]["z"], 
              pos["position"]["e"], 
-             pos["position"]["n"]) = LatLongUTMconversion.LLtoUTM(23, # Wgs84
-                                                                  pos["position"]["latitude"],
-                                                                  pos["position"]["longitude"],
-                                                                  LongOrigin)
+             pos["position"]["n"]) = self._WGS84_UTM(pos["position"]["latitude"],
+                                                     pos["position"]["longitude"],
+                                                     LongOrigin)
             return True
         except:
             # TODO: line number and exception text here too?
             self.log(u"exception", u"Failed to LLtoUTM()")
             return False
+
+    def _WGS84_UTM(self, lat, lon, LongOrigin=None):
+        """
+        Calculate UTM coordinates.
+        Return lat, lon and pseudo zone. 
+        """
+        if self.LongOrigin:
+             LongOrigin = self.LongOrigin
+        return LatLongUTMconversion.LLtoUTM(23, # Wgs84
+                                            lat, lon, LongOrigin)
 
     def has_fix(self, pos):
         """Return True if pos has a fix."""
@@ -1608,15 +1613,15 @@ class GpsTrackTab(BaseInfoTab):
         appuifw.app.menu.insert(0, (u"Set meters/pixel", 
                                     lambda:self.set_meters_per_px(appuifw.query(u"Meters","number", self.meters_per_px))))
         appuifw.app.menu.insert(0, (u"Add POI", self.save_poi))
-        appuifw.app.menu.insert(0, (u"POIs Download", self.download_pois_test))
+        appuifw.app.menu.insert(0, (u"Download", self.download_pois_new))
         self.update()
 
-    def download_pois_test(self):
+    def download_pois_new(self):
         self.active = False # FIXME: this shoud be inactive only when query dialog is open
         # Perhaps self.Main.download_pois_test() could take "this" as an argument: 
         # self.Main.download_pois_test(self)
         # and when query is open, Main could set view.active = False
-        self.Main.download_pois_test()
+        self.Main.download_pois_new()
         self.active = True
         self.update()
 
@@ -1817,6 +1822,22 @@ class GpsTrackTab(BaseInfoTab):
         p["x"] = int((-p0["position"]["e"] + p["position"]["e"]) / meters_per_px)
         p["y"] = int((p0["position"]["n"] - p["position"]["n"]) / meters_per_px)
 
+    def _calculate_canvas_xy_point(self, meters_per_px, p0, p):
+        """
+        NEW STYLE 
+        Calculcate (pseudo UTM) x- and y-coordiates for point p.
+        p0 is the center point of the image.
+        """
+        # is image neccessary?
+        if ("coordinates_en" in p0 and 
+            "coordinates_en" in p):
+            e, n = p["coordinates_en"]
+            e0, n0 = p0["coordinates_en"]
+            x = int((-e0 + e) / meters_per_px)
+            y = int((n0 - n) / meters_per_px)
+            p["canvas_xy"] = [x, y]
+
+
     def update(self, dummy=(0, 0, 0, 0)):
         """
         Draw all elements (texts, points, track, pois etc) to the canvas.
@@ -2007,6 +2028,7 @@ class GpsTrackTab(BaseInfoTab):
                                  (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=0x0000ff)
                 # There is a bug in image.text (fixed in 1.4.4?), so text must be drawn straight to the canvas
                 self.ui.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x9999ff)
+
         for p in self.Main.data["pois_downloaded"]:
             self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
             if p.has_key("x"):
@@ -2034,6 +2056,18 @@ class GpsTrackTab(BaseInfoTab):
                 #                 (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=bordercolor)
                 self.ui.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x666600)
 
+        for p in self.Main.data["pois_downloaded_new"]:
+            new_pc = {"coordinates_en" : [pc["position"]["e"], pc["position"]["n"]]}
+            self._calculate_canvas_xy_point(self.meters_per_px, new_pc, p)
+            if "canvas_xy" in p:
+                x, y = p["canvas_xy"]
+                pointcolor = 0x660000
+                bordercolor = 0x0000ff
+                self.ui.point([x+center_x, y+center_y], outline=pointcolor, width=poi_width)
+                #self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
+                #                 (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=bordercolor)
+                self.ui.text(([x+130, y+125]), u"%s" % p["properties"]["cnt"], font=(u"Series 60 Sans", 10), fill=0x666600)
+        
         ##############################################
         # Testing "status" bar. TODO: implement better, e.g. own function for status bar
         if self.Main.read_position_running:
