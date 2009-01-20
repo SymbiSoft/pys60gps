@@ -131,7 +131,7 @@ class Comm:
                     "message" : message}
         return data
         
-    def _send_request(self, operation, params):
+    def _send_request(self, operation, params, filename = None):
         """
         Send HTTP POST request to the server using httplib, 
         return decoded data and a HTTPResponse object.
@@ -142,7 +142,7 @@ class Comm:
             params[key] = csetconv.to_utf8(params[key])
         params = urllib.urlencode(params)
         headers = self._get_default_headers()
-        headers["Content-type"] = "application/x-www-form-urlencoded"
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
         # Send session id in headers as a cookie
         if self.sessionid != None:
             headers["Cookie"] = "sessionid=%s;" % self.sessionid
@@ -155,7 +155,13 @@ class Comm:
                 reason = csetconv.to_unicode(response.reason)
                 if response.status == 200:
                     data = response.read()
-                    data = self._decode_content(data, response)
+                    # Decode content if it's type was "application/json"
+                    if response.getheader("content-type") == "application/json":
+                        data = self._decode_content(data, response)
+                    elif filename is not None:
+                        datafile = open(filename, "wb")
+                        datafile.write(data)
+                        datafile.close()
                 else:
                     data = {"status" : "error:server", 
                             "message" : u"Server responded: %s %s" % (
