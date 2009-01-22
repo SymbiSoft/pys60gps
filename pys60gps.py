@@ -186,6 +186,7 @@ class GpsApp:
         self.menu_entries.append(((u"Images"), ImageGallery(self)))
         self.menu_entries.append(((u"GPS"), GpsView(self)))
         self.menu_entries.append(((u"Sysinfo"), SysinfoView(self)))
+        self.menu_entries.append(((u"WLAN"), WlanView(self)))
         # Create main menu from that sequence
         self.main_menu = [item[0] for item in self.menu_entries]
         # Create list of views from that sequence
@@ -2567,6 +2568,89 @@ class ImageGallery:
     def search_without_caption(self):
         """Return a list of photos without caption"""
         pass
+
+class WlanView(BaseView):
+    
+    def __init__(self, parent):
+        self.name = "SysinfoView"
+        self.parent = parent
+        self.Main = parent.Main
+        self.wlans = []
+        self.active = False
+        self.fontheight = 15
+        self.lineheight = 17
+        self.font = (u"Series 60 Sans", self.fontheight)
+
+    def scan(self):
+        if e32.in_emulator():
+            time.sleep(1)
+            import random
+            self.wlans = [
+                {'Capability': 1025, 'BeaconInterval': 100, 'SecurityMode': 'Open', 
+                 'SSID': u'linksys', 'BSSID': u'00:14:BF:A5:1D:4B', 'ConnectionMode': 'Infrastructure', 
+                 'SupportedRates': u'82848B9624B0486C', 'Channel': 8, 'RxLevel': random.randint(-100, -50)}, 
+                {'Capability': 1, 'BeaconInterval': 100, 'SecurityMode': 'Open', 
+                 'SSID': u'MyWLAN', 'BSSID': u'00:02:72:43:57:E1', 'ConnectionMode': 'Infrastructure', 
+                 'SupportedRates': u'82848B96', 'Channel': 11, 'RxLevel': random.randint(-100, -50)}, 
+                {'Capability': 17, 'BeaconInterval': 100, 'SecurityMode': 'WpaPsk', 
+                 'SSID': u'RMWLAN', 'BSSID': u'00:02:72:43:56:87', 'ConnectionMode': 'Infrastructure', 
+                 'SupportedRates': u'82848B96', 'Channel': 11, 'RxLevel': random.randint(-100, -50)},
+                {'Capability': 1041, 'BeaconInterval': 100, 'SecurityMode': 'WpaPsk', 
+                 'SSID': u'', 'BSSID': u'00:13:D3:79:99:8F', 'ConnectionMode': 'Infrastructure', 
+                 'SupportedRates': u'82848B96', 'Channel': 11, 'RxLevel': random.randint(-100, -50)}
+                 ]
+        else:
+            try:
+                import wlantools
+                self.wlans = wlantools.scan(False)
+            except Exception, error:
+                appuifw.note(u"No wlantools.", 'error')
+                return {"error":unicode(error)}
+
+    def activate(self):
+        self.active = True
+        appuifw.app.exit_key_handler = self.close
+        self.canvas = appuifw.Canvas(redraw_callback=self.update)
+        appuifw.app.body = self.canvas
+        appuifw.app.screen = "normal"
+        appuifw.app.menu = [
+                            (u"Scan", self.scan),
+                            (u"Update", self.update),
+                            (u"Close", self.close),
+                            ]
+        self.scan()
+        self.update()
+
+    def _get_lines(self):
+        lines = []
+        for wlan in self.wlans:
+            lines.append(u"%d %s %s" % (wlan["RxLevel"], wlan["BSSID"], wlan["SSID"]))
+        return lines
+
+    def update(self, dummy=(0, 0, 0, 0)):
+        """
+        Simply call self.blit_lines(lines) to draw some lines of text to the canvas.
+        This should be overriden in the deriving class if more complex operations are wanted.
+        Start a new timer to call update again after a short while.
+        """
+        lines = self._get_lines()
+        self.canvas.clear()
+        self.blit_lines(lines)
+
+    def blit_lines(self, lines, color=0x000000):
+        """
+        Draw some lines of text to the canvas.
+        """
+        self.canvas.clear()
+        start = 0
+        for l in lines:
+            start = start + self.lineheight
+            self.canvas.text((3,start), l, font=self.font, fill=color)
+
+    def close(self):
+        # Activate previous (calling) view
+        self.parent.activate()
+
 
 # Exception harness for test versions
 try:
