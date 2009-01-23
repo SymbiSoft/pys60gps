@@ -2606,6 +2606,11 @@ class WlanView(BaseView):
             except Exception, error:
                 appuifw.note(u"No wlantools.", 'error')
                 return {"error":unicode(error)}
+        # DSU-sort by RxLevel
+        decorated  = [(i['RxLevel'], i) for i in self.wlans]
+        decorated.sort()
+        decorated.reverse()
+        self.wlans = [item for (name, item) in decorated]
 
     def activate(self):
         self.active = True

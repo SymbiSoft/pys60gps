@@ -1,5 +1,9 @@
 Pys60Gps Changelog
 
+2008-01-23 version 0.3.4
+
+Added initial wlan scan view.
+
 2008-01-12 version 0.3.3
 
 Added Login into the main menu.
