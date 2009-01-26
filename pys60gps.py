@@ -384,7 +384,7 @@ class GpsApp:
             appuifw.note(u"Got %s objects!" % len(data["geojson"]), 'info')
             geometries = data["geojson"]
         else:
-            appuifw.note(u"Did not find geojson from response. Maybe wrong keyword or no objects in neighborhood?", 'error')
+            appuifw.note(u"Did not find geojson from response. Maybe wrong keyword or no objects in neighbourhood?", 'error')
         for geom in geometries:
             lon, lat = geom["coordinates"]
             (z, e, n) = self._WGS84_UTM(lat, lon, LongOrigin=None)
@@ -2030,6 +2030,7 @@ class GpsTrackTab(BaseInfoTab):
                 # There is a bug in image.text (fixed in 1.4.4?), so text must be drawn straight to the canvas
                 self.ui.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x9999ff)
 
+        # DEPRECATED, TODO: REMOVE
         for p in self.Main.data["pois_downloaded"]:
             self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
             if p.has_key("x"):

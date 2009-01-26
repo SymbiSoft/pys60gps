@@ -1,8 +1,13 @@
 Pys60Gps Changelog
 
-2008-01-23 version 0.3.4
+2008-01-26 version 0.3.5
 
-Added initial wlan scan view.
+Added basic wlan scan view.
+
+2008-01-16 version 0.3.4
+
+Improved error handling in data transmission.
+All communication between client and server is now done through Comm-module. 
 
 2008-01-12 version 0.3.3
 
