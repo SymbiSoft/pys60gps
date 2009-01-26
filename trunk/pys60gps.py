@@ -1,7 +1,7 @@
 # $Id$
 
 # DO NOT remove this
-SIS_VERSION = "0.3.4"
+SIS_VERSION = "0.3.5"
 
 import appuifw
 import e32
