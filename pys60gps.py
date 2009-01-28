@@ -184,7 +184,7 @@ class GpsApp:
         self.menu_entries = []
         self.menu_entries.append(((u"Track"), TrackView(self)))
         self.menu_entries.append(((u"Images"), ImageGallery(self)))
-        self.menu_entries.append(((u"GPS"), GpsView(self)))
+        self.menu_entries.append(((u"GPS Info"), GpsView(self)))
         self.menu_entries.append(((u"Sysinfo"), SysinfoView(self)))
         self.menu_entries.append(((u"WLAN"), WlanView(self)))
         # Create main menu from that sequence
@@ -1479,6 +1479,11 @@ class GpsView(BaseView):
         self.tabs.append((u"Speed", GpsSpeedTab(self)))
         self.current_tab = 0
 
+    def activate(self):
+        BaseView.activate(self)
+        if self.Main.read_position_running == False:
+            self.Main.start_read_position()
+
     def close(self):
         # debug stuff
         try:
@@ -1615,6 +1620,8 @@ class GpsTrackTab(BaseInfoTab):
                                     lambda:self.set_meters_per_px(appuifw.query(u"Meters","number", self.meters_per_px))))
         appuifw.app.menu.insert(0, (u"Add POI", self.save_poi))
         appuifw.app.menu.insert(0, (u"Download", self.download_pois_new))
+        if self.Main.read_position_running == False:
+            self.Main.start_read_position()
         self.update()
 
     def download_pois_new(self):
