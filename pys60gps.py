@@ -1,7 +1,8 @@
 # $Id$
 
 # DO NOT remove this
-SIS_VERSION = "0.3.5"
+SIS_VERSION = "0.3.6"
+APP_TITLE = u"PyS60GPS"
 
 import appuifw
 import e32
@@ -62,12 +63,36 @@ draw_startup_screen(canvas, u"LatLongUTMconversios")
 import LatLongUTMconversion
 draw_startup_screen(canvas, u"Calculate")
 import Calculate
-draw_startup_screen(canvas, u"pys60_json")
-import pys60_json as json
+draw_startup_screen(canvas, u"simplejson")
+#import pys60_json as json # TODO REMOVE
+import pys60_simplejson
+simplejson = pys60_simplejson.simplejson()
 draw_startup_screen(canvas, u"PositionHelper")
 import PositionHelper
 draw_startup_screen(canvas, u"Comm")
 import Comm
+draw_startup_screen(canvas, u"TopWindow")
+import TopWindow
+
+
+def progress_window(text):
+    """Show a text in title pane."""
+    screen = TopWindow.TopWindow()
+    (size, position) = appuifw.app.layout(appuifw.ETitlePane)
+    screen.size = size
+    screen.position = position
+    screen.corner_type = 'square'
+    screen.background_color = 0x0000ff
+    screen.shadow = 1
+    img = graphics.Image.new(size)
+    img.clear(fill=0xffff00) 
+    img.text((0, 25), text, font=(u"Series 60 Sans", 15), fill=0x333333)
+    screen.add_image(img, (0,0))
+    screen.show()
+    return screen
+
+
+
 
 ####################################
 # FIXME: move these to an own module
@@ -183,6 +208,7 @@ class GpsApp:
         # Put all menu entries and views as tuples into a sequence
         self.menu_entries = []
         self.menu_entries.append(((u"Track"), TrackView(self)))
+        self.menu_entries.append(((u"Simple chat"), SimpleChatView(self)))
         self.menu_entries.append(((u"Images"), ImageGallery(self)))
         self.menu_entries.append(((u"GPS Info"), GpsView(self)))
         self.menu_entries.append(((u"Sysinfo"), SysinfoView(self)))
@@ -562,7 +588,7 @@ class GpsApp:
             self.append_delivery_data(data)
         filename = self._get_log_cache_filename(logname)
         f = open(filename, "at")
-        f.write(json.write(data) + "\n")
+        f.write(simplejson.dumps(data) + "\n")
         f.close()
 
     def append_delivery_data(self, data):
@@ -597,7 +623,7 @@ class GpsApp:
             json_data = []
             while len(self.data[delivery_key]) > 0:
                 data = self.data[delivery_key].pop(0)
-                json_data.append(json.write(data))
+                json_data.append(simplejson.dumps(data))
             file.writestr(info, "\n".join(json_data))
             file.close()
 
@@ -674,9 +700,16 @@ class GpsApp:
             else:
                 appuifw.note(u"You can set it in\nSet->Password menu", 'info')
         else:
+            pw = progress_window(u"Logging in")
             data, response = self.comm.login(self.config["username"], 
                                              self.config["password"])
-            message = u"Login request HTTP-status %s.\n%s" % (response.status, data["message"])
+            # Check we got valid response
+            if isinstance(data, dict) is False:
+                appuifw.note(u"Invalid response from web server!", 'error')
+            elif data["status"].startswith("error"):
+                appuifw.note(u"%s" % data["message"], 'error')
+            pw.hide()
+            message = u"%s" % (data["message"])
             appuifw.note(message, 'info')
 
     # TODO: check is this relevant
@@ -1261,7 +1294,7 @@ class GpsApp:
 ################### BASE VIEW START #######################
 
 # TODO: move these to separate file
-class BaseView:
+class BaseTabbedView:
     """
     Base class for all tabbed views
     """
@@ -1271,7 +1304,7 @@ class BaseView:
         __init__ must be defined in derived class.
         """
         raise "__init__() method has not been defined!"
-        self.name = "BaseView"
+        self.name = "BaseTabbedView"
         self.parent = parent
         self.Main = parent.Main
         self.tabs = []
@@ -1377,7 +1410,7 @@ class BaseInfoTab:
         self.parent.close() # Exit this tab set
 
 ############## Sysinfo VIEW START ##############
-class SysinfoView(BaseView):
+class SysinfoView(BaseTabbedView):
     def __init__(self, parent):
         self.name = "SysinfoView"
         self.parent = parent
@@ -1386,9 +1419,9 @@ class SysinfoView(BaseView):
         self.tabs = []
         self.tabs.append((u"Gsm", GsmTab(self)))
         self.tabs.append((u"Wifi", WifiTab(self)))
-        self.tabs.append((u"SysInfo", SysInfoTab(self)))
         self.tabs.append((u"E32", E32InfoTab(self)))
         self.tabs.append((u"Mem", MemTab(self)))
+        self.tabs.append((u"SysInfo", SysInfoTab(self)))
         self.current_tab = 0
 
     def close(self):
@@ -1406,15 +1439,18 @@ class SysInfoTab(BaseInfoTab):
     def _get_lines(self):
         lines = []
         lines.append(u"Time: %s" % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
-        lines.append(u"Battery: %s" % sysinfo.battery())
-        lines.append(u"Signal bars: %d" % sysinfo.signal_bars())
-        lines.append(u"Signal DBM: %.1f" % sysinfo.signal_dbm())
-        lines.append(u"Profile: %s" % sysinfo.active_profile())
-        lines.append(u"Twips: %d x %d" % sysinfo.display_twips())
-        lines.append(u"Pixels: %d x %d" % sysinfo.display_pixels())
-        lines.append(u"IMEI: %s" % sysinfo.imei())
-        lines.append(u"Os version: %d.%d.%d" % sysinfo.os_version())
-        lines.append(u"Sw version: %s" % sysinfo.sw_version())
+        try:
+            #lines.append(u"Battery: %s" % sysinfo.battery())
+            #lines.append(u"Signal bars: %d" % sysinfo.signal_bars())
+            #lines.append(u"Signal DBM: %.1f" % sysinfo.signal_dbm())
+            lines.append(u"Profile: %s" % sysinfo.active_profile())
+            lines.append(u"Twips: %d x %d" % sysinfo.display_twips())
+            lines.append(u"Pixels: %d x %d" % sysinfo.display_pixels())
+            lines.append(u"IMEI: %s" % sysinfo.imei())
+            lines.append(u"Os version: %d.%d.%d" % sysinfo.os_version())
+            lines.append(u"Sw version: %s" % sysinfo.sw_version())
+        except:
+            lines.append(u"sysinfo not functional")
         return lines
 
 class E32InfoTab(BaseInfoTab):
@@ -1469,7 +1505,7 @@ class WifiTab(BaseInfoTab):
 ############## Sysinfo VIEW END ###############
 
 ############## GPS VIEW START ##############
-class GpsView(BaseView):
+class GpsView(BaseTabbedView):
     def __init__(self, parent):
         self.name = "GpsView"
         self.parent = parent
@@ -1480,7 +1516,7 @@ class GpsView(BaseView):
         self.current_tab = 0
 
     def activate(self):
-        BaseView.activate(self)
+        BaseTabbedView.activate(self)
         if self.Main.read_position_running == False:
             self.Main.start_read_position()
 
@@ -1549,7 +1585,7 @@ class GpsInfoTab(BaseInfoTab):
         lines.append(u"DOP (H/V/T) %.1f/%.1f/%.1f" % (s["horizontal_dop"],s["vertical_dop"],s["time_dop"]))
         return lines
 
-class TrackView(BaseView):
+class TrackView(BaseTabbedView):
     def __init__(self, parent):
         self.name = "GpsView"
         self.parent = parent
@@ -1787,7 +1823,7 @@ class GpsTrackTab(BaseInfoTab):
         # jsonize only one pos per time, otherwise out of memory or takes very long time
         points = []
         for p in self.Main.data["position_debug"]:
-            points.append(json.write(p))
+            points.append(simplejson.dumps(p))
         data = "\n".join(points)
         name = appuifw.query(u"Name", "text", u"")
         if name is None:
@@ -2577,7 +2613,7 @@ class ImageGallery:
         """Return a list of photos without caption"""
         pass
 
-class WlanView(BaseView):
+class WlanView(BaseTabbedView):
     
     def __init__(self, parent):
         self.name = "SysinfoView"
@@ -2664,6 +2700,149 @@ class WlanView(BaseView):
         # Activate previous (calling) view
         self.parent.activate()
 
+################### BASE VIEW START #######################
+# TODO: move these to separate file
+class BaseView:
+
+    def __init__(self, parent):
+        self.name = "BaseView"
+        self.parent = parent
+        self.Main = parent.Main
+
+    def activate(self):
+        """Set main menu to app.body and left menu entries."""
+        # Use exit_key_handler of current class
+        appuifw.app.exit_key_handler = self.exit_key_handler
+
+    def exit_key_handler(self):
+        self.close()
+
+    def close(self):
+        # Activate previous (calling) view
+        self.parent.activate()
+################### BASE VIEW END #########################
+
+
+class SimpleChatView(BaseView):
+    """
+    TODO: 
+    - automatic update
+    - save font size in settings
+    - send "limit" parameter, allow user define it from menu
+    - net chat, too
+    """
+    def __init__(self, parent):
+        BaseView.__init__(self, parent)
+        self.chatmessages = []
+        if "simplechat_fontsize" in self.Main.config:
+            self.fontsize = self.Main.config["simplechat_fontsize"]
+        else:
+            self.fontsize = 14
+        self.delimiter = u">>> "
+        self.t = appuifw.Text(u"")
+        self.t.bind(key_codes.EKeySelect, self.send_chatmessage)
+
+    def get_chatmessages(self):
+        pw = progress_window(u"Loading chatmessages")
+        data, response = self.Main.comm._send_request("get_simplechatmessages", {})
+        # Check we got valid response
+        if isinstance(data, dict) is False:
+            appuifw.note(u"Invalid response from server", 'error')
+        elif data["status"].startswith("error"):
+            if "message" not in data:
+                data["message"] = u"Unknown error in response"
+            appuifw.note(u"%s" % data["message"], 'error')
+        elif (data["status"] == "ok" and 
+              "chatmessages" in data):
+            self.chatmessages = data["chatmessages"]
+        else:
+            appuifw.note(u"Unknown error in response", 'error') 
+        pw.hide()
+        self.update_message_view()
+
+    def send_chatmessage(self):
+        # First try to find inline message
+        text = self.get_message()
+        # If not found, ask with appuifw.query
+        if not text:
+            text = appuifw.query(u"Message (max 80 chr)", "text", u"")
+            if not text:
+                return
+        pw = progress_window(u"Sending message")
+        data, response = self.Main.comm._send_request("send_simplechatmessage", 
+                                                      {"text": text,
+                                                       "sender" : self.Main.config["username"]})
+        # Check we got valid response
+        if isinstance(data, dict) is False:
+            appuifw.note(u"Invalid response from server", 'error')
+        elif data["status"].startswith("error"):
+            if "message" not in data:
+                data["message"] = u"Unknown error in response"
+            appuifw.note(u"%s" % data["message"], 'error')
+        elif (data["status"] == "ok" and 
+              "chatmessages" in data):
+            self.chatmessages = data["chatmessages"]
+        else:
+            appuifw.note(u"Unknown error in response", 'error') 
+        pw.hide()
+        self.update_message_view()
+
+    def add_text(self, timestamp, user, text):
+        self.t.font = (u"dense", self.fontsize)
+        self.t.style = appuifw.STYLE_BOLD
+        self.t.color = (200,0,0)
+        self.t.add(u"%s: " % (user)) # NOTE: must be unicode here
+        self.t.style = 0
+        self.t.add(u"%s\n" % (timestamp)) # NOTE: must be unicode here
+        self.t.color = (0,0,0)
+        self.t.add(u">> %s\n" % (text))
+    
+    def get_message(self):
+        parts = self.t.get().split(self.delimiter)
+        #appuifw.note(u"%d" % len(parts), 'error')
+        if len(parts) > 1:
+            message = parts[-1].strip()
+        else:
+            self.update_message_view()
+            message = None
+        #appuifw.note(u"%s" % message, 'error')
+        return message
+
+    def update_message_view(self):
+        self.t.clear()
+        self.menu_entries = []
+        for chatmessage in self.chatmessages:
+            self.add_text(chatmessage["sendtime"], 
+                          chatmessage["sender"], chatmessage["text"])
+        self.t.font = (u"dense", int(self.fontsize/4*3))
+        self.t.add(u"--- Localtime: %s ---\n" % time.strftime("%Y-%m-%d %H:%M:%S"))
+        self.t.font = (u"dense", self.fontsize)
+        self.t.add(self.delimiter)
+        appuifw.app.body = self.t
+
+    def activate(self):
+        """Set main menu to app.body and left menu entries."""
+        BaseView.activate(self)
+        if len(self.chatmessages) == 0:
+            self.get_chatmessages()
+        self.update_message_view()
+        appuifw.app.menu = [
+            (u"Send message",self.send_chatmessage),
+            (u"Update post list",self.get_chatmessages),
+            (u"Set font", self.set_fontsize),
+            (u"Close", self.parent.activate),
+            ]
+
+    def set_fontsize(self):
+        fs = appuifw.query(u"Font size","number", self.fontsize)
+        if fs:
+            self.fontsize = fs
+            self.update_message_view()
+            # FIXME this doesn't unfortunately work: 
+            # settings.ini will be overwritten in every start 
+            #self.Main.config["simplechat_fontsize"] = fs
+            #self.Main.save_config()
+        
 
 # Exception harness for test versions
 try:

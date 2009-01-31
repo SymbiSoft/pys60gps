@@ -1,5 +1,9 @@
 Pys60Gps Changelog
 
+2008-01-31 version 0.3.6
+
+Added very simple chat.
+
 2008-01-26 version 0.3.5
 
 Added basic wlan scan view.
