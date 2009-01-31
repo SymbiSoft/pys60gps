@@ -42,8 +42,8 @@ import zlib
 # import sha
 import http_poster
 import csetconv
-import pys60_json as json
-from pys60_json import ReadException
+import pys60_simplejson
+simplejson = pys60_simplejson.simplejson()
 
 def rpc_name():
     """Return the name of calling function."""
@@ -52,8 +52,8 @@ def rpc_name():
 def parse_json_response(json_data, response):
     """Decode JSON response and return the data in a dictionary."""
     try:
-        data = json.read(json_data)
-    except ReadException, error:
+        data = simplejson.loads(json_data)
+    except ValueError, error:
         # Server gave a valid HTTP response, but it is not JSON
         message = csetconv.to_unicode(str(error))
         if len(message) > 50:
