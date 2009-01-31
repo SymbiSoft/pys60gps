@@ -30,6 +30,8 @@ from sre_constants import BRANCH, SUBPATTERN
 from sre import VERBOSE, MULTILINE, DOTALL
 import re
 
+from encoder import JSONEncoder
+
 FLAGS = re.VERBOSE | re.MULTILINE | re.DOTALL
 WHITESPACE = re.compile(r'\s*', FLAGS)
 
