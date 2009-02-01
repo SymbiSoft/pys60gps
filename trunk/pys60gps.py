@@ -402,13 +402,16 @@ class GpsApp:
         # params["lat"] = "60.275"
         # params["lon"] = "24.98"
         e32.ao_sleep(0.05) # let the querypopup disappear
-        data, response = self.comm._send_request("get_scans", params)
+        data, response = self.comm._send_request("get_pois", params)
         geometries = []
         if data["status"].startswith("error"): 
             appuifw.note(u"Error occurred: %s" % data["message"], 'error')
         elif "geojson" in data:
-            appuifw.note(u"Got %s objects!" % len(data["geojson"]), 'info')
-            geometries = data["geojson"]
+            if "type" in data["geojson"] and data["geojson"]["type"] ==  "GeometryCollection":
+                geometries = data["geojson"]["geometries"]
+            else:
+                geometries = data["geojson"]
+            appuifw.note(u"Got %s objects!" % len(geometries), 'info')
         else:
             appuifw.note(u"Did not find geojson from response. Maybe wrong keyword or no objects in neighbourhood?", 'error')
         for geom in geometries:
@@ -2111,7 +2114,11 @@ class GpsTrackTab(BaseInfoTab):
                 self.ui.point([x+center_x, y+center_y], outline=pointcolor, width=poi_width)
                 #self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
                 #                 (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=bordercolor)
-                self.ui.text(([x+130, y+125]), u"%s" % p["properties"]["cnt"], font=(u"Series 60 Sans", 10), fill=0x666600)
+                if "title" in p["properties"]:
+                    text = u"%s" % p["properties"]["title"]
+                else:
+                    text = u"%s" % p["properties"]["cnt"]
+                self.ui.text(([x+130, y+125]), text, font=(u"Series 60 Sans", 10), fill=0x666600)
         
         ##############################################
         # Testing "status" bar. TODO: implement better, e.g. own function for status bar
