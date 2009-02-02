@@ -2,9 +2,10 @@ import Base
 import appuifw
 import key_codes
 import e32
+import time
+
 import TopWindow
 import graphics
-import time
 
 def progress_window(text):
     screen = TopWindow.TopWindow()
@@ -104,7 +105,8 @@ class SimpleChatView(Base.View):
         else:
             self.update_message_view()
             message = None
-        #appuifw.note(u"%s" % message, 'error')
+        # Avoid crash when T9 is on and the last word is underlined
+        self.t.add(u"\n") 
         return message
 
     def update_message_view(self):
