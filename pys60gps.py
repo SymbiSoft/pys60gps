@@ -1,7 +1,7 @@
 # $Id$
 
 # DO NOT remove this
-SIS_VERSION = "0.3.6"
+SIS_VERSION = "0.3.7"
 APP_TITLE = u"PyS60GPS"
 
 import appuifw
@@ -1659,6 +1659,7 @@ class GpsTrackTab(BaseInfoTab):
                                     lambda:self.set_meters_per_px(appuifw.query(u"Meters","number", self.meters_per_px))))
         appuifw.app.menu.insert(0, (u"Add POI", self.save_poi))
         appuifw.app.menu.insert(0, (u"Download", self.download_pois_new))
+        e32.ao_sleep(0.1)
         if self.Main.read_position_running == False:
             self.Main.start_read_position()
         self.update()
