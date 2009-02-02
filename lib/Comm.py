@@ -176,6 +176,11 @@ class Comm:
                 data = {"status" : "error:communication:error", 
                         "message" : message}
                 response = None
+            except RuntimeError, error:
+                message = u"Network not available. '%s'" % csetconv.to_unicode(str(error))
+                data = {"status" : "error:communication:network", 
+                        "message" : message}
+                response = None
             # These are raised if server is connected but it does return 
             # a single byte (e.g in Segmentation fault -case) 
             except httplib.BadStatusLine: # Python 2.5
