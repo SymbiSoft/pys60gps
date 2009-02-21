@@ -1,5 +1,13 @@
 Pys60Gps Changelog
 
+2008-01-31 version 0.3.8
+
+Added simple Wikipedia view.
+
+2008-01-31 version 0.3.7
+
+Improved the simple chat.
+
 2008-01-31 version 0.3.6
 
 Added very simple chat.
