@@ -95,6 +95,10 @@ class Comm:
                      "fix" : u"Contact the server's administrator."},
         }
 
+    def rpc_name(self):
+        """Return the name of calling function."""
+        return sys._getframe(1).f_code.co_name
+
     def _get_default_headers(self):
         """
         Create and return headers dictionary with common default values. 
