@@ -1,7 +1,7 @@
 # $Id$
 
 # DO NOT remove this
-SIS_VERSION = "0.3.7"
+SIS_VERSION = "0.3.8"
 APP_TITLE = u"PyS60GPS"
 
 import appuifw
@@ -79,6 +79,10 @@ from SimpleChatView import SimpleChatView
 
 draw_startup_screen(canvas, u"ImageGalleryView")
 from ImageGalleryView import ImageGalleryView
+
+draw_startup_screen(canvas, u"WikipediaView")
+from WikipediaView import WikipediaView
+
 
 def progress_window(text):
     """Show a text in title pane."""
@@ -218,6 +222,7 @@ class GpsApp:
         self.menu_entries.append(((u"GPS Info"), GpsView(self)))
         self.menu_entries.append(((u"Sysinfo"), SysinfoView(self)))
         self.menu_entries.append(((u"WLAN"), WlanView(self)))
+        self.menu_entries.append(((u"Wikipedia"), WikipediaView(self)))
         # Create main menu from that sequence
         self.main_menu = [item[0] for item in self.menu_entries]
         # Create list of views from that sequence
