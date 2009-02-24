@@ -30,9 +30,8 @@ def post_multipart(host, selector, params, files, headers={}):
         headers['Content-Type'] = content_type
     conn.request('POST', selector, body, headers)
     response = conn.getresponse()
-    data = response.read()
     conn.close()
-    return data, response
+    return response
 
 def encode_multipart_formdata(params, files):
     """

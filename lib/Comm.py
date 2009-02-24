@@ -216,9 +216,11 @@ class Comm:
         headers = self._get_default_headers()
         # error handling is missing here
         try:
-            data, response  = http_poster.post_multipart(self.host, self.script, 
+            #data, response  = http_poster.post_multipart(self.host, self.script, 
+            response  = http_poster.post_multipart(self.host, self.script, 
                                                          params, files, headers)
             if response.status == 200:
+                data = response.read()
                 data = self._decode_content(data, response)
             else:
                 reason = csetconv.to_unicode(response.reason)
