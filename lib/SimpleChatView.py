@@ -43,8 +43,10 @@ class SimpleChatView(Base.View):
         self.t.bind(key_codes.EKeySelect, self.send_chatmessage)
 
     def get_chatmessages(self):
-        pw = progress_window(u"Loading chatmessages")
+        ip = appuifw.InfoPopup()
+        ip.show(u"Loading chatmessages", (50, 50), 60000, 100, appuifw.EHLeftVTop)
         data, response = self.Main.comm._send_request("get_simplechatmessages", {})
+        ip.hide()
         # Check we got valid response
         if isinstance(data, dict) is False:
             appuifw.note(u"Invalid response from server", 'error')
@@ -57,7 +59,6 @@ class SimpleChatView(Base.View):
             self.chatmessages = data["chatmessages"]
         else:
             appuifw.note(u"Unknown error in response", 'error') 
-        pw.hide()
         self.update_message_view()
 
     def send_chatmessage(self):
@@ -68,10 +69,12 @@ class SimpleChatView(Base.View):
             text = appuifw.query(u"Message (max 80 chr)", "text", u"")
             if not text:
                 return
-        pw = progress_window(u"Sending message")
+        ip = appuifw.InfoPopup()
+        ip.show(u"Sending message", (50, 50), 60000, 100, appuifw.EHLeftVTop)
         data, response = self.Main.comm._send_request("send_simplechatmessage", 
                                                       {"text": text,
                                                        "sender" : self.Main.config["username"]})
+        ip.hide()
         # Check we got valid response
         if isinstance(data, dict) is False:
             appuifw.note(u"Invalid response from server", 'error')
@@ -84,7 +87,6 @@ class SimpleChatView(Base.View):
             self.chatmessages = data["chatmessages"]
         else:
             appuifw.note(u"Unknown error in response", 'error') 
-        pw.hide()
         self.update_message_view()
 
     def add_text(self, timestamp, user, text):
