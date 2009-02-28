@@ -30,7 +30,9 @@ def post_multipart(host, selector, params, files, headers={}):
         headers['Content-Type'] = content_type
     conn.request('POST', selector, body, headers)
     response = conn.getresponse()
-    conn.close()
+    # conn can't be closed here, because response in not read()able after it
+    # in some situations?
+    # conn.close() 
     return response
 
 def encode_multipart_formdata(params, files):
