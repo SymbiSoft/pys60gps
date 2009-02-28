@@ -84,25 +84,6 @@ draw_startup_screen(canvas, u"WikipediaView")
 from WikipediaView import WikipediaView
 
 
-def progress_window(text):
-    """Show a text in title pane."""
-    screen = TopWindow.TopWindow()
-    (size, position) = appuifw.app.layout(appuifw.ETitlePane)
-    screen.size = size
-    screen.position = position
-    screen.corner_type = 'square'
-    screen.background_color = 0x0000ff
-    screen.shadow = 1
-    img = graphics.Image.new(size)
-    img.clear(fill=0xffff00) 
-    img.text((0, 25), text, font=(u"Series 60 Sans", 15), fill=0x333333)
-    screen.add_image(img, (0,0))
-    screen.show()
-    return screen
-
-
-
-
 ####################################
 # FIXME: move these to an own module
 import math
@@ -158,6 +139,8 @@ class GpsApp:
         self.running = True
         self.focus = True
         appuifw.app.focus = self.focus_callback # Set up focus callback
+        self.ip = appuifw.InfoPopup()
+
         self.read_position_running = False
         self.downloading_pois_test = False # TEMP
         # Create a directory to contain all gathered and downloaded data. Note '\\' in the first argument.
@@ -229,10 +212,10 @@ class GpsApp:
         self.views = [item[1] for item in self.menu_entries]
         # Create a listbox from main_menu and set select-handler
         self.listbox = appuifw.Listbox(self.main_menu, self.handle_select)
+        self.comm = Comm.Comm(self.config["host"], self.config["script"])
         self.activate()
         self.beep = self.get_tone(freq=440, duration=500, volume=1.0)
         #print self.read_log_cache_filenames("track")
-        self.comm = Comm.Comm(self.config["host"], self.config["script"])
 
     def get_sis_version(self):
         return SIS_VERSION
@@ -412,7 +395,9 @@ class GpsApp:
         # params["lat"] = "60.275"
         # params["lon"] = "24.98"
         e32.ao_sleep(0.05) # let the querypopup disappear
+        self.ip.show(u"Downloading...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
         data, response = self.comm._send_request("get_pois", params)
+        self.ip.hide()
         geometries = []
         if data["status"].startswith("error"): 
             appuifw.note(u"Error occurred: %s" % data["message"], 'error')
@@ -421,7 +406,7 @@ class GpsApp:
                 geometries = data["geojson"]["geometries"]
             else:
                 geometries = data["geojson"]
-            appuifw.note(u"Got %s objects!" % len(geometries), 'info')
+            # appuifw.note(u"Got %s objects!" % len(geometries), 'info')
         else:
             appuifw.note(u"Did not find geojson from response. Maybe wrong keyword or no objects in neighbourhood?", 'error')
         for geom in geometries:
@@ -576,7 +561,7 @@ class GpsApp:
             positioning.stop_position()
             self.read_position_running = False
             self._update_menu() # NOTE: this messes up the menu if this function is called from outside of the main view!
-            appuifw.note(u"Stopping GPS...", 'info')
+            self.ip.show(u"Stopping GPS...", (50, 50), 3000, 100, appuifw.EHLeftVTop)
             return
         self.read_position_running = True
         self.data["trip_distance"] = 0.0 # TODO: set this up in __init__ and give change to reset this
@@ -585,7 +570,8 @@ class GpsApp:
                                      "data":"test_app"}])
         positioning.position(course=1,satellites=1, callback=self.read_position, interval=500000, partial=1) 
         self._update_menu() # NOTE: this messes up the menu if this function is called from outside of the main view!
-        appuifw.note(u"Starting GPS...", 'info')
+        self.ip.show(u"Starting GPS...", (50, 50), 3000, 100, appuifw.EHLeftVTop)
+
 
     def _get_log_cache_filename(self, logname):
         return os.path.join(self.cachedir, u"%s.json" % logname)
@@ -680,19 +666,20 @@ class GpsApp:
                 unsent_files = os.listdir(deliverydir)
                 if len(unsent_files) == 0:
                     message = u"Send status %s %s" % (response.status, data["message"])
-                    appuifw.note(message, 'info')
+                    self.ip.show(message, (50, 50), 5000, 100, appuifw.EHLeftVTop)
                 else:
                     message = u"%s, do you like to send %d unsent files now aswell?" % (
                                        data["message"], len(unsent_files))
                     if appuifw.query(message, 'query'):
                         for delivery in unsent_files:
                             temppath = os.path.join(deliverydir, delivery)
-                            appuifw.note(u"Sending %s" % (temppath), 'info')
+                            self.ip.show(u"Sending %s" % (temppath), (50, 50), 60000, 100, appuifw.EHLeftVTop)
                             data, response = self.temp_fileupload(temppath)
                             if response.status == 200:
                                 os.remove(temppath) 
                             else:
                                 break
+                            self.ip.hide()
             else:
                 message = u"Send status %s %s" % (response.status, data["message"])
                 appuifw.note(message, 'info')
@@ -713,7 +700,8 @@ class GpsApp:
             else:
                 appuifw.note(u"You can set it in\nSet->Password menu", 'info')
         else:
-            pw = progress_window(u"Logging in")
+            self.ip = appuifw.InfoPopup()
+            self.ip.show(u"Logging in...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
             data, response = self.comm.login(self.config["username"], 
                                              self.config["password"])
             # Check we got valid response
@@ -721,9 +709,10 @@ class GpsApp:
                 appuifw.note(u"Invalid response from web server!", 'error')
             elif data["status"].startswith("error"):
                 appuifw.note(u"%s" % data["message"], 'error')
-            pw.hide()
+            self.ip.hide()
             message = u"%s" % (data["message"])
-            appuifw.note(message, 'info')
+            self.ip.show(message, (50, 50), 5000, 10, appuifw.EHLeftVTop)
+            #appuifw.note(message, 'info')
 
     # TODO: check is this relevant
     def check_for_unsent_delivery_data(self):
@@ -745,8 +734,10 @@ class GpsApp:
                   "pys60gps_version" : self.get_sis_version(),
                   }
         # if "md5" in data and data["md5"] == md5.new(filedata
+        self.ip.show(u"Uploading file...", (50, 50), 60000, 10, appuifw.EHLeftVTop)
         data, response = self.comm._send_multipart_request("fileupload", 
                                                            params, files)
+        self.ip.hide()
         # FIXME: temporary testing solution
         import md5
         filedata_md5 = md5.new(filedata).hexdigest()
@@ -757,8 +748,7 @@ class GpsApp:
                 ok = "failed"
         except:
             ok = "exception"
-        appuifw.note(u"MD5 check: %s" % (ok), 'info')
-        #appuifw.note(u"%s" % (filedata_md5), 'info')
+        self.ip.show(u"MD5 check: %s" % (ok), (50, 50), 3000, 10, appuifw.EHLeftVTop)
         return data, response
 
     def save_log_cache(self, logname, namepattern = "-%Y%m%d"):
