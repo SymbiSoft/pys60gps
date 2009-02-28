@@ -220,6 +220,9 @@ class Comm:
             response  = http_poster.post_multipart(self.host, self.script, 
                                                          params, files, headers)
             if response.status == 200:
+                #if response.isclosed():
+                #    data = {"status" : "error:connection", 
+                #            "message" : u"HTTP Connection already closed"}
                 data = response.read()
                 data = self._decode_content(data, response)
             else:
