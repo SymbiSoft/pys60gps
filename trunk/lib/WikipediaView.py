@@ -68,7 +68,10 @@ class WikipediaView(Base.View):
             appuifw.note(u"No GPS FIX, using default coordinates", 'error')
             params["lat"] = "60.175"
             params["lon"] = "24.93"
+        ip = appuifw.InfoPopup()
+        ip.show(u"Loading nearby Wikipedia titles...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
         data, response = self.Main.comm._send_request("get_wikipedia", params)
+        ip.hide()
         if data["status"] == "ok" and "data" in data:
             self.wikipedialist = data["data"]
         else:
