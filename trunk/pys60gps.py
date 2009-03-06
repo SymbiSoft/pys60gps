@@ -376,6 +376,8 @@ class GpsApp:
         if self.key is None: 
             self.downloading_pois_test = False
             return
+        # if self.key == 'loctest':
+        #     wlan_ids = ",".join([x['SSID'] for x in wlantools.scan()]) # or something
         params = {"key" : self.key,
                   "username" : str(self.config["username"]),
                   "group" : str(self.config["group"]),

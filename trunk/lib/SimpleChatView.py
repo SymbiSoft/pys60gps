@@ -3,25 +3,7 @@ import appuifw
 import key_codes
 import e32
 import time
-
-import TopWindow
-import graphics
-
-def progress_window(text):
-    screen = TopWindow.TopWindow()
-    (size, position) = appuifw.app.layout(appuifw.ETitlePane)
-    #size = (150, 30)
-    screen.size = size
-    screen.position = position # (20, 0)
-    screen.corner_type = 'square'
-    screen.background_color = 0x0000ff
-    screen.shadow = 2
-    img = graphics.Image.new(size)
-    img.clear(fill=0xffff00) 
-    img.text((0, 25), text, font=(u"Series 60 Sans", 20), fill=0x333333)
-    screen.add_image(img, (0,0))
-    screen.show()
-    return screen
+from HelpView import HelpView
 
 class SimpleChatView(Base.View):
     """
@@ -41,6 +23,11 @@ class SimpleChatView(Base.View):
         self.delimiter = u">>> "
         self.t = appuifw.Text(u"")
         self.t.bind(key_codes.EKeySelect, self.send_chatmessage)
+        self.help = HelpView(self, 
+            u"""To chat with a member of your community choose "Send message" and start typing.
+             
+When you have finished, choose "OK" and your message will be sent immediately.
+""")
 
     def get_chatmessages(self):
         ip = appuifw.InfoPopup()
@@ -130,15 +117,23 @@ class SimpleChatView(Base.View):
             self.get_chatmessages()
         self.update_message_view()
         appuifw.app.menu = [
-            (u"Send message",self.send_chatmessage),
-            (u"Update post list",self.get_chatmessages),
-            (u"Set font", self.set_fontsize),
+            (u"Send chat message",self.send_chatmessage),
+            (u"Refresh chat",self.get_chatmessages),
+            (u"Increase font size", lambda:self.set_fontsize(2)),
+            (u"Decrease font size", lambda:self.set_fontsize(-2)),
+            (u"Set font size", self.set_fontsize),
+            (u"Help",self.help.activate),
             (u"Close", self.parent.activate),
-            ]
+        ]
 
-    def set_fontsize(self):
-        fs = appuifw.query(u"Font size","number", self.fontsize)
+    def set_fontsize(self, fs = 0):
+        if fs == 0:
+            fs = appuifw.query(u"Font size","number", self.fontsize)
+        else:
+            fs = self.fontsize + fs
         if fs:
+            if fs < 6: fs = 6
+            if fs > 32: fs = 32
             self.fontsize = fs
             self.update_message_view()
             # FIXME this doesn't unfortunately work: 

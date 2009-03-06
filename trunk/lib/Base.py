@@ -57,7 +57,7 @@ class TabView(View):
 
     def activate(self):
         """Set main menu to app.body and left menu entries."""
-        View.activate(self, parent)
+        View.activate(self)
         if len(self.tabs) == 0:
             raise "No tabs are defined " # FIXME: raising strings is deprecated
         # Create tab name list from tabs sequence
