@@ -2,6 +2,10 @@ Pys60Gps Changelog
 
 2008-01-31 version 0.3.8
 
+Replaced old simplejson with a new one.
+
+2008-01-31 version 0.3.8
+
 Added simple Wikipedia view.
 
 2008-01-31 version 0.3.7
