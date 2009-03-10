@@ -18,6 +18,27 @@
 #
 # Aaron Straup Cope
 # http://aaronland.info/python/s60-simplejson/
+#
+# Aapo Rista 2008-2009
+# Added missing JSONEncoder
+"""
+simplejson ported for PyS60 1.4-series (which bases on Python 2.2)
+
+Basic usage: 
+
+import pys60_simplejson
+simplejson = pys60_simplejson.simplejson()
+data = {
+    "foo" : u"\xe4", 
+    "bar" : 3.14159,
+    "baz" : "hello!",
+}
+
+json = simplejson.dumps(data)
+print json, data["foo"]
+data = simplejson.loads(json)
+print data, data["foo"]
+"""
 
 #
 # required for the 'yield' love in py 2.2
@@ -391,21 +412,9 @@ class JSONDecoder(object):
         return obj, end
 
 
-
-################################################################
-################################################################
-################################################################
-################################################################
-################################################################
 """
 Implementation of JSONEncoder
 """
-#
-# required for the 'yield' love in py 2.2
-#
-#from __future__ import generators
-
-#import re
 
 try:
     from simplejson._speedups import encode_basestring_ascii as c_encode_basestring_ascii
