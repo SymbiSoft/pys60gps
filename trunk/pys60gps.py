@@ -1,7 +1,7 @@
 # $Id$
 
 # DO NOT remove this
-SIS_VERSION = "0.3.8"
+SIS_VERSION = "0.3.9"
 APP_TITLE = u"PyS60GPS"
 
 import appuifw
@@ -64,9 +64,7 @@ import LatLongUTMconversion
 draw_startup_screen(canvas, u"Calculate")
 import Calculate
 draw_startup_screen(canvas, u"simplejson")
-#import pys60_json as json # TODO REMOVE
-import pys60_simplejson
-simplejson = pys60_simplejson.simplejson()
+import simplejson
 draw_startup_screen(canvas, u"PositionHelper")
 import PositionHelper
 draw_startup_screen(canvas, u"Comm")

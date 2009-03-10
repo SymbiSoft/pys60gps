@@ -42,8 +42,7 @@ import zlib
 # import sha
 import http_poster
 import csetconv
-import pys60_simplejson
-simplejson = pys60_simplejson.simplejson()
+import simplejson
 
 def rpc_name():
     """Return the name of calling function."""
