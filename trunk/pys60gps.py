@@ -1,7 +1,7 @@
 # $Id$
 
 # DO NOT remove this
-SIS_VERSION = "0.3.10"
+SIS_VERSION = "0.3.11"
 APP_TITLE = u"PyS60GPS"
 
 import appuifw
@@ -365,6 +365,44 @@ class GpsApp:
         self.save_config()
         self._update_menu()
 
+    # FIXME: part of this is also in WlanView
+    def temp_get_radio_params(self):
+        if e32.in_emulator():
+            time.sleep(1)
+            import random
+            wlan_devices = [
+                {'Capability': 1025, 'BeaconInterval': 100, 'SecurityMode': 'Open', 
+                 'SSID': u'linksys', 'BSSID': u'00:14:BF:A5:1D:4B', 'ConnectionMode': 'Infrastructure', 
+                 'SupportedRates': u'82848B9624B0486C', 'Channel': 8, 'RxLevel': random.randint(-100, -50)}, 
+                {'Capability': 1, 'BeaconInterval': 100, 'SecurityMode': 'Open', 
+                 'SSID': u'MyWLAN', 'BSSID': u'00:02:72:43:57:E1', 'ConnectionMode': 'Infrastructure', 
+                 'SupportedRates': u'82848B96', 'Channel': 11, 'RxLevel': random.randint(-100, -50)}, 
+                {'Capability': 17, 'BeaconInterval': 100, 'SecurityMode': 'WpaPsk', 
+                 'SSID': u'RMWLAN', 'BSSID': u'00:02:72:43:56:87', 'ConnectionMode': 'Infrastructure', 
+                 'SupportedRates': u'82848B96', 'Channel': 11, 'RxLevel': random.randint(-100, -50)},
+                {'Capability': 1041, 'BeaconInterval': 100, 'SecurityMode': 'WpaPsk', 
+                 'SSID': u'', 'BSSID': u'00:13:D3:79:99:8F', 'ConnectionMode': 'Infrastructure', 
+                 'SupportedRates': u'82848B96', 'Channel': 11, 'RxLevel': random.randint(-100, -50)}
+                 ]
+        else:
+            try:
+                import wlantools
+                wlan_devices = wlantools.scan(False)
+            except Exception, error:
+                appuifw.note(u"No wlantools.", 'error')
+                return {"error":unicode(error)}
+        # DSU-sort by RxLevel
+        decorated  = [(i['RxLevel'], i) for i in wlan_devices]
+        decorated.sort()
+        decorated.reverse()
+        wlan_devices = [item for (name, item) in decorated]
+        wlan_list = [w['BSSID'] for w in wlan_devices]
+        params = {"wlan_ids" : ",".join(wlan_list)}
+        gsm_location = location.gsm_location()
+        if gsm_location and len(gsm_location) > 0:
+            params["cellid"] = ",".join([str(x) for x in gsm_location])
+        return params
+
     def download_pois_new(self, pos = None):
         """
         Download geojson objects from the internet using Comm-module.
@@ -376,11 +414,12 @@ class GpsApp:
             return
         # if self.key == 'loctest':
         #     wlan_ids = ",".join([x['SSID'] for x in wlantools.scan()]) # or something
-        params = {"key" : self.key,
+        params = self.temp_get_radio_params()
+        params.update({"key" : self.key,
                   "username" : str(self.config["username"]),
                   "group" : str(self.config["group"]),
                   "pys60gps_version" : self.get_sis_version(),
-                  }
+                  })
         if pos == None:
             if self.has_fix(self.pos):
                 pos = self.pos
