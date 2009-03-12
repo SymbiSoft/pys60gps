@@ -7,6 +7,7 @@ import graphics
 import time
 import re
 import os
+import urllib
 
 class WikipediaView(Base.View):
     
@@ -39,15 +40,20 @@ class WikipediaView(Base.View):
 
     def handle_select(self):
         i = self.listbox.current()
-        choises = [u"Open in browser", u"Show image"]
+        choises = [u"Open in browser"] # , u"Show image"]
         test = appuifw.popup_menu(choises, u"Select action:")
         if test is not None:
             if test == 0:
                 import e32
-                url = '4 http://fi.wikipedia.org/wiki/%s' % self.wikipedialist[i]["title"].replace(" ", "_") 
-                b = 'BrowserNG.exe'
-                 # the space between ' and " seems to be important so don't miss it!
-                e32.start_exe(b, ' "%s"' % url, 1)
+                #baseurl = 'http://fi.wikipedia.org/wiki/%s'
+                baseurl = u"http://wapedia.mobi/fi/%s"
+                # Wapedia understands only quoted utf8 characters
+                url = baseurl % urllib.quote(self.wikipedialist[i]["title"].replace(" ", "_").encode("utf8"))
+                print url
+                browser_param = '4 %s' % url
+                browser = 'BrowserNG.exe'
+                # the space between ' and " seems to be important so don't miss it!
+                e32.start_exe(browser, ' "%s"' % browser_param, 1)
             elif test == 1:
                 appuifw.note(u"%s Not implemented" % choises[test], 'error')
             else:
