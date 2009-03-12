@@ -9,7 +9,9 @@
 # Find out version string
 
 SIS_VERSION=$(perl -ne 'if (/SIS_VERSION\s*=\s*"([\d\.]+)"/) {print "-$1";}' pys60gps.py)
-REVISION=$(perl -ne 'if (/\$Id: pys60gps.py (\d+)/) {print "-rev$1";exit()}' pys60gps.py)
+# REVISION=$(perl -ne 'if (/\$Id: pys60gps.py (\d+)/) {print "-rev$1";exit()}' pys60gps.py)
+svn up
+REVISION=-rev$(svn info|grep Revision:|cut -d' ' -f2) # Revision: 156
 
 # Cleanup old stuff
 
