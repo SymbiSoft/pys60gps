@@ -1,4 +1,4 @@
-# $Id: P2PFusion.py 128 2009-01-16 09:09:33Z aapris $
+# $Id$
 
 """
 Base classes for different view types.

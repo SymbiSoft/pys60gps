@@ -1,3 +1,5 @@
+__id__ = "$Id$"
+
 import Base
 import appuifw
 import key_codes
@@ -8,6 +10,24 @@ import time
 import re
 import os
 import urllib
+
+import random
+def scan():
+    return [
+{'Capability': 1025, 'BeaconInterval': 100, 'SecurityMode': 'Open', 
+ 'SSID': u'linksys', 'BSSID': u'00:14:BF:A5:1D:4B', 'ConnectionMode': 'Infrastructure', 
+ 'SupportedRates': u'82848B9624B0486C', 'Channel': 8, 'RxLevel': random.randint(-100, -50)}, 
+{'Capability': 1, 'BeaconInterval': 100, 'SecurityMode': 'Open', 
+ 'SSID': u'MyWLAN', 'BSSID': u'00:02:72:43:57:E1', 'ConnectionMode': 'Infrastructure', 
+ 'SupportedRates': u'82848B96', 'Channel': 11, 'RxLevel': random.randint(-100, -50)}, 
+{'Capability': 17, 'BeaconInterval': 100, 'SecurityMode': 'WpaPsk', 
+ 'SSID': u'RMWLAN', 'BSSID': u'00:02:72:43:56:87', 'ConnectionMode': 'Infrastructure', 
+ 'SupportedRates': u'82848B96', 'Channel': 11, 'RxLevel': random.randint(-100, -50)},
+{'Capability': 1041, 'BeaconInterval': 100, 'SecurityMode': 'WpaPsk', 
+ 'SSID': u'', 'BSSID': u'00:13:D3:79:99:8F', 'ConnectionMode': 'Infrastructure', 
+ 'SupportedRates': u'82848B96', 'Channel': 11, 'RxLevel': random.randint(-100, -50)}
+ ]
+
 
 class WikipediaView(Base.View):
     
@@ -40,14 +60,24 @@ class WikipediaView(Base.View):
 
     def temp_wlan_locate(self):
         try:
-            import wlantools
+            import location
+            if e32.in_emulator():
+                wlan_devices = scan()
+            else:
+                import wlantools
+                wlan_devices = wlantools.scan(False)
         except:
+            appuifw.note(u"No wlantools available!", 'error')
             return None
         ip = appuifw.InfoPopup()
-        ip.show(u"WLAN LOCATE...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
-        wlan_devices = wlantools.scan(False)
+        ip.show(u"Getting WLAN location...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
         wlan_list = [w['BSSID'] for w in wlan_devices]
         params = {"wlan_ids" : ",".join(wlan_list)}
+        gsm_location = location.gsm_location()
+        #print gsm_location
+        #print type(gsm_location)
+        if gsm_location and len(gsm_location) > 0:
+            params["cellid"] = ",".join([str(x) for x in gsm_location])
         data, response = self.Main.comm._send_request("get_wlan_01", params)
         ip.hide()
         #print data
@@ -99,7 +129,7 @@ class WikipediaView(Base.View):
                 params["lat"] = "60.175"
                 params["lon"] = "24.93"
                 appuifw.note(u"No WLAN FIX, using default coordinates %(lat)s,%(lon)s" % params, 'error')
-                #raise
+                raise
         #print params
         ip = appuifw.InfoPopup()
         ip.show(u"Loading nearby Wikipedia titles...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
