@@ -32,11 +32,31 @@ class WikipediaView(Base.View):
             self.menu_entries.append(((u"%s" % wikipediaitem["title"], 
                                        u"%d m %s" % (wikipediaitem["distance"], wikipediaitem["type"]))))
         if len(self.menu_entries) == 0:
-            appuifw.note(u"No files available", 'error')
+            appuifw.note(u"No Wikipedia articles available", 'error')
             self.parent.activate()
             return
         self.listbox = appuifw.Listbox(self.menu_entries, self.handle_select)
         appuifw.app.body = self.listbox
+
+    def temp_wlan_locate(self):
+        try:
+            import wlantools
+        except:
+            return None
+        ip = appuifw.InfoPopup()
+        ip.show(u"WLAN LOCATE...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
+        wlan_devices = wlantools.scan(False)
+        wlan_list = [w['BSSID'] for w in wlan_devices]
+        params = {"wlan_ids" : ",".join(wlan_list)}
+        data, response = self.Main.comm._send_request("get_wlan_01", params)
+        ip.hide()
+        #print data
+        if "status" in data and data["status"] == "ok":
+            lon, lat = data["geojson"]["geometries"][0]["coordinates"]
+            return lat, lon
+        else:
+            return None
+            
 
     def handle_select(self):
         i = self.listbox.current()
@@ -49,7 +69,7 @@ class WikipediaView(Base.View):
                 baseurl = u"http://wapedia.mobi/fi/%s"
                 # Wapedia understands only quoted utf8 characters
                 url = baseurl % urllib.quote(self.wikipedialist[i]["title"].replace(" ", "_").encode("utf8"))
-                print url
+                #print url
                 browser_param = '4 %s' % url
                 browser = 'BrowserNG.exe'
                 # the space between ' and " seems to be important so don't miss it!
@@ -69,11 +89,18 @@ class WikipediaView(Base.View):
         try:
             params["lat"] = u"%.6f" % self.Main.pos["position"]["latitude"]
             params["lon"] = u"%.6f" % self.Main.pos["position"]["longitude"]
-        #else:
         except:
-            appuifw.note(u"No GPS FIX, using default coordinates", 'error')
-            params["lat"] = "60.175"
-            params["lon"] = "24.93"
+            pass
+        if not params:
+            try:
+                appuifw.note(u"No GPS FIX, using wlan coordinates", 'error')
+                params["lat"], params["lon"] = ["%s" % x for x in self.temp_wlan_locate()]
+            except:
+                params["lat"] = "60.175"
+                params["lon"] = "24.93"
+                appuifw.note(u"No WLAN FIX, using default coordinates %(lat)s,%(lon)s" % params, 'error')
+                #raise
+        #print params
         ip = appuifw.InfoPopup()
         ip.show(u"Loading nearby Wikipedia titles...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
         data, response = self.Main.comm._send_request("get_wikipedia", params)
