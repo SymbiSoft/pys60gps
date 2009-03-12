@@ -1,7 +1,7 @@
 # $Id$
 
 # DO NOT remove this
-SIS_VERSION = "0.3.9"
+SIS_VERSION = "0.3.10"
 APP_TITLE = u"PyS60GPS"
 
 import appuifw
