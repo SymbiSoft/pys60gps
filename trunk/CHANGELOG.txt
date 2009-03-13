@@ -25,24 +25,3 @@ Improved the simple chat.
 
 Added very simple chat.
 
-2008-01-26 version 0.3.5
-
-Added basic wlan scan view.
-Addet automatic GPS ON when user selects Track or GPS-info view.
-
-2008-01-16 version 0.3.4
-
-Improved error handling in data transmission.
-All communication between client and server is now done through Comm-module. 
-
-2008-01-12 version 0.3.3
-
-Added Login into the main menu.
-Splitted Set menu to scan related and other settings.
-Added query to Login on exit if user has no active session and there is data to send.
-
-2008-01-09 version 0.3.2
-
-Added query to send data which sending failed in the past.
-Added query to send unsent data just before exit.
-
