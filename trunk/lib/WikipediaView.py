@@ -115,16 +115,21 @@ class WikipediaView(Base.View):
     def update_wikipedialist(self):
         params = {
                   }
-        #if self.Main.has_fix(self.Main.pos):
-        try:
-            params["lat"] = u"%.6f" % self.Main.pos["position"]["latitude"]
-            params["lon"] = u"%.6f" % self.Main.pos["position"]["longitude"]
-        except:
-            pass
+        pos = self.Main.pos
+        if self.Main.has_fix(pos):
+            try:
+                #lat = pos["position"]["latitude"]
+                #lon = pos["position"]["longitude"]
+                params["lat"] = u"%.6f" % pos["position"]["latitude"]
+                params["lon"] = u"%.6f" % pos["position"]["longitude"]
+            except:
+                pass
         if not params:
             try:
                 appuifw.note(u"No GPS FIX, using wlan coordinates", 'error')
-                params["lat"], params["lon"] = ["%s" % x for x in self.temp_wlan_locate()]
+                latlon = self.temp_wlan_locate()
+                if latlon:
+                    params["lat"], params["lon"] = ["%s" % x for x in latlon]
             except:
                 params["lat"] = "60.175"
                 params["lon"] = "24.93"
