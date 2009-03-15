@@ -1,7 +1,7 @@
 # $Id$
 
 # DO NOT remove this
-SIS_VERSION = "0.3.11"
+SIS_VERSION = "0.3.12"
 APP_TITLE = u"PyS60GPS"
 
 import appuifw
@@ -78,8 +78,14 @@ from SimpleChatView import SimpleChatView
 draw_startup_screen(canvas, u"ImageGalleryView")
 from ImageGalleryView import ImageGalleryView
 
+draw_startup_screen(canvas, u"ListdataView")
+from ListdataView import ListdataView
+
 draw_startup_screen(canvas, u"WikipediaView")
 from WikipediaView import WikipediaView
+
+#draw_startup_screen(canvas, u"HklView")
+#from HklView import HklView
 
 
 ####################################
@@ -198,12 +204,13 @@ class GpsApp:
         # Put all menu entries and views as tuples into a sequence
         self.menu_entries = []
         self.menu_entries.append(((u"Track"), TrackView(self)))
+        self.menu_entries.append(((u"Nearby"), ListdataView(self)))
         self.menu_entries.append(((u"Simple chat"), SimpleChatView(self)))
         self.menu_entries.append(((u"Images"), ImageGalleryView(self)))
         self.menu_entries.append(((u"GPS Info"), GpsView(self)))
         self.menu_entries.append(((u"Sysinfo"), SysinfoView(self)))
         self.menu_entries.append(((u"WLAN"), WlanView(self)))
-        self.menu_entries.append(((u"Wikipedia"), WikipediaView(self)))
+        #self.menu_entries.append(((u"Wikipedia"), WikipediaView(self)))
         # Create main menu from that sequence
         self.main_menu = [item[0] for item in self.menu_entries]
         # Create list of views from that sequence
@@ -216,6 +223,7 @@ class GpsApp:
         #print self.read_log_cache_filenames("track")
 
     def get_sis_version(self):
+        self.get_geolocation_params()
         return SIS_VERSION
 
     def _select_access_point(self, apid = None):
@@ -366,6 +374,52 @@ class GpsApp:
         self._update_menu()
 
     # FIXME: part of this is also in WlanView
+    def get_geolocation_params(self):
+        """
+        Find all gps, gsm and wlan signals currently available.
+        """
+        geolocation = {"version" : "0.0.1"}
+        # Try to get gps location
+        pos = self.pos
+        if self.has_fix(pos):
+            geolocation["lat"] = "%.6f" % pos["position"]["latitude"]
+            geolocation["lon"] = "%.6f" % pos["position"]["longitude"]
+        # Try to scan wlan base stations
+        wlan_devices = []
+        try:
+            import wlantools
+            wlan_devices = wlantools.scan(False)
+        except Exception, error:
+            if e32.in_emulator():
+                time.sleep(1)
+                import random
+                wlan_devices = [
+                    {'Capability': 1, 'BeaconInterval': 100, 'SecurityMode': 'Open', 
+                     'SSID': u'MyWLAN', 'BSSID': u'00:02:72:43:57:E1', 'ConnectionMode': 'Infrastructure', 
+                     'SupportedRates': u'82848B96', 'Channel': 11, 'RxLevel': random.randint(-100, -50)}, 
+                    {'Capability': 17, 'BeaconInterval': 100, 'SecurityMode': 'WpaPsk', 
+                     'SSID': u'RMWLAN', 'BSSID': u'00:02:72:43:56:87', 'ConnectionMode': 'Infrastructure', 
+                     'SupportedRates': u'82848B96', 'Channel': 11, 'RxLevel': random.randint(-100, -50)},
+                ]
+        # DSU-sort by RxLevel
+        decorated  = [(i['RxLevel'], i) for i in wlan_devices]
+        decorated.sort()
+        decorated.reverse()
+        wlan_devices = [item for (name, item) in decorated]
+        wlan_list = ["%(BSSID)s,%(RxLevel)s" % (w) for w in wlan_devices]
+        geolocation["wlanids"] = ";".join(wlan_list)
+        # Try to get cellid (note the symbian bug, 
+        # cellid is not available when the radio is on!)
+        # TODO: use cached gsm_location
+        gsm_location = location.gsm_location()
+        if gsm_location and len(gsm_location) > 0:
+            geolocation["cellids"] = "%s,%s" % (":".join([str(x) for x in gsm_location]),
+                                           sysinfo.signal_dbm())
+        # print geolocation
+        return geolocation
+
+    # FIXME: part of this is also in WlanView
+    # DEPRECATED
     def temp_get_radio_params(self):
         if e32.in_emulator():
             time.sleep(1)
@@ -402,6 +456,7 @@ class GpsApp:
         if gsm_location and len(gsm_location) > 0:
             params["cellid"] = ",".join([str(x) for x in gsm_location])
         return params
+
 
     def download_pois_new(self, pos = None):
         """

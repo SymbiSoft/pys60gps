@@ -1,5 +1,9 @@
 Pys60Gps Changelog
 
+2008-03-15 version 0.3.12
+
+Removed Wikipedia and added more general view for "Nearby" data.
+
 2008-03-12 version 0.3.11
 
 Added "loc" keyword for Track-view's Download.
