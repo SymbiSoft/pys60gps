@@ -1,5 +1,9 @@
 Pys60Gps Changelog
 
+2008-03-22 version 0.3.13
+
+Added very simple Twitter client.
+
 2008-03-15 version 0.3.12
 
 Removed Wikipedia and added more general view for "Nearby" data.

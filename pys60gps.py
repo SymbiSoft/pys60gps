@@ -1,7 +1,7 @@
 # $Id$
 
 # DO NOT remove this
-SIS_VERSION = "0.3.12"
+SIS_VERSION = "0.3.13"
 APP_TITLE = u"PyS60GPS"
 
 import appuifw
@@ -74,6 +74,9 @@ import TopWindow
 
 draw_startup_screen(canvas, u"SimpleChatView")
 from SimpleChatView import SimpleChatView
+
+draw_startup_screen(canvas, u"TwitterView")
+from TwitterView import TwitterView
 
 draw_startup_screen(canvas, u"ImageGalleryView")
 from ImageGalleryView import ImageGalleryView
@@ -206,6 +209,7 @@ class GpsApp:
         self.menu_entries.append(((u"Track"), TrackView(self)))
         self.menu_entries.append(((u"Nearby"), ListdataView(self)))
         self.menu_entries.append(((u"Simple chat"), SimpleChatView(self)))
+        self.menu_entries.append(((u"Twitter"), TwitterView(self)))
         self.menu_entries.append(((u"Images"), ImageGalleryView(self)))
         self.menu_entries.append(((u"GPS Info"), GpsView(self)))
         self.menu_entries.append(((u"Sysinfo"), SysinfoView(self)))
