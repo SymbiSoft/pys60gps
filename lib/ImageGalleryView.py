@@ -215,7 +215,11 @@ class ImageGalleryView(Base.View):
                 #image = graphics.Image.open(i["path"])
                 #small = image.resize((170, 128), keepaspect=1)
                 #del(image)
-            self.canvas.blit(small, target=(5, 31))
+            try:
+                self.canvas.blit(small, target=(5, 31))
+            except:
+                appuifw.note(u"Could not show thumbnail", 'error')
+                raise
             #del(small)
         else:
             self.canvas.text((5, 80), u"No images", font=font, fill=0x000066)
@@ -236,10 +240,14 @@ class ImageGalleryView(Base.View):
             if self.p_ext.search(name):
                 IMG = {}
                 IMG["path"] = os.path.join(dirname,name) # Full path
-                if self.IMG_NAMES.has_key(IMG["path"]): continue # Already found
                 stat = os.stat(IMG["path"])
                 IMG["filesize"] = stat[6] # File size in bytes
                 IMG["gmtime"] = stat[8] # Modification time
+                if IMG["filesize"] == 0:
+                    appuifw.note(u"Deleting 0 file", 'info')
+                    del self.IMG_NAMES[IMG["path"]]
+                if self.IMG_NAMES.has_key(IMG["path"]): 
+                    continue # Already found
                 # Ignore images older than ...
                 #if IMG["gmtime"] < self.gmtime-10*24*60*60: continue #print "wanha", IMG["path"], gmtime-IMG["gmtime"]
                 #f = open(IMG["path"], "rb")
@@ -247,9 +255,10 @@ class ImageGalleryView(Base.View):
                 #f.close()
                 # Calculate md5sum
                 #IMG["md5"] = md5.new(idata).hexdigest() # md5sum
-                self.IMG_LIST.append(IMG)
-                self.IMG_NEW_LIST.append(IMG)
-                self.IMG_NAMES[IMG["path"]] = IMG
+                if IMG["filesize"] > 0:
+                    self.IMG_LIST.append(IMG)
+                    self.IMG_NEW_LIST.append(IMG)
+                    self.IMG_NAMES[IMG["path"]] = IMG
 
     def update_filelist(self):
         for dir in self.directories:
