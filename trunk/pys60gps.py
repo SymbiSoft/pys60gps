@@ -184,7 +184,7 @@ class GpsApp:
         self.data["bluetooth"] = [] # Bluetooth scan history list (lightblue.finddevices())
         # New simplified style: TODO remove old ones and rename new ones to old name
         self.data["cellid_new"] = [] # GSM-cellid history list (location.gsm_location())
-        self.data["wifi_new"] = [] # Wifi scan history list (wlantools.scan())
+        self.data["wifi_new"] = [] # Wlan scan history list (wlantools.scan())
         self.data["bluetooth_new"] = [] # Bluetooth scan history list (lightblue.finddevices())
         self.data["track_new"] = [] # Position history list (positioning.position())
         self.data["delivery_new"] = [] # All data to be sent to the server
@@ -950,7 +950,7 @@ class GpsApp:
                                              pos["satellites"]["satellites"])
         return data
 
-    # TODO: rename gsmscan ? (alike wifiscan, btscan)
+    # TODO: rename gsmscan ? (alike wlanscan, btscan)
     def read_gsm_location(self):
         """
         Read gsm_location/cellid changes and save them to the gsm history list.
@@ -1025,9 +1025,9 @@ class GpsApp:
                     self.data["gsm_location"].pop(0)
             return data
 
-    def auto_wifiscan(self):
+    def auto_wlanscan(self):
         """
-        Do automatically _wifiscan() if certain contitions are met.
+        Do automatically _wlanscan() if certain contitions are met.
         """
         pos = self.pos
         if self.has_fix(pos) is False:
@@ -1055,12 +1055,12 @@ class GpsApp:
                 dist_time_flag = True
         if ((len(self.data["wifi"]) == 0
             or dist_time_flag)):
-            # Start wifiscan in background
-            e32.ao_sleep(0.01, self._wifiscan)
+            # Start wlanscan in background
+            e32.ao_sleep(0.01, self._wlanscan)
 
-    def _wifiscan(self):
+    def _wlanscan(self):
         """
-        Scan all available wifi networks if wlantools-module is present.
+        Scan all available wlan networks if wlantools-module is present.
         """
         # TODO: add lock here or immediate return if previous scan is still active / hanged
         try:
@@ -1068,7 +1068,7 @@ class GpsApp:
         except Exception, error:
             return {"error":unicode(error)}
         if self.scanning["wifi"]:
-            return {"error" : u"Wifi scan already running!"}
+            return {"error" : u"WLAN scan already running!"}
         self.scanning["wifi"] = True
         starttime = time.clock()
         wlan_devices = wlantools.scan(False)
@@ -1087,12 +1087,12 @@ class GpsApp:
         if (wlan_devices != []):
             if (self.wlan_devices_latest == wlan_devices):
                 self.scanning["wifi"] = False
-                return {"info":u"Wifi scan too fast, skipping this one!"}
+                return {"info":u"WLAN scan too fast, skipping this one!"}
         self.wlan_devices_latest = wlan_devices
         data = self.simplify_position(pos, isotime=True)
         #data["comment"] = u""
         data["duration"] = duration
-        data["wifilist"] = wlan_devices
+        data["wlanlist"] = wlan_devices
         #if not self.has_fix(pos): # TODO: move this interaction to some other function, e.g in tracktab
         #    data["comment"] = appuifw.query(u"No GPS fix, add text comment", "text", u"")
         if not data.has_key("systime"):
@@ -1110,8 +1110,8 @@ class GpsApp:
         self.scanning["wifi"] = False
         return data
 
-    def wifiscan(self, comment = None):
-        data = self._wifiscan()
+    def wlanscan(self, comment = None):
+        data = self._wlanscan()
         if "error" in data:
             appuifw.note(data["error"], 'error')
             return {}
@@ -1320,9 +1320,9 @@ class GpsApp:
         self.pos = pos
         # Read gsm-cell changes
         self.read_gsm_location()
-        # Scan wifi's automatically
-        self.auto_wifiscan()
-        # TODO: wifiscan() here if it is time to do it
+        # Scan wlan's automatically
+        self.auto_wlanscan()
+        # TODO: wlanscan() here if it is time to do it
         # Experimental speed history, to be rewritten
         speed_key = (u'%d'%time.time())[:-1]
          # If speed_history is empty add the first item or key has changed (every 10th second)
@@ -1519,7 +1519,7 @@ class SysinfoView(BaseTabbedView):
         self.init_ram = sysinfo.free_ram()
         self.tabs = []
         self.tabs.append((u"Gsm", GsmTab(self)))
-        self.tabs.append((u"Wifi", WifiTab(self)))
+        self.tabs.append((u"Wlan", WlanTab(self)))
         self.tabs.append((u"E32", E32InfoTab(self)))
         self.tabs.append((u"Mem", MemTab(self)))
         self.tabs.append((u"SysInfo", SysInfoTab(self)))
@@ -1590,16 +1590,16 @@ class GsmTab(BaseInfoTab):
                 lines.append(u"Error in gsm data")
         return lines
 
-class WifiTab(BaseInfoTab):
-    """Show a few last wifi's."""
+class WlanTab(BaseInfoTab):
+    """Show a few last wlans."""
     def _get_lines(self):
-        lines = [u"Wifis: %d lines" % len(self.Main.data["wifi"])]
+        lines = [u"Wlans: %d lines" % len(self.Main.data["wifi"])]
         last = self.Main.data["wifi"][-13:]
         last.reverse()
         for l in last:
             try:
                 lines.append(u"%s" % time.strftime("%H:%M:%S ", time.localtime(l["systime"]))
-                            + u"  %s wifis found" % (l['text']))
+                            + u"  %s wlans found" % (l['text']))
             except:
                 lines.append(u"Error in gsm data")
         return lines
@@ -1747,7 +1747,7 @@ class GpsTrackTab(BaseInfoTab):
         self.canvas.bind(key_codes.EKey1, lambda: self.toggle("track"))
         self.canvas.bind(key_codes.EKey2, lambda: self.toggle("cellid"))
         self.canvas.bind(key_codes.EKey3, lambda: self.toggle("wifi"))
-        self.canvas.bind(key_codes.EKey4, self.Main.wifiscan)
+        self.canvas.bind(key_codes.EKey4, self.Main.wlanscan)
         self.canvas.bind(key_codes.EKey6, self.Main.bluetoothscan)
 
         appuifw.app.menu.insert(0, (u"Send track via bluetooth", self.send_track))
