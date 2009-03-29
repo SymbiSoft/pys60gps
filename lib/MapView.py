@@ -495,85 +495,37 @@ class GpsApp:
         def check_keys(pos, keys, data, mainkey):
             if mainkey in pos:
                 for (new, old) in keys:
-                    if old in pos[mainkey] and self.is_nan(pos[mainkey][old]) == False:
-                        data[new] = pos[mainkey][old]
+                    try:
+                        if old in pos[mainkey] and self.is_nan(pos[mainkey][old]) == False:
+                            data[new] = pos[mainkey][old]
+                    except:
+                        print  mainkey, pos[mainkey], type(pos[mainkey]), new, old
+                        raise
         keys = [
             ("lat", "latitude"),
             ("lon", "longitude"),
             ("alt_m", "altitude"),
             ("hor_acc", "horizontal_accuracy"),
             ("ver_acc", "vertical_accuracy"),
-            #("", ""),
         ]
         check_keys(pos, keys, data, "position")
-#        if "position" in pos:
-#            for (new, old) in keys:
-#                if old in pos["position"] and self.is_nan(pos["position"][old]) == False:
-#                    data[new] = pos["position"][old]
-#            if "latitude" in pos["position"] and \
-#               self.is_nan(pos["position"]["latitude"]) == False:
-#                data["lat"] = pos["position"]["latitude"]
-#                data["lon"] = pos["position"]["longitude"]
-#            if "altitude" in pos["position"] and \
-#               self.is_nan(pos["position"]["altitude"]) == False:
-#                data["alt_m"] = pos["position"]["altitude"]
-#            if "horizontal_accuracy" in pos["position"] and \
-#               self.is_nan(pos["position"]["horizontal_accuracy"]) == False:
-#                data["ver_acc"] = pos["position"]["horizontal_accuracy"]
-#            if "vertical_accuracy" in pos["position"] and \
-#               self.is_nan(pos["position"]["vertical_accuracy"]) == False:
-#                data["hor_acc"] = pos["position"]["vertical_accuracy"]
         keys = [
             ("speed", "speed"),
             ("heading", "heading"),
             ("head_acc", "heading_accuracy"),
             ("spd_acc", "speed_accuracy"),
-            #("", ""),
         ]
         check_keys(pos, keys, data, "course")
-#        if "course" in pos:
-#            if "speed" in pos["course"] and \
-#               self.is_nan(pos["course"]["speed"]) == False:
-#                data["speed_kmh"] = pos["course"]["speed"] * 3.6
-#                data["speed"] = pos["course"]["speed"]
-#            if "heading" in pos["course"] and \
-#               self.is_nan(pos["course"]["heading"]) == False:
-#                data["heading"] = pos["course"]["heading"]
-#            if "heading_accuracy" in pos["course"] and \
-#               self.is_nan(pos["course"]["heading_accuracy"]) == False:
-#                data["head_acc"] = pos["course"]["heading_accuracy"]
-#            if "speed_accuracy" in pos["course"] and \
-#               self.is_nan(pos["course"]["speed_accuracy"]) == False:
-#                data["spd_acc"] = pos["course"]["speed_accuracy"]
         keys = [
             ("hdop", "horizontal_dop"),
             ("vdop", "vertical_dop"),
             ("tdop", "time_dop"),
-            ("used_satellites", "used_satellites"),
-            ("satellites", "satellites"),
+            ("sat_used", "used_satellites"),
+            ("gpstime", "time"),
+            ("sat", "satellites"),
         ]
         check_keys(pos, keys, data, "satellites")
-        if "satellites" in pos:
-            if "time" in pos["satellites"]:
-                if isotime:
-                    data["gpstime"] = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", 
-                                                    time.localtime(pos["satellites"]["time"]))
-                else:
-                    data["gpstime"] = pos["satellites"]["time"]
-#            try:
-#                data["hdop"] = pos["satellites"]["horizontal_dop"]
-#                data["vdop"] = pos["satellites"]["vertical_dop"]
-#                data["tdop"] = pos["satellites"]["time_dop"]
-#            except:
-#                pass
-#            data["satellites"] = "%d/%d"  % (pos["satellites"]["used_satellites"], 
-#                                             pos["satellites"]["satellites"])
         return data
-
-#{'satellites': {'horizontal_dop': 2.0, 'used_satellites': 5, 'vertical_dop': 2.29999995231628, 'time': 1238308011.00095, 'satellites': 10, 'time_dop': NaN}, 
-# 'position': {'latitude': 60.2749416666667, 'altitude': 47.2000007629395, 'vertical_accuracy': 18.3999996185303, 'longitude': 24.986165, 'horizontal_accuracy': 16.0}, 
-# 'course': {'speed': 0.13374400138855, 'heading': 139.300003051758, 'heading_accuracy': NaN, 'speed_accuracy': NaN}}
-
 
     def _calculate_UTM(self, pos, LongOrigin=None):
         """
@@ -589,8 +541,7 @@ class GpsApp:
              pos["n"]) = self._WGS84_UTM(pos["lat"],  pos["lon"], LongOrigin)
             return True
         except:
-            # TODO: line number and exception text here too?
-            self.log(u"exception", u"Failed to LLtoUTM()")
+            # TODO: log errors
             return False
 
     def _WGS84_UTM(self, lat, lon, LongOrigin=None):
