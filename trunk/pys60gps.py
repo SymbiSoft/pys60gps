@@ -169,22 +169,22 @@ class GpsApp:
         self.LongOrigin = None
         # Some counters
         self.counters = {"cellid":0,
-                         "wifi":0,
+                         "wlan":0,
                          "bluetooth":0,
                          "track":0,
                          "delivery":0,
                          }
-        self.scanning = {"wifi":False,
+        self.scanning = {"wlan":False,
                          "bluetooth":False,
                          }
         # Data-repository
         self.data = {}
         self.data["gsm_location"] = [] # GSM-cellid history list (location.gsm_location())
-        self.data["wifi"] = [] # Wifi scan history list (wlantools.scan())
+        self.data["wlan"] = [] # wlan scan history list (wlantools.scan())
         self.data["bluetooth"] = [] # Bluetooth scan history list (lightblue.finddevices())
         # New simplified style: TODO remove old ones and rename new ones to old name
         self.data["cellid_new"] = [] # GSM-cellid history list (location.gsm_location())
-        self.data["wifi_new"] = [] # Wlan scan history list (wlantools.scan())
+        self.data["wlan_new"] = [] # Wlan scan history list (wlantools.scan())
         self.data["bluetooth_new"] = [] # Bluetooth scan history list (lightblue.finddevices())
         self.data["track_new"] = [] # Position history list (positioning.position())
         self.data["delivery_new"] = [] # All data to be sent to the server
@@ -279,10 +279,10 @@ class GpsApp:
             "min_cellid_time" : 20,
             "max_cellid_time" : 600,
             "max_cellid_dist" : 500,
-            "min_wifi_time" : 6,
-            "max_wifi_time" : 600,
-            "max_wifi_dist" : 100,
-            "max_wifi_speed" : 60,
+            "min_wlan_time" : 6,
+            "max_wlan_time" : 600,
+            "max_wlan_dist" : 100,
+            "max_wlan_speed" : 60,
             "track_debug" : False,
             "username" : None,
             "password" : u"",
@@ -361,16 +361,16 @@ class GpsApp:
         profiles["lazy"] = {
             "max_cellid_time" : 600,
             "max_cellid_dist" : 500,
-            "min_wifi_time" : 6,
-            "max_wifi_time" : 3600,
-            "max_wifi_dist" : 10000,
+            "min_wlan_time" : 6,
+            "max_wlan_time" : 3600,
+            "max_wlan_dist" : 10000,
         }
         profiles["turbo"] = {
             "max_cellid_time" : 180,
             "max_cellid_dist" : 100,
-            "min_wifi_time" : 6,
-            "max_wifi_time" : 60,
-            "max_wifi_dist" : 50,
+            "min_wlan_time" : 6,
+            "max_wlan_time" : 60,
+            "max_wlan_dist" : 50,
         }
         for key in profiles[profile]:
             self.config[key] = profiles[profile][key]
@@ -537,17 +537,17 @@ class GpsApp:
             (u"max_cellid_dist (%d)" % self.config["max_cellid_dist"], 
                 lambda:self.set_config_var(u"max_cellid_dist ", "number", "max_cellid_dist")),
                 
-            (u"max_wifi_time (%d)" % self.config["max_wifi_time"], 
-                lambda:self.set_config_var(u"max_wifi_time ", "number", "max_wifi_time")),
+            (u"max_wlan_time (%d)" % self.config["max_wlan_time"], 
+                lambda:self.set_config_var(u"max_wlan_time ", "number", "max_wlan_time")),
                 
-            (u"min_wifi_time (%d)" % self.config["min_wifi_time"], 
+            (u"min_wlan_time (%d)" % self.config["min_wlan_time"], 
                 lambda:self.set_config_var(u"Estimation ", "number", "estimated_error_radius")),
                 
-            (u"max_wifi_dist (%d)" % self.config["max_wifi_dist"], 
-                lambda:self.set_config_var(u"max_wifi_dist ", "number", "max_wifi_dist")),
+            (u"max_wlan_dist (%d)" % self.config["max_wlan_dist"], 
+                lambda:self.set_config_var(u"max_wlan_dist ", "number", "max_wlan_dist")),
 
-            (u"max_wifi_speed (%d) km/h" % self.config["max_wifi_speed"], 
-                lambda:self.set_config_var(u"max_wifi_speed ", "number", "max_wifi_speed")),
+            (u"max_wlan_speed (%d) km/h" % self.config["max_wlan_speed"], 
+                lambda:self.set_config_var(u"max_wlan_speed ", "number", "max_wlan_speed")),
 
         ))
 
@@ -1009,7 +1009,7 @@ class GpsApp:
                     #data["signal_bars"] = None
                     #data["signal_dbm"] = None
                     pass
-                # We put this gsm cellid in a list, because in the future there may be several (like in wifi)
+                # We put this gsm cellid in a list, because in the future there may be several (like in wlan)
                 data["gsmlist"] = [cell]
                 pos["gsm"] = gsm_location
                 pos["text"] = l[3]
@@ -1034,8 +1034,8 @@ class GpsApp:
             return # Do not save scan automatically, if there is no fix
         dist_time_flag = False
         dist = 0
-        if len(self.data["wifi"]) > 0:
-            p0 = self.data["wifi"][-1] # use the latest saved point in history
+        if len(self.data["wlan"]) > 0:
+            p0 = self.data["wlan"][-1] # use the latest saved point in history
             # Time difference between current and the latest saved position
             timediff = pos["satellites"]["time"] - p0["satellites"]["time"]
             # Distance between current and the latest saved position
@@ -1048,12 +1048,12 @@ class GpsApp:
             # NOTE: pos["position"]["latitude"] may be a NaN!
             # NaN >= 500 is True
             # NaN > 500 is False in Python 2.2!!!
-            if ((dist > self.config["max_wifi_dist"] 
-                or timediff > self.config["max_wifi_time"])
+            if ((dist > self.config["max_wlan_dist"] 
+                or timediff > self.config["max_wlan_time"])
                 and timediff > 6
-                and pos["course"]["speed"]*3.6 < self.config["max_wifi_speed"]):
+                and pos["course"]["speed"]*3.6 < self.config["max_wlan_speed"]):
                 dist_time_flag = True
-        if ((len(self.data["wifi"]) == 0
+        if ((len(self.data["wlan"]) == 0
             or dist_time_flag)):
             # Start wlanscan in background
             e32.ao_sleep(0.01, self._wlanscan)
@@ -1067,9 +1067,9 @@ class GpsApp:
             import wlantools
         except Exception, error:
             return {"error":unicode(error)}
-        if self.scanning["wifi"]:
+        if self.scanning["wlan"]:
             return {"error" : u"WLAN scan already running!"}
-        self.scanning["wifi"] = True
+        self.scanning["wlan"] = True
         starttime = time.clock()
         wlan_devices = wlantools.scan(False)
         duration = time.clock() - starttime
@@ -1079,14 +1079,14 @@ class GpsApp:
             for k,v in w.items():
                 del w[k]
                 w[k.lower()] = (u"%s" % v).replace('\x00', '')
-        # s60 seems to cache wifi scans so do not save 
-        # new scan point if previous scan resulted exactly the same wifi list
+        # s60 seems to cache wlan scans so do not save 
+        # new scan point if previous scan resulted exactly the same wlan list
         try:  self.wlan_devices_latest # First test if "latest" exists
         except: self.wlan_devices_latest = None # TODO: this should be done in init
         # Save new scan point always if latest's result was empty  
         if (wlan_devices != []):
             if (self.wlan_devices_latest == wlan_devices):
-                self.scanning["wifi"] = False
+                self.scanning["wlan"] = False
                 return {"info":u"WLAN scan too fast, skipping this one!"}
         self.wlan_devices_latest = wlan_devices
         data = self.simplify_position(pos, isotime=True)
@@ -1099,15 +1099,15 @@ class GpsApp:
             # FIXME: create function to get ISO systime string
             # TODO: use above function here and everywhere
             data["systime"] = self.get_iso_systime()
-        self.append_log_cache("wifi", data)
-        if self.counters["wifi"] % 5 == 0:
-            self.save_log_cache("wifi")
+        self.append_log_cache("wlan", data)
+        if self.counters["wlan"] % 5 == 0:
+            self.save_log_cache("wlan")
         # Add a pos to be drawn on the canvas
         pos["text"] = u"%d" % len(wlan_devices)
-        self.data["wifi"].append(pos)
-        if len(self.data["wifi"]) > 100:
-            self.data["wifi"].pop(0)
-        self.scanning["wifi"] = False
+        self.data["wlan"].append(pos)
+        if len(self.data["wlan"]) > 100:
+            self.data["wlan"].pop(0)
+        self.scanning["wlan"] = False
         return data
 
     def wlanscan(self, comment = None):
@@ -1369,7 +1369,7 @@ class GpsApp:
         self.flush_delivery_data()
         self.save_log_cache("track")
         self.save_log_cache("cellid") 
-        self.save_log_cache("wifi")
+        self.save_log_cache("wlan")
         self.send_delivery_data(True, True)
         appuifw.app.set_tabs([u"Back to normal"], lambda x: None)
 
@@ -1593,8 +1593,8 @@ class GsmTab(BaseInfoTab):
 class WlanTab(BaseInfoTab):
     """Show a few last wlans."""
     def _get_lines(self):
-        lines = [u"Wlans: %d lines" % len(self.Main.data["wifi"])]
-        last = self.Main.data["wifi"][-13:]
+        lines = [u"Wlans: %d lines" % len(self.Main.data["wlan"])]
+        last = self.Main.data["wlan"][-13:]
         last.reverse()
         for l in last:
             try:
@@ -1720,7 +1720,7 @@ class GpsTrackTab(BaseInfoTab):
     center_pos = {}
     toggables = {"track":True,
                  "cellid":False,
-                 "wifi":False,
+                 "wlan":False,
                 }
 
     def activate(self):
@@ -1746,7 +1746,7 @@ class GpsTrackTab(BaseInfoTab):
         self.canvas.bind(key_codes.EKeySelect, self.save_poi)
         self.canvas.bind(key_codes.EKey1, lambda: self.toggle("track"))
         self.canvas.bind(key_codes.EKey2, lambda: self.toggle("cellid"))
-        self.canvas.bind(key_codes.EKey3, lambda: self.toggle("wifi"))
+        self.canvas.bind(key_codes.EKey3, lambda: self.toggle("wlan"))
         self.canvas.bind(key_codes.EKey4, self.Main.wlanscan)
         self.canvas.bind(key_codes.EKey6, self.Main.bluetoothscan)
 
@@ -2118,8 +2118,8 @@ class GpsTrackTab(BaseInfoTab):
                 self.ui.text(([p["x"]+center_x+10, p["y"]+center_y+5]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0xccccff)
                 self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x9999ff, width=poi_width)
         ##############################################        
-        # Draw Wifi points
-        for p in self.Main.data["wifi"]:
+        # Draw wlan points
+        for p in self.Main.data["wlan"]:
             self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
             if p.has_key("x"):
                 self.ui.text(([p["x"]+center_x+10, p["y"]+center_y+5]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x0000ff)
