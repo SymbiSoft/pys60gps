@@ -18,11 +18,8 @@ class TwitterView(Base.View):
     def __init__(self, parent):
         Base.View.__init__(self, parent)
         self.host = 'twitter.com'
-        self.username = "aapris"
-        self.password = "twitterhumppa"
         self.username = u""
         self.password = u""
-        
         self.friends_timeline = []
         self.fontsize = 14
         self.delimiter = u">>> "
@@ -81,6 +78,7 @@ When you have finished, choose "OK" and your message will be sent immediately.
         headers = self._get_http_headers()
         params = {}
         params["status"] = text.encode("utf8")
+        params["source"] = "pys60gps"
         params = urllib.urlencode(params)
         conn = httplib.HTTPConnection(self.host)
         service = '/statuses/update.json'
