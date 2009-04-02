@@ -854,13 +854,20 @@ class GpsTrackTab(BaseInfoTab):
 
     def __init__(self, parent):
         BaseInfoTab.__init__(self, parent)
-        self.map = graphics.Image.open(u"E:\\Images\\hervanta.png")
         import LatLongUTMconversion
-        self.topleft = (23.799271, 61.509515)
-        self.bottomright = (23.887824, 61.434418)
+        # hevanta
+        #self.map = graphics.Image.open(u"E:\\Images\\hervanta.png")
+        #self.topleft = (23.799271, 61.509515)
+        #self.bottomright = (23.887824, 61.434418)
+        #self.mappixelmeters = 4.0
+        #self.width = 1175  # px
+        #self.height = 2095 # px
+        # helsinki
+        self.map = graphics.Image.open(u"E:\\data\\helsinki.png")
+        self.topleft = (24.935635, 60.282121) # MMPLL,1
+        self.bottomright = (25.036795, 60.177069) # MMPLL,3
         self.mappixelmeters = 4.0
-        self.width = 1175  # px
-        self.height = 2095 # px
+        self.width, self.height = 1445, 2905
     
     def update_canvas_size(self, size):
         self.size = size
