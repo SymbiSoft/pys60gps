@@ -163,9 +163,10 @@ class GpsApp:
         self.config = {} # TODO: read these from a configuration file
         self.apid = None # Default access point
         self.read_config()
-        if self.config.has_key("apid"):
-            self._select_access_point(self.config["apid"])
+        #if self.config.has_key("apid"):
+        #    self._select_access_point(self.config["apid"])
         # Center meridian
+        self.select_access_point()
         self.LongOrigin = None
         # Some counters
         self.counters = {"cellid":0,
@@ -229,6 +230,15 @@ class GpsApp:
     def get_sis_version(self):
         self.get_geolocation_params()
         return SIS_VERSION
+
+    def select_access_point(self, apid = None):
+        if self.apid == None:
+            self.apid = socket.select_access_point()
+        if self.apid:
+            self.apo = socket.access_point(self.apid)
+            socket.set_default_access_point(self.apo)
+            self.apo.start()
+
 
     def _select_access_point(self, apid = None):
         """
@@ -742,8 +752,9 @@ class GpsApp:
                     return
             # Ask for login, if there is no sessionid
             if ask_login and not self.comm.sessionid:
-                if appuifw.query(u"You have no active session, would you like to login first?", 'query'):
-                    self.login()
+                # This query is disabled
+                # if appuifw.query(u"You have no active session, would you like to login first?", 'query'):
+                self.login()
 
             deliverydir = os.path.join(self.datadir, "delivery")
             if not os.path.isdir(deliverydir):
