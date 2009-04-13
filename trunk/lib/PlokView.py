@@ -21,67 +21,55 @@ class PlokView(Base.View):
         self.active = False
         self.show_images = True
         self.ploklist = []
-        #pos = (0,0,240,320)
-        #self.lock.wait()
     
     def get_ploklist(self):
-        
+        params = {'operation': 'get_ploks_newest'}
+        if len(self.ploklist) > 0:
+            params["lastid"] = self.ploklist[0]["id"]
         params = urllib.urlencode({'operation': 'get_ploks_newest'})
         url = "http://www.plok.in/api/test.php"
+        ip = appuifw.InfoPopup()
+        ip.show(u"Loading latest ploks...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
         f = urllib.urlopen("%s?%s" % (url, params))
         data = simplejson.loads(f.read())
         f.close()
         self.ploklist = data["ploklist"]
-        
+        ip.hide()
+        ip.show(u"Dumping images", (50, 50), 60000, 100, appuifw.EHLeftVTop)
         for plok in self.ploklist:
             imagefile = "D:\\%(id)s.jpg" % plok
+            # TODO: if not os.path.isfile(imagefile):
             f = open(imagefile, "wb")
             f.write(base64.decodestring(plok["image_base64"]))
             f.close()
+        ip.hide()
+
+    def get_plok(self, id):
+        params = urllib.urlencode({'operation': 'get_plok', 'id' : id})
+        url = "http://www.plok.in/api/test.php"
+        ip = appuifw.InfoPopup()
+        ip.show(u"Loading plok...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
+        filename = u"D:\\plok.jpg"
+        urllib.urlretrieve("%s?%s" % (url, params), filename)
+        ip.hide()
+        lock=e32.Ao_lock()
+        content_handler = appuifw.Content_handler(lock.signal)
+        content_handler.open(filename)
+        lock.wait()
+        
 
     def fill_items(self):
-        self.items = [ u"%(sender)s %(isotime)s\n%(title)s" % (plok) for plok in self.ploklist ]
+        # FIXME: check that these keys exist
+        pattern = u"%(sender)s %(isotime)s\n%(title)s"
+        self.items = [ pattern % (plok) for plok in self.ploklist ]
         self.images = [ "D:\\%(id)s.jpg" % plok for plok in self.ploklist ]
 
-    def images_menu(self,val):
-        self.show_images = val
-        menu = []
-        if val:
-            menu += [(u"Hide images", lambda: self.images_menu(False))]
-        else:
-            menu += [(u"Show images", lambda: self.images_menu(True))]
-        menu += [(u"About", self.about),
-                 (u"Quit", self.close_app)]
-        app.menu = menu
-        self.update_list()
-                    
     def item_selected(self):
         item = self.listbox.current()
-        #note(u"%s" % item,"info")
-        f = self.items[item]
-        #self.update_list(f)
-
-    def update_list(self,f=u""):
-        if f:
-            d = os.path.abspath( os.path.join(self.cur_dir,f) )
-        else:
-            d = self.cur_dir
-        if os.path.isdir(d.encode('utf-8')):
-            if f == u".." and len(self.cur_dir) == 3:
-                self.cur_dir = u""
-            else:
-                self.cur_dir = d 
-            self.fill_items()
-            attrs = self.listbox.get_config()
-            attrs['items'] = self.items
-            attrs['title'] = u" " + self.cur_dir
-            if self.show_images:
-                attrs['images'] = self.images
-                attrs['image_size'] = (44,44)
-            else:
-                attrs['images'] = []
-                
-            self.listbox.reconfigure(attrs)
+        plok = self.ploklist[item]
+        self.get_plok(plok["id"])
+        #print plok
+        #note(u"Selecting plok %s is not implemented yet, sorry." % plok["id"],"info")
 
     def handle_close(self):
         self.active = False
@@ -89,11 +77,12 @@ class PlokView(Base.View):
 
     def activate(self):
         self.active = True
-        app.screen = "full"
-        app.menu = [#(u"Hide images", lambda: self.images_menu(False)),
-                    (u"Quit", self.close)]
+        appuifw.app.screen = "full"
+        appuifw.app.menu = [(u"Update list", self.get_ploklist),
+                            (u"Quit", self.close)]
         appuifw.app.exit_key_handler = self.handle_close
-        self.get_ploklist()
+        if len(self.ploklist) == 0:
+            self.get_ploklist()
         self.fill_items()
         pos = (0,0) + sysinfo.display_pixels()
         self.listbox = CanvasListBox(items=self.items,
@@ -107,4 +96,4 @@ class PlokView(Base.View):
                                      image_size=(44,44),
                                      title=u"Latest ploks")
         
-        app.body = self.listbox
+        appuifw.app.body = self.listbox
