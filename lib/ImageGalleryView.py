@@ -6,15 +6,15 @@ import appuifw
 import key_codes
 import e32
 import graphics
+import http_poster
+import socket
 
 class ImageGalleryView(Base.View):
-#class ImageGalleryView:
 
     def __init__(self, parent):
         Base.View.__init__(self, parent)
         self.active = False
         # TODO: create way to change these
-        # TODO: put these to Main.config
         self.tags = [u"animals",u"architecture",u"nature",u"object",u"people",u"traffic",u"view"]
         self.visibilities = [u"PUBLIC",u"RESTRICTED:community",u"RESTRICTED:friends",u"RESTRICTED:family",u"PRIVATE"]
         self.extensions = ["jpg", "png"]
@@ -236,6 +236,8 @@ class ImageGalleryView(Base.View):
         e32.ao_sleep(0.01) # Wait until the canvas has been drawn
 
     def store_filenames_cb(self, arg, dirname, names):
+        # Do not check folders like "_PAlbTN"
+        if dirname.startswith("_"): return
         for name in names:
             if self.p_ext.search(name):
                 IMG = {}
@@ -282,7 +284,7 @@ class ImageGalleryView(Base.View):
         for thumb in thumbinstances:
             thumbinstance = os.path.join(thumbbasedir, thumb, basename + "_" + thumb) # E.g. "030820083076.jpg_170x128"
             if os.path.isfile(thumbinstance):
-                width, height = thumb.split("x") # e.g. "170x120" -> (170, 120)
+                width, height = thumb.split("x") # e.g. "178x120" -> (178, 120)
                 thumbnails_available[thumb] = {"path":thumbinstance, "width":width, "height":height}
         return thumbnails_available
     
@@ -350,31 +352,46 @@ class ImageGalleryView(Base.View):
         self.update()
 
     def sync_server(self):
+    # FIXME: put this to sync queue
         """Send image to the server. Initial/test version."""
         if self.current_img >= 0:
             current_img = self.IMG_LIST[self.current_img]
+            if "status" in current_img and current_img["status"] == u"synchronized":
+                appuifw.note(u"Already uploaded", 'info')
+                return
+            if self.Main.apid == None:
+                self.Main.apid = socket.select_access_point()
+            if self.Main.apid:
+                self.apo = socket.access_point(self.Main.apid)
+                socket.set_default_access_point(self.apo)
+                self.apo.start()
+                
+            if appuifw.query(u'Send image really? There is no undo.', 'query') is False:
+                return
             current_img["status"] = u"synchronizing"
             filename = current_img["path"]
-            host = self.Main.config["host"]
-            script = self.Main.config["script"]
+            host = "www.plok.in" # self.Main.config["host"]
+            script = "/save/plok.php" # self.Main.config["script"]
             headers = {} # set useragent etc
             f=open(filename, 'r')
             filedata = f.read()
             f.close()
             # Create "files"-list which contains all files to send
-            files = [("file1", filename, filedata)]
-            params = {"caption":current_img["caption"].encode("utf-8"), 
-                      "tags":current_img["tags"].encode("utf-8"),
-                      "visibility":current_img["visibility"].encode("utf-8"),
+            files = [("newfile", "testfile.jpg", filedata)]
+            params = {"rpc_op" : "send_plok_pys60gps",
+                      "caption" : current_img["caption"].encode("utf-8"), 
+                      "tags" : current_img["tags"].encode("utf-8"),
+                      "visibility" : current_img["visibility"].encode("utf-8"),
+                      "sender" : self.Main.config["username"].encode("utf-8")
+                      #"sender" : "pys60gps", # self.Main.config["username"].encode("utf-8")
                       }
             res = http_poster.post_multipart(host, script, params, files, headers)
-            if res[0] == 200:
+            data = res.read()
+            if data != "0":
                 current_img["status"] = u"synchronized"
             else:
                 current_img["status"] = u"sync failed"
-            print res[2][:200]
-            #self.update()
-
+            print data
 
     def delete_current(self):
         """Delete current image permanently."""
