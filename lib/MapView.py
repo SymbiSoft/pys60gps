@@ -608,28 +608,32 @@ class GpsApp:
                                           pos["lon"],
                                          )
                 # Difference of heading between current and the latest saved position
-                anglediff = Calculate.anglediff(p0["heading"], pos["heading"])
+                if "heading" in pos and "heading" in p0:
+                    anglediff = Calculate.anglediff(p0["heading"], pos["heading"])
                 # Time difference between current and the latest saved position
                 timediff = pos["gpstime"] - p0["gpstime"]
                 
                 # Project a location estimation point (pe) using speed and heading from the latest saved point
                 pe = {}
                 # timediff = time.time() - p0['systime']
-                dist_project = p0["speed"] * timediff # speed * seconds = distance in meters
-                lat, lon = Calculate.newlatlon(p0["lat"], p0["lon"], 
-                                               dist_project, p0["heading"])
-                pe["position"] = {}
-                pe["lat"] = lat
-                pe["lon"] = lon
-                self.Main._calculate_UTM(pe)
-                self.pos_estimate = pe
-                # This calculates the distance between the current point and the estimated point.
-                # Perhaps ellips could be more optime?
-                dist_estimate = Calculate.distance(pe["lat"],
-                                          pe["lon"],
-                                          pos["lat"],
-                                          pos["lon"],
-                                         )
+                try:
+                    dist_project = p0["speed"] * timediff # speed * seconds = distance in meters
+                    lat, lon = Calculate.newlatlon(p0["lat"], p0["lon"], 
+                                                   dist_project, p0["heading"])
+                    pe["position"] = {}
+                    pe["lat"] = lat
+                    pe["lon"] = lon
+                    self.Main._calculate_UTM(pe)
+                    self.pos_estimate = pe
+                    # This calculates the distance between the current point and the estimated point.
+                    # Perhaps ellips could be more optime?
+                    dist_estimate = Calculate.distance(pe["lat"],
+                                              pe["lon"],
+                                              pos["lat"],
+                                              pos["lon"],
+                                             )
+                except:
+                    pass
                 # This calculates the distance of the current point from the estimation vector
                 # In the future this will be an alternate to the estimation circle
                 if "speed" in p0 and "heading" in p0:
@@ -838,12 +842,12 @@ class GpsTrackTab(BaseInfoTab):
     """
     Print the track on the canvas.
     """
-    meters_per_px = 5
+    meters_per_px = 4
     seen_counter = 0
     #pois = []
     # Are zoom_levels below 1.0 needeed?
-    zoom_levels = [0.0675,0.125,0.25,0.5,1,2,3,4,5,8,12,16,20,30,50,80,100,150,250,400,600,1000,2000,5000,10000]
-    zoom_index = 7
+    zoom_levels = [1,2,4,8,16]
+    zoom_index = 2
     center_pos = {}
     toggables = {"track":True,
                  "cellid":False,
@@ -856,18 +860,24 @@ class GpsTrackTab(BaseInfoTab):
         BaseInfoTab.__init__(self, parent)
         import LatLongUTMconversion
         # hevanta
-        #self.map = graphics.Image.open(u"E:\\Images\\hervanta.png")
-        #self.topleft = (23.799271, 61.509515)
-        #self.bottomright = (23.887824, 61.434418)
-        #self.mappixelmeters = 4.0
-        #self.width = 1175  # px
-        #self.height = 2095 # px
-        # helsinki
-        self.map = graphics.Image.open(u"E:\\data\\helsinki.png")
-        self.topleft = (24.935635, 60.282121) # MMPLL,1
-        self.bottomright = (25.036795, 60.177069) # MMPLL,3
+        self.map = graphics.Image.open(u"E:\\Images\\hervanta.png")
+        self.topleft = (23.799271, 61.509515)
+        self.bottomright = (23.887824, 61.434418)
         self.mappixelmeters = 4.0
-        self.width, self.height = 1445, 2905
+        self.width, self.height = 1175, 2095
+        # Hervanta 2
+        self.topleft = (23.783069, 61.505614) # MMPLL,1
+        self.bottomright = (23.895754, 61.505747) # MMPLL,3
+        self.mappixelmeters = 4.0
+        self.width, self.height = 1500,2000
+
+        
+        # helsinki
+        #self.map = graphics.Image.open(u"E:\\data\\helsinki.png")
+        #self.topleft = (24.935635, 60.282121) # MMPLL,1
+        #self.bottomright = (25.036795, 60.177069) # MMPLL,3
+        #self.mappixelmeters = 4.0
+        #self.width, self.height = 1445, 2905
     
     def update_canvas_size(self, size):
         self.size = size
@@ -994,8 +1004,8 @@ class GpsTrackTab(BaseInfoTab):
         p0 is the center point of the image.
         """
         # is image neccessary?
-        if "e" not in p: return
-        if "e" not in p0: return
+        if "e" not in p or "e" not in p0:
+            return
         p["x"] = int((-p0["e"] + p["e"]) / meters_per_px)
         p["y"] = int((p0["n"] - p["n"]) / meters_per_px)
 
@@ -1027,16 +1037,22 @@ class GpsTrackTab(BaseInfoTab):
         pos = self.Main.pos # the current position during this update()
         poi_r = 5 # POI circles radius
         ch_l = 10 # Crosshair length
-        # TODO: determine center from canvas width/height
+        # canvas center point
         center_x = self.size[0] / 2
         center_y = self.size[1] / 2
+        # pc is the current center point
+        if self.center_pos:
+            pc = self.center_pos
+        else:
+            pc = pos
+        
         # TODO: cleanup here!
         self.ui.clear()
         ##########################################################################
         (lon, lat) = self.topleft
         (z, e1, n1) = LatLongUTMconversion.LLtoUTM(23, lat, lon, self.Main.LongOrigin)
-        if "lat" in pos:
-            lat, lon = pos["lat"], pos["lon"]
+        if "lat" in pc:
+            lat, lon = pc["lat"], pc["lon"]
             (z, e2, n2) = LatLongUTMconversion.LLtoUTM(23, lat, lon, self.Main.LongOrigin)
             cen = ((e2-e1)/self.mappixelmeters, (n1 - n2)/self.mappixelmeters)
             
@@ -1044,22 +1060,28 @@ class GpsTrackTab(BaseInfoTab):
                     cen[0]+self.size[0]/2, cen[1]+self.size[1]/2]
             blit = [int(x) for x in blit]
             self.ui.blit(self.map, source=blit)
+        # Plot liikenneympyrä in hervanta
+        p_ympy = {
+            "lon" : 23.852382, 
+            "lat" : 61.447862,
+        }
+        self.Main._calculate_UTM(p_ympy, self.Main.LongOrigin)
+        #print p_ympy, "=========================================="
+        if "lat" in pc:
+            self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p_ympy)
+            print p_ympy["y"], p_ympy["x"]
+            self.ui.point([p_ympy["x"], p_ympy["y"]], outline=0x00ff00, width=20)
         ##########################################################################
         # Print some information about track
         mdist = self.Main.config["min_trackpoint_distance"]
         helpfont = (u"Series 60 Sans", 12)
         # Draw crosshair
         # TODO: draw arrow
-        self.ui.line([center_x-ch_l, center_y, center_x+ch_l, center_y], outline=0x0000ff, width=1)
-        self.ui.line([center_x, center_y-ch_l, center_x, center_y+ch_l], outline=0x0000ff, width=1)
+        self.ui.line([center_x-ch_l, center_y, center_x+ch_l, center_y], outline=0xff0000, width=1)
+        self.ui.line([center_x, center_y-ch_l, center_x, center_y+ch_l], outline=0xff0000, width=1)
         # Test polygon
         # self.ui.polygon([15,15,100,100,100,15,50,10], outline=0x0000ff, width=4)
         j = 0
-        # pc is the current center point
-        if self.center_pos:
-            pc = self.center_pos
-        else:
-            pc = pos
 
         poi_width = 20 / self.meters_per_px # show pois relative to zoom level
         if poi_width < 1: poi_width = 1
@@ -1068,7 +1090,7 @@ class GpsTrackTab(BaseInfoTab):
 
         # draw "heading arrow"
         ##############################################        
-        if self.Main.has_fix(pos) and pos["heading"] and pos["speed"]:
+        if self.Main.has_fix(pos) and "heading" in pos and pos["heading"] and pos["speed"]:
             p = copy.deepcopy(pos)
             self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
             try:
@@ -1219,24 +1241,24 @@ class GpsTrackTab(BaseInfoTab):
 #        a.append([[23.8312618,61.4497862],[23.8327456,61.450135],[23.8381127,61.4513532],[23.8388123,61.4515139],[23.8412646,61.4521047],[23.843256,61.45257],[23.8467628,61.4533507]])
 #        a.append([[23.8459855,61.4593235],[23.8460542,61.4591799],[23.8463148,61.4586589],[23.8463873,61.4585306],[23.8465941,61.4581124],[23.8471625,61.4568595],[23.8475562,61.4557883],[23.8479627,61.4549332]])
         
-        if self.Main.LongOrigin:
-            #print self.Main.LongOrigin
-            for road in a:
-                for i in range(0, len(road) - 1):
-                    x = road[i]
-                    x2 = road[i+1]
-                    p = {"lat": x[1], "lon": x[0]}
-                    self.Main._calculate_UTM(p)
-                    self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
-                    p2 = {"lat": x2[1], "lon": x2[0]}
-                    self.Main._calculate_UTM(p2)
-                    self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p2)
-                    #self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x0ff000, width=5)
-                    self.ui.line([p["x"]+center_x, p["y"]+center_y, 
-                                  p2["x"]+center_x, p2["y"]+center_y], outline=0x000099, width=2)
-                    
-                    #self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x000000, width=5)
-                #print p
+#        if self.Main.LongOrigin:
+#            #print self.Main.LongOrigin
+#            for road in a:
+#                for i in range(0, len(road) - 1):
+#                    x = road[i]
+#                    x2 = road[i+1]
+#                    p = {"lat": x[1], "lon": x[0]}
+#                    self.Main._calculate_UTM(p)
+#                    self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p)
+#                    p2 = {"lat": x2[1], "lon": x2[0]}
+#                    self.Main._calculate_UTM(p2)
+#                    self._calculate_canvas_xy(self.ui, self.meters_per_px, pc, p2)
+#                    #self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x0ff000, width=5)
+#                    self.ui.line([p["x"]+center_x, p["y"]+center_y, 
+#                                  p2["x"]+center_x, p2["y"]+center_y], outline=0x000099, width=2)
+#                    
+#                    #self.ui.point([p["x"]+center_x, p["y"]+center_y], outline=0x000000, width=5)
+#                #print p
         
         # Draw wlan points
         for p in self.Main.data["wlan"]:
@@ -1285,7 +1307,8 @@ class GpsTrackTab(BaseInfoTab):
         ###########################################
         # Draw scale bar
         self.draw_scalebar(self.ui)
-
+        if "hdop" in pos:
+            self.ui.text((2,40), u"%.1f" % (pos["hdop"]), font=helpfont, fill=0x999999)
         self.ui.text((2,51), u"Press * or # to zoom", font=helpfont, fill=0x999999)
         
         if self.center_pos and "e" in self.center_pos:
@@ -1309,6 +1332,7 @@ class GpsTrackTab(BaseInfoTab):
             mppx_text = u"%d m/px" % self.meters_per_px
         else:
             mppx_text = u"%d cm/px" % (self.meters_per_px * 100)
+        canvas.rectangle((scale_bar_x-5, scale_bar_y-15, scale_bar_x+scale_bar_width+10, scale_bar_y+15), fill=0xe0e0e0)
         canvas.text((scale_bar_x + 5, 18), scale_text, font=(u"Series 60 Sans", 10), fill=0x333333)
         canvas.text((scale_bar_x + 5, 32), mppx_text, font=(u"Series 60 Sans", 10), fill=0x333333)
         canvas.line([scale_bar_x, 20, scale_bar_x + scale_bar_width, 20], outline=0x0000ff, width=1)
