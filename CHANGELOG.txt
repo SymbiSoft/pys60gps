@@ -1,5 +1,9 @@
 Pys60Gps Changelog
 
+2008-04-12 version 0.3.14
+
+Added simple Plok view.
+
 2008-03-22 version 0.3.13
 
 Added very simple Twitter client.

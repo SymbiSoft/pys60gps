@@ -1,7 +1,7 @@
 # $Id$
 
 # DO NOT remove this
-SIS_VERSION = "0.3.13"
+SIS_VERSION = "0.3.14"
 APP_TITLE = u"PyS60GPS"
 
 import appuifw
@@ -84,12 +84,8 @@ from ImageGalleryView import ImageGalleryView
 draw_startup_screen(canvas, u"ListdataView")
 from ListdataView import ListdataView
 
-draw_startup_screen(canvas, u"WikipediaView")
-from WikipediaView import WikipediaView
-
-#draw_startup_screen(canvas, u"HklView")
-#from HklView import HklView
-
+draw_startup_screen(canvas, u"PlokView")
+from PlokView import PlokView
 
 ####################################
 # FIXME: move these to an own module
@@ -215,6 +211,7 @@ class GpsApp:
         self.menu_entries.append(((u"GPS Info"), GpsView(self)))
         self.menu_entries.append(((u"Sysinfo"), SysinfoView(self)))
         self.menu_entries.append(((u"WLAN"), WlanView(self)))
+        self.menu_entries.append(((u"Plok"), PlokView(self)))
         #self.menu_entries.append(((u"Wikipedia"), WikipediaView(self)))
         # Create main menu from that sequence
         self.main_menu = [item[0] for item in self.menu_entries]
