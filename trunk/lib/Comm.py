@@ -107,7 +107,7 @@ class Comm:
            "User-Agent": self.useragent,
         }
         if self.sessionid != None:
-            headers["Cookie"] = "sessionid=%s;" % self.sessionid
+            headers["Cookie"] = "%s=%s;" % (self.session_cookie_name, self.sessionid)
         return headers
 
     def _decompress_content(self, data, response):
@@ -148,7 +148,7 @@ class Comm:
         headers["Content-Type"] = "application/x-www-form-urlencoded"
         # Send session id in headers as a cookie
         if self.sessionid != None:
-            headers["Cookie"] = "sessionid=%s;" % self.sessionid
+            headers["Cookie"] = "%s=%s;" % (self.session_cookie_name, self.sessionid)
         conn = httplib.HTTPConnection(self.host)
         # This is nested because Python 2.2 doesn't support try/except/finally
         try: 
