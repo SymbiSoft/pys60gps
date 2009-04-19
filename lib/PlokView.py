@@ -23,11 +23,11 @@ class PlokView(Base.View):
         self.ploklist = []
     
     def get_ploklist(self):
-        params = {'operation': 'get_ploks_newest', 'thumb_size' : '44'}
+        params = {'operation': 'get_files_newest', 'thumb_size' : '44'}
         if len(self.ploklist) > 0:
             params["lastid"] = self.ploklist[0]["id"]
         # TODO: really use this lastid stuff
-        params = urllib.urlencode({'operation': 'get_ploks_newest'})
+        params = urllib.urlencode({'operation': 'get_files_newest'})
         url = "http://www.plok.in/api/test.php"
         ip = appuifw.InfoPopup()
         ip.show(u"Loading latest ploks...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
@@ -46,7 +46,7 @@ class PlokView(Base.View):
         ip.hide()
 
     def get_plok(self, id):
-        params = urllib.urlencode({'operation': 'get_plok', 
+        params = urllib.urlencode({'operation': 'get_file', 
                                    'id' : id, 
                                    'image_size' : '240'})
         url = "http://www.plok.in/api/test.php"
