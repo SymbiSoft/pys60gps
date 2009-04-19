@@ -16,18 +16,19 @@ class ImageGalleryView(Base.View):
     def __init__(self, parent):
         Base.View.__init__(self, parent)
         self.active = False
-        self.comm = Comm.Comm("test.plok.in", "/api/test.php")
-        self.comm.session_cookie_name = "sid"
-        data, response = self.comm.login(self.Main.config["username"], "kaapeli")
-        appuifw.note(u"%s" % data["message"], 'error')
-        #print data, self.comm.sessionid
-        #print response.getheader("cookie")
+        self.host = appuifw.query(u"Plok host", "text", u"www.plok.in")
+        if not self.host:
+            self.host = u"test.plok.in"
+        self.comm = Comm.Comm(self.host, "/api/test.php")
+        #self.comm = Comm.Comm("10.0.2.2:8880", "/api/test.php")
         # TODO: create way to change these
-        self.tags = [u"animals",u"architecture",u"nature",u"object",u"people",u"traffic",u"view"]
-        self.visibilities = [u"PUBLIC",u"RESTRICTED:community",u"RESTRICTED:friends",u"RESTRICTED:family",u"PRIVATE"]
+        self.tags = [u"action",u"animals",u"architecture",u"nature",u"object",u"people",u"traffic",u"view"]
+        #self.visibilities = [u"PUBLIC",u"RESTRICTED:community",u"RESTRICTED:friends",u"RESTRICTED:family",u"PRIVATE"]
+        self.visibilities = [u"PUBLIC",u"RESTRICTED",u"PRIVATE"]
         self.extensions = ["jpg", "png"]
         self.directories = ["C:\\Data\\Images", "E:\\Images"]
         # Other stuff
+        self.last_caption = u""
         self.updating = False
         self.current_img = -1
         self.image_metadatafile = os.path.join(self.Main.datadir, "imagedata.txt")
@@ -39,17 +40,21 @@ class ImageGalleryView(Base.View):
         self.gmtime = time.time() + time.altzone # FIXME: altzone is broken (finland, normaltime, elisa)
         self.t = e32.Ao_timer()
 
-    #def start_sync(self):
-    #    self.t.after(0.1, self.sync_server)
-        
     def activate(self):
         #Base.View.activate(self)
-        appuifw.app.screen = "large"
+        if not self.comm.sessionid:
+            self.password = appuifw.query(u"Password", "text", u"")
+            if self.password:
+                data, response = self.comm.login(self.Main.config["username"], self.password)
+                appuifw.note(u"%s" % data["message"], 'info')
+
         self.timer = e32.Ao_timer()
         self.current_img = -1
         appuifw.app.exit_key_handler = self.handle_close
         self.imagemenu = []
+        appuifw.app.screen = "large"
         self.canvas = appuifw.Canvas(redraw_callback=self.update)
+        appuifw.app.body = self.canvas
         self.canvas.bind(key_codes.EKeyLeftArrow,lambda: self.next_image(-1))
         self.canvas.bind(key_codes.EKeyRightArrow,lambda: self.next_image(1))
         self.canvas.bind(key_codes.EKeyUpArrow,lambda: self.next_image(0))
@@ -65,10 +70,10 @@ class ImageGalleryView(Base.View):
         self.imagemenu.append((u"C. Delete", lambda: self.delete_current()))
         self.canvas.bind(key_codes.EKeySelect,lambda: self.show_current())
         self.imagemenu.append((u"Show", lambda: self.show_current()))
-        appuifw.app.body = self.canvas
         self.timer = e32.Ao_timer()
         self.load_image_metadata()
         self.timer.after(0.01, self.update_filelist)
+        self.update()
 
     def _update_menu(self):
         """Update left options key to fit current context"""
@@ -149,72 +154,73 @@ class ImageGalleryView(Base.View):
                 self.IMG_LIST.pop(j)
             #print "Read metadata of %d images from %s.\nMissing %d" % (len(self.IMG_LIST), self.image_metadatafile, len(missing))
         else:
-            print "Cached metadata %s not found" % (self.image_metadatafile)
+            pass
+            #print "Cached metadata %s not found" % (self.image_metadatafile)
 
     def update(self, dummy=(0, 0, 0, 0)):
         if self.updating is True: return
         self.updating = True
-        lheight = 15
-        font = (u"Series 60 Sans", 12)
+        lheight = 16
+        font = (u"Series 60 Sans", 14)
         self.canvas.clear(0x000000)
         #self.canvas.text((5, 20), u"PyS60 Image gallery", font=(u"Series 60 Sans", 20))
         #self.canvas.text((5, 200), u"Free RAM: %d kB" % (sysinfo.free_ram()/1024), font=font)
         if self.current_img < 0:
             l = 15
-            self.canvas.text((5, l), u"%d total images" % (len(self.IMG_NAMES.keys())), font=font, fill=0x6666ff)
+            self.canvas.text((5, l), u"%d total images" % (len(self.IMG_NAMES.keys())), font=font, fill=0xccccff)
             l = l + lheight
-            self.canvas.text((5, l), u"%d NEW images" % (len(self.IMG_NEW_LIST)), font=font, fill=0x6666ff)
+            self.canvas.text((5, l), u"%d NEW images" % (len(self.IMG_NEW_LIST)), font=font, fill=0xccccff)
             l = l + lheight
-            self.canvas.text((5, l), u"Press left/right to view images", font=font, fill=0x6666ff)
+            self.canvas.text((5, l), u"Press left/right to view images", font=font, fill=0xccccff)
             l = l + lheight
-            self.canvas.text((5, l), u"Press 1 to set image caption", font=font, fill=0x6666ff)
+            self.canvas.text((5, l), u"Press 1 to set image caption", font=font, fill=0xccccff)
             l = l + lheight
-            self.canvas.text((5, l), u"Press 2 to set image tags", font=font, fill=0x6666ff)
+            self.canvas.text((5, l), u"Press 2 to set image tags", font=font, fill=0xccccff)
             l = l + lheight
-            self.canvas.text((5, l), u"Press 3 to toggle image visibility", font=font, fill=0x6666ff)
+            self.canvas.text((5, l), u"Press 3 to toggle image visibility", font=font, fill=0xccccff)
             l = l + lheight
-            self.canvas.text((5, l), u"Press up to come back to this screen", font=font, fill=0x6666ff)
+            self.canvas.text((5, l), u"Press up to come back to this screen", font=font, fill=0xccccff)
             l = l + lheight
-            self.canvas.text((5, l), u"Press 'enter' to view original image", font=font, fill=0x6666ff)
+            self.canvas.text((5, l), u"Press 'enter' to view original image", font=font, fill=0xccccff)
         elif len(self.IMG_LIST) > 0:
             i = self.IMG_LIST[self.current_img]
             l = 15
-            self.canvas.text((80, l), u"File %d/%d" % (self.current_img+1, len(self.IMG_LIST)), font=font, fill=0x6666ff)
+            self.canvas.text((120, l), u"File %d/%d" % (self.current_img+1, len(self.IMG_LIST)), font=font, fill=0xccccff)
             if i.has_key("filesize"):
-                self.canvas.text((5, l), u"Size %.1f kB" % (i["filesize"]/1024), font=font, fill=0x6666ff)
+                self.canvas.text((5, l), u"Size %.1f kB" % (i["filesize"]/1024), font=font, fill=0xccccff)
             l = l + lheight
             if i.has_key("gmtime"):
                 filetime = u"" + time.strftime("File time: %Y-%m-%dT%H:%M:%SZ ", time.localtime(i["gmtime"]))
-                self.canvas.text((5, l), filetime, font=font, fill=0x6666ff)
-            self.canvas.text((5, 80), u"Loading...", font=font, fill=0x6666ff)
+                self.canvas.text((5, l), filetime, font=font, fill=0xccccff)
+            self.canvas.text((5, 80), u"Loading...", font=font, fill=0xccccff)
             # Show metadata
-            textline = 175
-            lineheight = 15
+            textline = 180
+            lineheight = 16
             margin = 6
             # shortcut key area
-            self.canvas.rectangle((margin-1, textline-15, margin+7, textline + lineheight*3+5), fill=0xaaaaaa)
+            self.canvas.rectangle((margin-1, textline-15, margin+7, textline + lineheight*3+5), fill=0x101010)
             # image metadata area
             width = self.canvas.size[0] - margin
-            self.canvas.rectangle((margin+8, textline-15, width, textline + lineheight*3+5), fill=0xdddddd)
+            self.canvas.rectangle((margin+8, textline-15, width, textline + lineheight*3+5), fill=0x202020)
             # Write caption
             if "caption" in i: text = i["caption"]
             else: text = u""
-            self.canvas.text((margin, textline), u"1 %s" % (text), font=font, fill=0x6666ff)
+            self.canvas.text((margin, textline), u"1 %s" % (text), font=font, fill=0xccccff)
             textline = textline + lineheight
             # Write tags
             if "tags" in i: text = i["tags"]
             else: text = u""
-            self.canvas.text((margin, textline), u"2 %s" % (text), font=font, fill=0x6666ff)
+            self.canvas.text((margin, textline), u"2 %s" % (text), font=font, fill=0xccccff)
             textline = textline + lineheight
             # Write visibility
             if "visibility" in i: text = i["visibility"]
             else: text = u""
-            self.canvas.text((margin, textline), u"3 %s" % (text), font=font, fill=0x6666ff)
+            self.canvas.text((margin, textline), u"3 %s" % (text), font=font, fill=0xccccff)
             textline = textline + lineheight
             # Sync text
             if "status" in i: text = i["status"]
             else: text = u"not sync'ed"
-            self.canvas.text((margin, textline), u"0 Sync with server (%s)" % text, font=font, fill=0x6666ff)
+            self.canvas.text((margin, textline), u"0 Sync with server (%s)" % text, font=font, fill=0xccccff)
             textline = textline + lineheight
             # Show image
             thumbs = self.find_thumbnails(i["path"])
@@ -232,13 +238,13 @@ class ImageGalleryView(Base.View):
                 #small = image.resize((170, 128), keepaspect=1)
                 #del(image)
             try:
-                self.canvas.blit(small, target=(5, 31))
+                self.canvas.blit(small, target=(5, 35))
             except:
                 appuifw.note(u"Could not show thumbnail", 'error')
                 raise
             #del(small)
         else:
-            self.canvas.text((5, 80), u"No images", font=font, fill=0x6666ff)
+            self.canvas.text((5, 80), u"No images", font=font, fill=0xccccff)
         self._update_menu()
         self.updating = False
         
@@ -248,7 +254,7 @@ class ImageGalleryView(Base.View):
         self.canvas.blit(img, target=(5, 30))
         self.canvas.text((100, 10), u"%.1f kB" % (data["filesize"]/1024), font=(u"Series 60 Sans", 10), fill=0x333333)
         if "caption" in data:
-            canvas.text((5, 100), data["caption"], font=(u"Series 60 Sans", 10), fill=0x6666ff)
+            canvas.text((5, 100), data["caption"], font=(u"Series 60 Sans", 10), fill=0xccccff)
         e32.ao_sleep(0.01) # Wait until the canvas has been drawn
 
     def store_filenames_cb(self, arg, dirname, names):
@@ -336,10 +342,11 @@ class ImageGalleryView(Base.View):
             return
         if self.IMG_LIST[self.current_img].has_key("caption"):
             old_caption = self.IMG_LIST[self.current_img]["caption"]
-        else: old_caption = u""
+        else: old_caption = self.last_caption
         caption = appuifw.query(u"Caption", "text", old_caption)
         if caption is not None:
             self.IMG_LIST[self.current_img]["caption"] = caption
+            self.last_caption = caption
 
     def ask_tags(self):
         """Test function to select file tags from a selection list."""
@@ -374,12 +381,11 @@ class ImageGalleryView(Base.View):
             current_img = self.IMG_LIST[self.current_img]
             current_img["status"] = u"synchronizing"
             params = {"operation" : "update_file",
-                      "caption" : current_img["caption"].encode("utf-8"), 
-                      "tags" : current_img["tags"].encode("utf-8"),
-                      "id" : current_img["id"].encode("utf-8"),
-                      "tags" : current_img["tags"].encode("utf-8"),
-                      "sender" : self.Main.config["username"].encode("utf-8")
+                      "sender" : self.Main.config["username"].encode("utf-8"), 
                       }
+            for key in ["caption", "tags", "visibility", "id"]:
+                if key in current_img:
+                    params[key] = current_img[key].encode("utf-8")
             ip = appuifw.InfoPopup()
             ip.show(u"Updating metadata...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
             data, response = self.comm._send_request("update_file", params)
@@ -421,17 +427,18 @@ class ImageGalleryView(Base.View):
             # Create "files"-list which contains all files to send
             files = [("newfile", os.path.basename(filename), filedata)]
             params = {"operation" : "send_file",
-                      "caption" : current_img["caption"].encode("utf-8"), 
-                      "tags" : current_img["tags"].encode("utf-8"),
-                      "visibility" : current_img["visibility"].encode("utf-8"),
-                      "sender" : self.Main.config["username"].encode("utf-8")
-                      #"sender" : "pys60gps", # self.Main.config["username"].encode("utf-8")
+                      "sender" : self.Main.config["username"].encode("utf-8"), 
                       }
+            for key in ["caption", "tags", "visibility"]:
+                if key in current_img:
+                    params[key] = current_img[key].encode("utf-8")
+                      
             ip = appuifw.InfoPopup()
             ip.show(u"Uploading file...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
             data, response = self.comm._send_multipart_request("send_file", 
                                                                params, files)
             ip.hide()
+            # print data, type(data)
             if "status" in data and data["status"] == "ok":
                 current_img["status"] = u"synchronized"
                 notetype = "info"
@@ -442,7 +449,6 @@ class ImageGalleryView(Base.View):
                 current_img["status"] = data["id"]
                 current_img["id"] = data["id"]
             appuifw.note(data["message"], notetype)
-            print data
 
     def delete_current(self):
         """Delete current image permanently."""
