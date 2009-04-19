@@ -49,8 +49,8 @@ When you have finished, choose "OK" and your message will be sent immediately.
         headers = self._get_http_headers()
         params = urllib.urlencode(params)
         conn = httplib.HTTPConnection(self.host)
-        service = '/statuses/friends_timeline.json'
-        conn.request("POST", service, params, headers)
+        service = '/statuses/friends_timeline.json' 
+        conn.request("GET", service, None, headers)
         response = conn.getresponse()
         json = response.read()
         conn.close()
