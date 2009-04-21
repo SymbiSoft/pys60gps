@@ -24,6 +24,7 @@ import Comm
 
 ####################################
 # FIXME: move these to an own module
+# These are currently in pys60gps.pu and TrackView.py
 import math
 rad=math.pi/180
 
@@ -62,7 +63,7 @@ def distance_from_line(x0, y0, x1, y1, x, y):
     return dist
 ####################################
 
-################### BASE VIEW START #######################
+
 
 # TODO: move these to separate file
 class BaseTabbedView:
