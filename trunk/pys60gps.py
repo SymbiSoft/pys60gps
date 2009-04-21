@@ -222,7 +222,7 @@ class GpsApp:
         # Put all menu entries and views as tuples into a sequence
         self.menu_entries = []
         self.menu_entries.append(((u"Track"), TrackView(self)))
-        plokcomm = Comm.Comm(u"test.plok.in", u"/api/test.php")
+        plokcomm = Comm.Comm(self.config["plokhost"], self.config["plokscript"])
         self.menu_entries.append(((u"Images"), ImageGalleryView(self, plokcomm)))
         self.menu_entries.append(((u"Plok"), PlokView(self, plokcomm)))
         self.menu_entries.append(((u"Nearby"), ListdataView(self)))
@@ -239,7 +239,6 @@ class GpsApp:
         self.listbox = appuifw.Listbox(self.main_menu, self.handle_select)
         self.comm = Comm.Comm(self.config["host"], self.config["script"])
         self.activate()
-        self.beep = self.get_tone(freq=440, duration=500, volume=1.0)
         #print self.read_log_cache_filenames("track")
 
     def get_sis_version(self):
@@ -313,9 +312,10 @@ class GpsApp:
             "password" : u"",
             "group" : None,
             "apid" : None,
-            "url" : u"http://www.plok.in/poi.php",
             "host" : u"opennetmap.org",
             "script" : u"/api/",
+            "plokhost" : u"www.plok.in", # Temporary solution to handle 2 different Comm-servers
+            "plokscript" : u"/api/",
         }
         # List here all configuration keys, which must be defined before use
         # If a config key has key "function", it's called to define value
@@ -577,24 +577,22 @@ class GpsApp:
         ))
 
         set_menu = (u"Set", (
-            (u"Toggle debug", self.toggle_debug),
+#            (u"Toggle debug", self.toggle_debug),
             (u"Max trackpoints (%d)" % self.config["max_trackpoints"], 
                 lambda:self.set_config_var(u"Max points", "number", "max_trackpoints")),
             (u"Trackpoint dist (%d)" % self.config["min_trackpoint_distance"], 
                 lambda:self.set_config_var(u"Trackpoint dist", "number", "min_trackpoint_distance")),
             (u"Est.vector dist (%d)" % self.config["max_estimation_vector_distance"], 
                 lambda:self.set_config_var(u"Trackpoint dist", "number", "max_estimation_vector_distance")),
-            (u"Estimation circle (%d)" % self.config["estimated_error_radius"], 
-                lambda:self.set_config_var(u"Estimation circle", "number", "estimated_error_radius")),
+#            (u"Estimation circle (%d)" % self.config["estimated_error_radius"], 
+#                lambda:self.set_config_var(u"Estimation circle", "number", "estimated_error_radius")),
 
-            (u"Nickname (%s)" % self.config["username"], 
+            (u"Username (%s)" % self.config["username"], 
                 lambda:self.set_config_var(u"Nickname", "text", "username")),
             (u"Password (%s)" % u"*****", 
                 lambda:self.set_config_var(u"Password", "code", "password")),
-            (u"Group (%s)" % self.config["group"], 
-                lambda:self.set_config_var(u"Group", "text", "group")),
-            (u"URL (%s)" % self.config["url"], 
-                lambda:self.set_config_var(u"Url (for server connections)", "text", "url")),
+#            (u"Group (%s)" % self.config["group"], 
+#                lambda:self.set_config_var(u"Group", "text", "group")),
             (u"Host (%s)" % self.config["host"], 
                 lambda:self.set_config_var(u"Host[:port]", "text", "host")),
             (u"Script (%s)" % self.config["script"], 
@@ -603,23 +601,32 @@ class GpsApp:
                 lambda:self._select_access_point()),
         ))
             
-
+        plok_menu = (u"Plok", (
+            (u"PlokHost (%s)" % self.config["plokhost"], 
+                lambda:self.set_config_var(u"PlokHost[:port]", "text", "plokhost")),
+            (u"PlokScript (%s)" % self.config["plokscript"], 
+                lambda:self.set_config_var(u"PlokScript", "text", "plokscript")),
+        ))
             
+
+        # Remember 30 menu items totally at MOST!
         appuifw.app.menu = [
             (u"Select",self.handle_select),
             (u"GPS %s" % (gps_onoff),self.start_read_position),
             profile_menu,
             set_scan_params_menu,
             set_menu,
+            plok_menu,
             (u"Reset config", self.reset_config),
             (u"Send data",self.send_delivery_data),
-            (u"Login",self.login),
             (u"Reboot",self.reboot),
             (u"Version", lambda:appuifw.note("Version: " + self.get_sis_version() + 
                                              "\n" + self.__version__, 'info')),
-            (u"Close", self.lock.signal),
+            (u"Exit", self.lock.signal),
             ]
-
+        if not self.comm.sessionid:
+            appuifw.app.menu.insert(2, (u"Login",self.login))
+            
     def activate(self):
         """Set main menu to app.body and left menu entries."""
         # Use exit_key_handler of current class
@@ -641,7 +648,7 @@ class GpsApp:
 
     def set_config_var(self, text, valuetype, key):
         """Set a configuration parameter."""
-        if not self.config.has_key(key):
+        if key not in self.config:
             appuifw.note(u"Configutation key '%s' is not defined" % (key), 'error')
             return
         value = appuifw.query(text, valuetype, self.config[key])
@@ -1398,143 +1405,6 @@ class GpsApp:
         self.save_log_cache("wlan")
         self.send_delivery_data(True, True)
         appuifw.app.set_tabs([u"Back to normal"], lambda x: None)
-
-    def get_tone(self, freq=440, duration=1000, volume=0.5):
-        from struct import pack
-        from math import sin, pi
-        f = open('D:\\tmptone.au', 'wb')    # temp file
-        f.write('.snd' + pack('>5L', 24, 8*duration, 2, 8000, 1))  #header
-        for i in range(duration*8):
-            sin_i = sin(i * 2*pi*freq/8000)  # sine wave
-            f.write(pack('b', volume*127*sin_i))
-        f.close()
-        # now play the file
-        s = audio.Sound.open('D:\\tmptone.au')
-        return s
-    
-    def play_tone(self):
-        if self.beep.state() == audio.EPlaying:
-            return
-            #sound_barf.stop()
-        self.beep.play()
-
-################### BASE VIEW START #######################
-
-# TODO: move these to separate file
-class BaseTabbedView:
-    """
-    Base class for all tabbed views
-    """
-
-    def __init__(self, parent):
-        """
-        __init__ must be defined in derived class.
-        """
-        raise "__init__() method has not been defined!"
-        self.name = "BaseTabbedView"
-        self.parent = parent
-        self.Main = parent.Main
-        self.tabs = []
-        self.current_tab = 0
-        self.tabs.append((u"Some", SomeTab(self)))
-        self.tabs.append((u"Other", OtherTab(self)))
-
-    def activate(self):
-        """Set main menu to app.body and left menu entries."""
-        # Use exit_key_handler of current class
-        appuifw.app.exit_key_handler = self.exit_key_handler
-        # Create tab name list from tabs sequence
-        self.tab_menu = [item[0] for item in self.tabs]
-        # Put all views to another sequence
-        self.views = [item[1] for item in self.tabs]
-        appuifw.app.set_tabs(self.tab_menu, self.handle_tab)
-        appuifw.app.activate_tab(self.current_tab)
-        self.views[self.current_tab].activate()
-
-    def handle_tab(self, index):
-        self.current_tab = index
-        self.views[index].activate()
-
-    def exit_key_handler(self):
-        self.close()
-
-    def close(self):
-        appuifw.app.set_tabs([u"Back to normal"], lambda x: None)
-        # Activate previous (calling) view
-        self.parent.activate()
-################### BASE VIEW END #########################
-
-############## List TAB START ##############
-class BaseInfoTab:
-    def __init__(self, parent, **kwargs):
-        """
-        Initialize timer and set up some common variables.
-        """
-        self.t = e32.Ao_timer()
-        self.parent = parent
-        self.Main = parent.Main
-        self.active = False
-        self.fontheight = 15
-        self.lineheight = 17
-        self.font = (u"Series 60 Sans", self.fontheight)
-
-    def _get_lines(self):
-        raise "_get_lines() must be implemented"
-
-    def activate(self):
-        """
-        Set up exit_key_handler, canvas, left menu for this tab
-        and finally call self.update() to draw the screen.
-        """
-        self.active = True
-        appuifw.app.exit_key_handler = self.handle_close
-        self.canvas = appuifw.Canvas(redraw_callback=self.update)
-        appuifw.app.body = self.canvas
-        appuifw.app.screen = "normal"
-        appuifw.app.menu = [(u"Update", self.update),
-                            (u"Close", self.handle_close),
-                            ]
-        self.activate_extra()
-        self.update()
-
-    def activate_extra(self):
-        """
-        Override this in deriving class 
-        if you want to do some extra stuff during activate()
-        e.g. add extra items to the menu.
-        """
-        pass
-
-    def update(self, dummy=(0, 0, 0, 0)):
-        """
-        Simply call self.blit_lines(lines) to draw some lines of text to the canvas.
-        This should be overriden in the deriving class if more complex operations are wanted.
-        Start a new timer to call update again after a short while.
-        """
-        self.t.cancel()
-        lines = self._get_lines()
-        self.canvas.clear()
-        self.blit_lines(lines)
-        if self.active:
-            self.t.after(0.5, self.update)
-
-    def blit_lines(self, lines, color=0x000000):
-        """
-        Draw some lines of text to the canvas.
-        """
-        self.canvas.clear()
-        start = 0
-        for l in lines:
-            start = start + self.lineheight
-            self.canvas.text((3,start), l, font=self.font, fill=color)
-
-    def handle_close(self):
-        """
-        Cancel timer and call parent view's close().
-        """
-        self.active = False
-        self.t.cancel()
-        self.parent.close() # Exit this tab set
 
 # Exception harness for test versions
 try:

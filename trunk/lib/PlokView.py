@@ -16,28 +16,33 @@ from canvaslistbox import CanvasListBox
 
 class PlokView(Base.View):
 
-    def __init__(self, parent):       
+    def __init__(self, parent, comm=None):
         Base.View.__init__(self, parent)
         self.active = False
+        if comm is not None:
+            self.comm = comm
+        else:
+            self.host = appuifw.query(u"Host", "text", u"www.plok.in")
+            if not self.host:
+                self.host = u"test.plok.in"
+            self.comm = Comm.Comm(self.host, "/api/test.php")
         self.show_images = True
         self.ploklist = []
     
     def get_ploklist(self):
-        params = {'operation': 'get_files_newest', 'thumb_size' : '44'}
+        params = {'thumb_size' : '44'}
         if len(self.ploklist) > 0:
             params["lastid"] = self.ploklist[0]["id"]
-        # TODO: really use this lastid stuff
-        params = urllib.urlencode({'operation': 'get_files_newest'})
-        url = "http://www.plok.in/api/test.php"
         ip = appuifw.InfoPopup()
         ip.show(u"Loading latest ploks...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
-        f = urllib.urlopen("%s?%s" % (url, params))
-        data = simplejson.loads(f.read())
-        f.close()
-        self.ploklist = data["ploklist"]
+        data, response = self.comm._send_request("get_files_newest", params)
+        # FIXME: error handling missing here
+        self.ploklist = data["filelist"]
         # ip.hide()
         ip.show(u"Dumping images", (50, 50), 60000, 100, appuifw.EHLeftVTop)
         for plok in self.ploklist:
+            # FIXME: check there is space on D
+            # FIXME: error handling missing here
             filename = "D:\\icon-%(id)s.jpg" % plok
             if not os.path.isfile(filename):
                 f = open(filename, "wb")
@@ -46,20 +51,22 @@ class PlokView(Base.View):
         ip.hide()
 
     def get_plok(self, id):
-        params = urllib.urlencode({'operation': 'get_file', 
-                                   'id' : id, 
-                                   'image_size' : '240'})
-        url = "http://www.plok.in/api/test.php"
+        params = {'id' : id, 
+                  'image_size' : '240'}
         ip = appuifw.InfoPopup()
         ip.show(u"Loading plok...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
         filename = u"D:\\plok-%s.jpg" % id
         if not os.path.isfile(filename):
-            urllib.urlretrieve("%s?%s" % (url, params), filename)
+            data, response = self.comm._send_request("get_file", 
+                                                     params, filename=filename)
         ip.hide()
-        lock=e32.Ao_lock()
-        content_handler = appuifw.Content_handler(lock.signal)
-        content_handler.open(filename)
-        lock.wait()
+        try:
+            lock=e32.Ao_lock()
+            content_handler = appuifw.Content_handler(lock.signal)
+            content_handler.open(filename)
+            lock.wait()
+        except:
+            appuifw.note(u"Could not show file!", 'error')
 
     def update_ploklist(self):
         self.get_ploklist()
@@ -68,7 +75,7 @@ class PlokView(Base.View):
         
     def fill_items(self):
         # FIXME: check that these keys exist
-        pattern = u"%(sender)s %(isotime)s\n%(title)s"
+        pattern = u"%(sender)s %(time)s\n%(title)s"
         self.items = [ pattern % (plok) for plok in self.ploklist ]
         self.images = [ "D:\\icon-%(id)s.jpg" % plok for plok in self.ploklist ]
 
@@ -83,6 +90,10 @@ class PlokView(Base.View):
 
     def activate(self):
         self.active = True
+        if self.comm.sessionid:
+            logged_in = u" (Logged in)"
+        else:
+            logged_in = u" (Not logged in)"
         appuifw.app.screen = "full"
         appuifw.app.menu = [(u"Update list", self.update_ploklist),
                             (u"Quit", self.close)]
@@ -100,6 +111,6 @@ class PlokView(Base.View):
                                      font_name=(u"Series 60 Sans", 12),
                                      title_font=(u"Series 60 Sans", 16),
                                      image_size=(44,44),
-                                     title=u"Latest ploks")
+                                     title=u"Latest ploks%s" % logged_in)
         
         appuifw.app.body = self.listbox
