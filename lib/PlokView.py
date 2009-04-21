@@ -25,9 +25,19 @@ class PlokView(Base.View):
             self.host = appuifw.query(u"Host", "text", u"www.plok.in")
             if not self.host:
                 self.host = u"test.plok.in"
-            self.comm = Comm.Comm(self.host, "/api/test.php")
+            self.comm = Comm.Comm(self.host, "/api/")
         self.show_images = True
         self.ploklist = []
+        self.cachedir = u"D:\\plokcache"
+        self.clear_cache()
+        if not os.path.isdir(self.cachedir):
+            os.makedirs(self.cachedir)
+
+    def clear_cache(self):
+        if os.path.isdir(self.cachedir):
+            for f in os.listdir(self.cachedir):
+                if f.endswith("jpg"):
+                    os.unlink(os.path.join(self.cachedir, f))
     
     def get_ploklist(self):
         params = {'thumb_size' : '44'}
@@ -43,11 +53,17 @@ class PlokView(Base.View):
         for plok in self.ploklist:
             # FIXME: check there is space on D
             # FIXME: error handling missing here
-            filename = "D:\\icon-%(id)s.jpg" % plok
+            filename = os.path.join(self.cachedir, "icon-%(id)s.jpg" % plok)
             if not os.path.isfile(filename):
-                f = open(filename, "wb")
-                f.write(base64.decodestring(plok["image_base64"]))
-                f.close()
+                try:
+                    f = open(filename, "wb")
+                    f.write(base64.decodestring(plok["image_base64"]))
+                    f.close()
+                except Exception, error:
+                    appuifw.note(unicode(error), 'error')
+                    if appuifw.query(u'Try to clear cache', 'query') is True:
+                        self.clear_cache()
+                    return
         ip.hide()
 
     def get_plok(self, id):
@@ -55,7 +71,7 @@ class PlokView(Base.View):
                   'image_size' : '240'}
         ip = appuifw.InfoPopup()
         ip.show(u"Loading plok...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
-        filename = u"D:\\plok-%s.jpg" % id
+        filename = os.path.join(self.cachedir, "plok-%(id)s-%(image_size)s.jpg" % params)
         if not os.path.isfile(filename):
             data, response = self.comm._send_request("get_file", 
                                                      params, filename=filename)
@@ -77,7 +93,7 @@ class PlokView(Base.View):
         # FIXME: check that these keys exist
         pattern = u"%(sender)s %(time)s\n%(title)s"
         self.items = [ pattern % (plok) for plok in self.ploklist ]
-        self.images = [ "D:\\icon-%(id)s.jpg" % plok for plok in self.ploklist ]
+        self.images = [ os.path.join(self.cachedir, "icon-%(id)s.jpg" % plok) for plok in self.ploklist ]
 
     def item_selected(self):
         item = self.listbox.current()
@@ -95,7 +111,11 @@ class PlokView(Base.View):
         else:
             logged_in = u" (Not logged in)"
         appuifw.app.screen = "full"
+        #self.canvas = appuifw.Canvas()
+        #self.canvas.text((5, 50), u"Loading...", font=(u"Series 60 Sans", 30), fill=0xccffcc)
+        #e32.ao_sleep(0.01)
         appuifw.app.menu = [(u"Update list", self.update_ploklist),
+                            (u"Clear file cache", self.clear_cache),
                             (u"Quit", self.close)]
         appuifw.app.exit_key_handler = self.handle_close
         if len(self.ploklist) == 0:
