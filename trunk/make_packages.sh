@@ -54,7 +54,7 @@ fi;
 
 # http://www.forum.nokia.com/main/platforms/s60/capability_descriptions.html
 # Create unsigned testrange package
-${ENSYMBLE} py2sis --uid=0xE00184F0 --appname=Pys60Gps --lang=EN --textfile=CHANGELOG.txt --shortcaption="Pys60Gps" --caption="PyS60 GPS (opennetmap.org)"  --drive=C --caps=ALL-TCB-DRM-AllFiles-CommDD-MultimediaDD-NetworkControl-DiskAdmin --vendor="Plokaus Oy" --runinstall --verbose sis pys60gps${SIS_VERSION}_unsigned_testrange.sis
+${ENSYMBLE} py2sis --heapsize=4k,5M --uid=0xE00184F0 --appname=Pys60Gps --lang=EN --textfile=CHANGELOG.txt --shortcaption="Pys60Gps" --caption="PyS60 GPS (opennetmap.org)"  --drive=C --caps=ALL-TCB-DRM-AllFiles-CommDD-MultimediaDD-NetworkControl-DiskAdmin --vendor="Plokaus Oy" --runinstall --verbose sis pys60gps${SIS_VERSION}_unsigned_testrange.sis
 
 if [ -z $1 ];
 then 
@@ -65,5 +65,5 @@ then
 fi
 
 # Create signed version
-${ENSYMBLE} py2sis --uid=0x200184F0 --appname=Pys60Gps --lang=EN --textfile=CHANGELOG.txt --shortcaption="Pys60Gps" --caption="PyS60 GPS (opennetmap.org)"  --drive=C --caps=ALL-TCB-DRM-AllFiles --vendor="Plokaus Oy" --runinstall --verbose --cert=$1.cer  --privkey=$1.key sis $1-pys60gps${SIS_VERSION}-signed.sis
+${ENSYMBLE} py2sis --heapsize=4k,5M --uid=0x200184F0 --appname=Pys60Gps --lang=EN --textfile=CHANGELOG.txt --shortcaption="Pys60Gps" --caption="PyS60 GPS (opennetmap.org)"  --drive=C --caps=ALL-TCB-DRM-AllFiles --vendor="Plokaus Oy" --runinstall --verbose --cert=$1.cer  --privkey=$1.key sis $1-pys60gps${SIS_VERSION}-signed.sis
 
