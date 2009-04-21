@@ -9,24 +9,31 @@ import graphics
 import http_poster
 import socket
 import simplejson
+# from secretmanager import SecretManager
 import Comm
 
 class ImageGalleryView(Base.View):
 
-    def __init__(self, parent):
+    def __init__(self, parent, comm=None):
         Base.View.__init__(self, parent)
         self.active = False
-        self.host = appuifw.query(u"Host", "text", u"www.plok.in")
-        if not self.host:
-            self.host = u"test.plok.in"
-        self.comm = Comm.Comm(self.host, "/api/test.php")
+        self.login_tries = 0
+        self.password = u""
+        if comm is not None:
+            self.comm = comm
+        else:
+            self.host = appuifw.query(u"Host", "text", u"www.plok.in")
+            if not self.host:
+                self.host = u"test.plok.in"
+            self.comm = Comm.Comm(self.host, "/api/test.php")
         #self.comm = Comm.Comm("10.0.2.2:8880", "/api/test.php")
         # TODO: create way to change these
         self.tags = [u"action",u"animals",u"architecture",u"nature",u"object",u"people",u"traffic",u"view"]
         #self.visibilities = [u"PUBLIC",u"RESTRICTED:community",u"RESTRICTED:friends",u"RESTRICTED:family",u"PRIVATE"]
-        self.visibilities = [u"PUBLIC", 
+        self.visibilities = [ 
                              u"PRIVATE", 
                              u"RESTRICTED",
+                             u"PUBLIC",
                              ]
         self.extensions = ["jpg", "png"]
         self.directories = ["C:\\Data\\Images", "E:\\Images"]
@@ -45,12 +52,6 @@ class ImageGalleryView(Base.View):
 
     def activate(self):
         #Base.View.activate(self)
-        if not self.comm.sessionid:
-            self.password = appuifw.query(u"Password", "text", u"")
-            if self.password:
-                data, response = self.comm.login(self.Main.config["username"], self.password)
-                appuifw.note(u"%s" % data["message"], 'info')
-
         self.timer = e32.Ao_timer()
         self.current_img = -1
         appuifw.app.exit_key_handler = self.handle_close
@@ -77,6 +78,26 @@ class ImageGalleryView(Base.View):
         self.load_image_metadata()
         self.timer.after(0.01, self.update_filelist)
         self.update()
+        if not self.comm.sessionid and self.login_tries == 0:
+            self.login()
+            self.update()
+            #else:
+            #    appuifw.note(u"Select Login from the menu if you want to do it later!", 'info')
+    
+    def login(self):
+        if not self.password:
+            self.password = appuifw.query(u"Password for '%s@%s' or cancel. (%d)" \
+                % (self.Main.config["username"], self.comm.host, 
+                                 self.login_tries), "text", u"")
+        if self.password:
+            ip = appuifw.InfoPopup()
+            ip.show(u"Logging in...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
+            data, response = self.comm.login(self.Main.config["username"], self.password)
+            ip.hide()
+            appuifw.note(u"%s" % data["message"], 'info')
+            self.login_tries += 1
+        else:
+            appuifw.note(u"No password set", 'error')
 
     def _update_menu(self):
         """Update left options key to fit current context"""
@@ -90,6 +111,8 @@ class ImageGalleryView(Base.View):
                                 (u"Search images", self.search_filelist),
                                 (u"Close", self.handle_close),
                                 ]
+            if not self.comm.sessionid:
+                appuifw.app.menu.insert(1, (u"Login", self.login))
         else: # Some image is currently open
             default = [(u"Close", self.handle_close),]
             menu = default + self.imagemenu
@@ -160,6 +183,41 @@ class ImageGalleryView(Base.View):
             pass
             #print "Cached metadata %s not found" % (self.image_metadatafile)
 
+    def get_mainscreen(self):
+        lheight = 16
+        font = (u"Series 60 Sans", 14)
+        img = graphics.Image.new(self.canvas.size)
+        img.clear(0x000000)
+        img.text((5, 25), u"Images", font=(u"Series 60 Sans", 23), fill=0xccffcc)
+        #img.text((5, 200), u"Free RAM: %d kB" % (sysinfo.free_ram()/1024), font=font)
+        #img.blit(self.get_mainscreen())
+        l = 45
+        img.text((5, l), u"%d total images" % (len(self.IMG_NAMES.keys())), font=font, fill=0xccccff)
+        l = l + lheight
+        img.text((5, l), u"%d NEW images" % (len(self.IMG_NEW_LIST)), font=font, fill=0xccccff)
+        l = l + lheight
+        l = l + 10 # extra space
+        img.text((5, l), u"Press left/right to view images", font=font, fill=0xccccff)
+        l = l + lheight
+        img.text((5, l), u"Press 1 to set image caption", font=font, fill=0xccccff)
+        l = l + lheight
+        img.text((5, l), u"Press 2 to set image tags", font=font, fill=0xccccff)
+        l = l + lheight
+        img.text((5, l), u"Press 3 to toggle image visibility", font=font, fill=0xccccff)
+        l = l + lheight
+        img.text((5, l), u"Press up to come back to this screen", font=font, fill=0xccccff)
+        l = l + lheight
+        img.text((5, l), u"Press 'enter' to view original image", font=font, fill=0xccccff)
+        if self.comm.sessionid:
+            login_color = 0x99ff99
+            logged_in = u"Logged in as %s@%s" % (self.Main.config["username"], self.comm.host)
+        else:
+            login_color = 0xff9999
+            logged_in = u"You are not logged in"
+        l = l + lheight
+        img.text((5, l), logged_in, font=font, fill=login_color)
+        return img
+
     def update(self, dummy=(0, 0, 0, 0)):
         if self.updating is True: return
         self.updating = True
@@ -169,22 +227,7 @@ class ImageGalleryView(Base.View):
         #self.canvas.text((5, 20), u"PyS60 Image gallery", font=(u"Series 60 Sans", 20))
         #self.canvas.text((5, 200), u"Free RAM: %d kB" % (sysinfo.free_ram()/1024), font=font)
         if self.current_img < 0:
-            l = 15
-            self.canvas.text((5, l), u"%d total images" % (len(self.IMG_NAMES.keys())), font=font, fill=0xccccff)
-            l = l + lheight
-            self.canvas.text((5, l), u"%d NEW images" % (len(self.IMG_NEW_LIST)), font=font, fill=0xccccff)
-            l = l + lheight
-            self.canvas.text((5, l), u"Press left/right to view images", font=font, fill=0xccccff)
-            l = l + lheight
-            self.canvas.text((5, l), u"Press 1 to set image caption", font=font, fill=0xccccff)
-            l = l + lheight
-            self.canvas.text((5, l), u"Press 2 to set image tags", font=font, fill=0xccccff)
-            l = l + lheight
-            self.canvas.text((5, l), u"Press 3 to toggle image visibility", font=font, fill=0xccccff)
-            l = l + lheight
-            self.canvas.text((5, l), u"Press up to come back to this screen", font=font, fill=0xccccff)
-            l = l + lheight
-            self.canvas.text((5, l), u"Press 'enter' to view original image", font=font, fill=0xccccff)
+            self.canvas.blit(self.get_mainscreen())
         elif len(self.IMG_LIST) > 0:
             i = self.IMG_LIST[self.current_img]
             l = 15
@@ -244,7 +287,7 @@ class ImageGalleryView(Base.View):
                 self.canvas.blit(small, target=(5, 35))
             except:
                 appuifw.note(u"Could not show thumbnail", 'error')
-                raise
+                #raise
             #del(small)
         else:
             self.canvas.text((5, 80), u"No images", font=font, fill=0xccccff)
