@@ -16,7 +16,7 @@ class ImageGalleryView(Base.View):
     def __init__(self, parent):
         Base.View.__init__(self, parent)
         self.active = False
-        self.host = appuifw.query(u"Plok host", "text", u"www.plok.in")
+        self.host = appuifw.query(u"Host", "text", u"www.plok.in")
         if not self.host:
             self.host = u"test.plok.in"
         self.comm = Comm.Comm(self.host, "/api/test.php")
@@ -24,7 +24,10 @@ class ImageGalleryView(Base.View):
         # TODO: create way to change these
         self.tags = [u"action",u"animals",u"architecture",u"nature",u"object",u"people",u"traffic",u"view"]
         #self.visibilities = [u"PUBLIC",u"RESTRICTED:community",u"RESTRICTED:friends",u"RESTRICTED:family",u"PRIVATE"]
-        self.visibilities = [u"PUBLIC",u"RESTRICTED",u"PRIVATE"]
+        self.visibilities = [u"PUBLIC", 
+                             u"PRIVATE", 
+                             u"RESTRICTED",
+                             ]
         self.extensions = ["jpg", "png"]
         self.directories = ["C:\\Data\\Images", "E:\\Images"]
         # Other stuff
