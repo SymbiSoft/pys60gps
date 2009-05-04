@@ -216,19 +216,23 @@ class GpsApp:
         # Timers
         # TODO put all started timers here so they can be cancelled when leaving program
         #self.timers = {}
-        self.comm = Comm.Comm(self.config["host"], self.config["script"])
+        self.comm = Comm.Comm(self.config["host"],
+                              self.config["script"],
+                              username=self.config["username"],
+                              password=self.config["password"])
         # temporary solution to handle speed data (to be removed/changed)
         self.speed_history = []
         # Put all menu entries and views as tuples into a sequence
         self.menu_entries = []
         self.menu_entries.append(((u"Track"), TrackView(self)))
-        plokcomm = Comm.Comm(self.config["plokhost"], self.config["plokscript"],
+        plokcomm = Comm.Comm(self.config["plokhost"], 
+                             self.config["plokscript"],
                              username=self.config["username"])
         self.menu_entries.append(((u"Images"), ImageGalleryView(self, plokcomm)))
         self.menu_entries.append(((u"Latest Ploks"), PlokView(self, plokcomm)))
         self.menu_entries.append(((u"Plok.in chat"), SimpleChatView(self, plokcomm)))
         self.menu_entries.append(((u"Nearby"), ListdataView(self)))
-        self.menu_entries.append(((u"Simple chat"), SimpleChatView(self)))
+        self.menu_entries.append(((u"Opennetmap.org chat"), SimpleChatView(self, self.comm)))
         self.menu_entries.append(((u"Twitter"), TwitterView(self)))
         self.menu_entries.append(((u"GPS Info"), GpsView(self)))
         self.menu_entries.append(((u"Sysinfo"), SysinfoView(self)))
