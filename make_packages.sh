@@ -1,7 +1,7 @@
 #!/bin/bash
 #############################################################
 # $Id$
-# Copyright Aapo Rista 2008
+# Copyright Aapo Rista 2008-2009
 # Create a few different packages which can be used to
 # install pys60gps to a s60-phone.
 #############################################################

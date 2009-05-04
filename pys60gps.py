@@ -1,7 +1,7 @@
 # $Id$
 
 # DO NOT remove this
-SIS_VERSION = "0.3.14"
+SIS_VERSION = "0.3.15"
 APP_TITLE = u"PyS60GPS"
 
 import appuifw
@@ -216,15 +216,17 @@ class GpsApp:
         # Timers
         # TODO put all started timers here so they can be cancelled when leaving program
         #self.timers = {}
-
+        self.comm = Comm.Comm(self.config["host"], self.config["script"])
         # temporary solution to handle speed data (to be removed/changed)
         self.speed_history = []
         # Put all menu entries and views as tuples into a sequence
         self.menu_entries = []
         self.menu_entries.append(((u"Track"), TrackView(self)))
-        plokcomm = Comm.Comm(self.config["plokhost"], self.config["plokscript"])
+        plokcomm = Comm.Comm(self.config["plokhost"], self.config["plokscript"],
+                             username=self.config["username"])
         self.menu_entries.append(((u"Images"), ImageGalleryView(self, plokcomm)))
-        self.menu_entries.append(((u"Plok"), PlokView(self, plokcomm)))
+        self.menu_entries.append(((u"Latest Ploks"), PlokView(self, plokcomm)))
+        self.menu_entries.append(((u"Plok.in chat"), SimpleChatView(self, plokcomm)))
         self.menu_entries.append(((u"Nearby"), ListdataView(self)))
         self.menu_entries.append(((u"Simple chat"), SimpleChatView(self)))
         self.menu_entries.append(((u"Twitter"), TwitterView(self)))
@@ -237,7 +239,6 @@ class GpsApp:
         self.views = [item[1] for item in self.menu_entries]
         # Create a listbox from main_menu and set select-handler
         self.listbox = appuifw.Listbox(self.main_menu, self.handle_select)
-        self.comm = Comm.Comm(self.config["host"], self.config["script"])
         self.activate()
         #print self.read_log_cache_filenames("track")
 

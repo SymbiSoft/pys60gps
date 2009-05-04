@@ -4,6 +4,7 @@ import key_codes
 import e32
 import time
 from HelpView import HelpView
+from CommWrapper import CommWrapper
 
 class SimpleChatView(Base.View):
     """
@@ -13,8 +14,13 @@ class SimpleChatView(Base.View):
     - send "limit" parameter, allow user define it from menu
     - net chat, too
     """
-    def __init__(self, parent):
+    def __init__(self, parent, comm = None):
         Base.View.__init__(self, parent)
+        if comm is None:
+            self.comm = self.Main.comm
+        else:
+            self.comm = comm
+        self.cw = CommWrapper(self.comm)
         self.chatmessages = []
         if "simplechat_fontsize" in self.Main.config:
             self.fontsize = self.Main.config["simplechat_fontsize"]
@@ -30,9 +36,17 @@ When you have finished, choose "OK" and your message will be sent immediately.
 """)
 
     def get_chatmessages(self):
+        data, response = self.cw.send_request("get_simplechatmessages", 
+                                              infotext=u"Loading chatmessages")
+        if (data["status"] == "ok" and 
+              "chatmessages" in data):
+            self.chatmessages = data["chatmessages"]
+        self.update_message_view()
+        return
+    
         ip = appuifw.InfoPopup()
         ip.show(u"Loading chatmessages", (50, 50), 60000, 100, appuifw.EHLeftVTop)
-        data, response = self.Main.comm._send_request("get_simplechatmessages", {})
+        data, response = self.comm._send_request("get_simplechatmessages", {})
         ip.hide()
         # Check we got valid response
         if isinstance(data, dict) is False:
@@ -58,7 +72,7 @@ When you have finished, choose "OK" and your message will be sent immediately.
                 return
         ip = appuifw.InfoPopup()
         ip.show(u"Sending message", (50, 50), 60000, 100, appuifw.EHLeftVTop)
-        data, response = self.Main.comm._send_request("send_simplechatmessage", 
+        data, response = self.comm._send_request("send_simplechatmessage", 
                                                       {"text": text,
                                                        "sender" : self.Main.config["username"]})
         ip.hide()
