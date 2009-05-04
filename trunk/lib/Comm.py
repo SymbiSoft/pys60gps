@@ -69,7 +69,8 @@ class Comm:
     
     __id__ = u'$Id$'
 
-    def __init__(self, host, script, useragent = None):
+    def __init__(self, host, script, 
+                 useragent = None, username = None, password = None):
         try: # Parse revision and last change date
             ida = self.__id__.split(u" ")
             self.revision = ida[2]
@@ -82,6 +83,8 @@ class Comm:
                                                 self.lastchangeddate)
         self.host = host
         self.script = script
+        self.username = username
+        self.password = password
         self.session_cookie_name = "sessionid"
         self.sessionid = None
         # Not in use currently
@@ -241,12 +244,14 @@ class Comm:
             response = None
         return data, response
  
-    def login(self, username, password):
+    def login(self, username=None, password=None):
         """
         Do login with given username and password.
         Server must return sessionid in data.
         Return decoded response data and a HTTPResponse object.
         """
+        username = username or self.username
+        password = password or self.password
         params = {'username': username, 'password' : password}
         data, response = self._send_request(rpc_name(), params)
         if ("status" in data 
