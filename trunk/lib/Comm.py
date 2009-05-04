@@ -149,9 +149,10 @@ class Comm:
         params = urllib.urlencode(params)
         headers = self._get_default_headers()
         headers["Content-Type"] = "application/x-www-form-urlencoded"
+        # deprecated. _get_default_headers() handles this
         # Send session id in headers as a cookie
-        if self.sessionid != None:
-            headers["Cookie"] = "%s=%s;" % (self.session_cookie_name, self.sessionid)
+        #if self.sessionid != None:
+        #    headers["Cookie"] = "%s=%s;" % (self.session_cookie_name, self.sessionid)
         conn = httplib.HTTPConnection(self.host)
         # This is nested because Python 2.2 doesn't support try/except/finally
         try: 
@@ -249,17 +250,30 @@ class Comm:
         Do login with given username and password.
         Server must return sessionid in data.
         Return decoded response data and a HTTPResponse object.
+        NOTE: data MUST be a dict and it MUST contain keys status and message.
         """
         username = username or self.username
         password = password or self.password
         params = {'username': username, 'password' : password}
         data, response = self._send_request(rpc_name(), params)
-        if ("status" in data 
+        if isinstance(data, dict) is False: # Make sure data is a dict
+            if isinstance(data, (str, unicode)): sample = data[:50]
+            else: sample = u""
+            data = {"status" : "error", 
+                    "message" : u"Not valid response: '%s'" % sample}
+        elif ("status" in data 
             and data["status"] == "ok" 
+            and "message" in data
             and self.session_cookie_name in data):
             self.sessionid = data[self.session_cookie_name]
+        elif ("status" in data 
+            and data["status"].startswith("error") 
+            and "message" in data):
+                pass # pass errors "as is"
         else:
             self.sessionid = None
+            data = {"status" : "error", 
+                    "message" : u"Invalid response from the server"}
         return data, response
 
     # TODO: login_sha()

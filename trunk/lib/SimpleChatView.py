@@ -27,8 +27,8 @@ class SimpleChatView(Base.View):
         else:
             self.fontsize = 14
         self.delimiter = u">>> "
-        self.t = appuifw.Text(u"")
-        self.t.bind(key_codes.EKeySelect, self.send_chatmessage)
+        self.text = appuifw.Text(u"")
+        self.text.bind(key_codes.EKeySelect, self.send_chatmessage)
         self.help = HelpView(self, 
             u"""To chat with a member of your community choose "Send message" and start typing.
              
@@ -42,25 +42,6 @@ When you have finished, choose "OK" and your message will be sent immediately.
               "chatmessages" in data):
             self.chatmessages = data["chatmessages"]
         self.update_message_view()
-        return
-    
-        ip = appuifw.InfoPopup()
-        ip.show(u"Loading chatmessages", (50, 50), 60000, 100, appuifw.EHLeftVTop)
-        data, response = self.comm._send_request("get_simplechatmessages", {})
-        ip.hide()
-        # Check we got valid response
-        if isinstance(data, dict) is False:
-            appuifw.note(u"Invalid response from server", 'error')
-        elif data["status"].startswith("error"):
-            if "message" not in data:
-                data["message"] = u"Unknown error in response"
-            appuifw.note(u"%s" % data["message"], 'error')
-        elif (data["status"] == "ok" and 
-              "chatmessages" in data):
-            self.chatmessages = data["chatmessages"]
-        else:
-            appuifw.note(u"Unknown error in response", 'error') 
-        self.update_message_view()
 
     def send_chatmessage(self):
         # First try to find inline message
@@ -70,38 +51,34 @@ When you have finished, choose "OK" and your message will be sent immediately.
             text = appuifw.query(u"Message (max 80 chr)", "text", u"")
             if not text:
                 return
-        ip = appuifw.InfoPopup()
-        ip.show(u"Sending message", (50, 50), 60000, 100, appuifw.EHLeftVTop)
-        data, response = self.comm._send_request("send_simplechatmessage", 
-                                                      {"text": text,
-                                                       "sender" : self.Main.config["username"]})
-        ip.hide()
-        # Check we got valid response
-        if isinstance(data, dict) is False:
-            appuifw.note(u"Invalid response from server", 'error')
-        elif data["status"].startswith("error"):
-            if "message" not in data:
-                data["message"] = u"Unknown error in response"
-            appuifw.note(u"%s" % data["message"], 'error')
-        elif (data["status"] == "ok" and 
-              "chatmessages" in data):
+        params = {"text": text,
+                  "sender" : self.comm.username}
+        data, response = self.cw.send_request("send_simplechatmessage", 
+                                              infotext=u"Sending message...",
+                                              params=params)
+        if (data["status"] == "ok" and 
+            "chatmessages" in data):
             self.chatmessages = data["chatmessages"]
         else:
-            appuifw.note(u"Unknown error in response", 'error') 
+            if message in "data":
+                message = data["message"]
+            else:
+                message = u"Unknown error in response"
+            appuifw.note(message, 'error')
         self.update_message_view()
 
-    def add_text(self, timestamp, user, text):
-        self.t.font = (u"dense", self.fontsize)
-        self.t.style = appuifw.STYLE_BOLD
-        self.t.color = (200,0,0)
-        self.t.add(u"%s: " % (user)) # NOTE: must be unicode here
-        self.t.style = 0
-        self.t.add(u"%s\n" % (timestamp)) # NOTE: must be unicode here
-        self.t.color = (0,0,0)
-        self.t.add(u">> %s\n" % (text))
+    def add_text(self, textarea, timestamp, user, text):
+        textarea.font = (u"dense", self.fontsize)
+        textarea.style = appuifw.STYLE_BOLD
+        textarea.color = (200,0,0)
+        textarea.add(u"%s: " % (user)) # NOTE: must be unicode here
+        textarea.style = 0
+        textarea.add(u"%s\n" % (timestamp)) # NOTE: must be unicode here
+        textarea.color = (0,0,0)
+        textarea.add(u">> %s\n" % (text))
     
     def get_message(self):
-        parts = self.t.get().split(self.delimiter)
+        parts = self.text.get().split(self.delimiter)
         #appuifw.note(u"%d" % len(parts), 'error')
         if len(parts) > 1:
             message = parts[-1].strip()
@@ -109,20 +86,23 @@ When you have finished, choose "OK" and your message will be sent immediately.
             self.update_message_view()
             message = None
         # Avoid crash when T9 is on and the last word is underlined
-        self.t.add(u"\n") 
+        self.text.add(u"\n") 
         return message
 
     def update_message_view(self):
-        self.t.clear()
+        new_text = appuifw.Text(u"")
+        #self.text.clear()
         self.menu_entries = []
         for chatmessage in self.chatmessages:
-            self.add_text(chatmessage["sendtime"], 
+            self.add_text(new_text,
+                          chatmessage["sendtime"], 
                           chatmessage["sender"], chatmessage["text"])
-        self.t.font = (u"dense", int(self.fontsize/4*3))
-        self.t.add(u"--- Localtime: %s ---\n" % time.strftime("%Y-%m-%d %H:%M:%S"))
-        self.t.font = (u"dense", self.fontsize)
-        self.t.add(self.delimiter)
-        appuifw.app.body = self.t
+        new_text.font = (u"dense", int(self.fontsize/4*3))
+        new_text.add(u"--- Localtime: %s ---\n" % time.strftime("%Y-%m-%d %H:%M:%S"))
+        new_text.font = (u"dense", self.fontsize)
+        appuifw.app.body = self.text = new_text
+        self.text.bind(key_codes.EKeySelect, self.send_chatmessage)
+        new_text.add(self.delimiter)
 
     def activate(self):
         """Set main menu to app.body and left menu entries."""
