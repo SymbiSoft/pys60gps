@@ -204,7 +204,8 @@ class Comm:
             conn.close()
         return data, response
 
-    def _send_multipart_request(self, operation, params, files):
+    # FIXME: saving response as "filename" is not implemented yet
+    def _send_multipart_request(self, operation, params, files, filename = None):
         """
         Send multipart HTTP-request to the server using http_poster.
         Request can contain file attachments.

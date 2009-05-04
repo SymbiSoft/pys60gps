@@ -47,6 +47,7 @@ class CommWrapper:
                            params={}, 
                            files=[], 
                            infotext=u"",
+                           filename=None,
                            require_session=True):
         if require_session:
             if self.comm.sessionid is None:
@@ -57,22 +58,23 @@ class CommWrapper:
                 starttime = time.clock()
                 data, response = self.login()
                 duration = time.clock() - starttime
-                self.add_log(data, duration)
+                self.add_log(data, operation, duration)
                 ip.hide()
                 if data["status"].startswith("error"):
                     return data, response
-        return self._send_request(operation, params, files, infotext)
+        return self._send_request(operation, params, files, filename, infotext)
 
     def _send_request(self, operation, 
                             params={}, 
                             files=[], 
+                            filename=None,
                             infotext=u""):
         ip = appuifw.InfoPopup()
         starttime = time.clock()
         if infotext:
             ip.show(infotext, (50, 50), 180000, 10, appuifw.EHLeftVTop)
         if len(files) == 0:
-            data, response = self.comm._send_request(operation, params)
+            data, response = self.comm._send_request(operation, params, filename)
         else:
             # files-list contains a list of 3-element tuples, e.g.
             # files = [("filefield's name", "filename.ext", filedata)]
@@ -80,21 +82,28 @@ class CommWrapper:
         duration = time.clock() - starttime
         ip.hide()
         #print self.comm.sessionid, data
-        if isinstance(data, dict) is False:
+        #print type(data)
+        if isinstance(data, dict):
+            if "status" in data and data["status"].startswith("error"):
+                if "message" not in data:
+                    data["message"] = u"Unknown error in response"
+                appuifw.note(u"%s" % data["message"], 'error')
+        elif filename is None:
             appuifw.note(u"Invalid response from server", 'error')
-        elif "status" in data and data["status"].startswith("error"):
-            if "message" not in data:
-                data["message"] = u"Unknown error in response"
-            appuifw.note(u"%s" % data["message"], 'error')
-        self.add_log(data, duration)
+        else: # Data was e.g. binary data (a file)
+            data = {"status" : u"unknown", "message" : "binary data"}
+        self.add_log(data, operation, duration)
         #print self.log
         return data, response
         
-    def add_log(self, data, duration):
+    def add_log(self, data, operation, duration):
+        # TODO: add max log entries
+        # TODO: implement a log viewer
         self.log.append({
             "status" : data["status"],
             "message" : data["message"],
             "time" : time.time(),
             "duration" : duration,
+            "operation" : operation,
             "keys" : ",".join(data.keys()),
         })
