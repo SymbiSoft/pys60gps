@@ -16,12 +16,8 @@ class CommWrapper:
         self.log = []
         self.login_tries = 0
         self.login_failed = False
-    
-    def login(self):
-        """
-        Perform login to the server. Request username and password if they
-        are not already set.
-        """
+
+    def _check_username_password(self):
         error = {"status" : "error", 
                  "message" : "Login failed, username and/or password is missing."}
         if self.username is None:
@@ -35,6 +31,12 @@ class CommWrapper:
                                           "code", u"")
             if self.password is None:
                 return error, None
+    
+    def login(self):
+        """
+        Perform login to the server. Request username and password if they
+        are not already set.
+        """
         data, response = self.comm.login(self.username, self.password)
         self.login_tries += 1
         if ("status" in data 
@@ -51,6 +53,7 @@ class CommWrapper:
                            require_session=True):
         if require_session:
             if self.comm.sessionid is None:
+                self._check_username_password()
                 ip = appuifw.InfoPopup()
                 if infotext:
                     ip.show(u"Logging in %s@%s" % (self.username, self.comm.host), 
