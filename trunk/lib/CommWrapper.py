@@ -16,6 +16,7 @@ class CommWrapper:
         self.log = []
         self.login_tries = 0
         self.login_failed = False
+        self.max_log_entries = 100
 
     def _check_username_password(self):
         error = {"status" : "error", 
@@ -37,11 +38,16 @@ class CommWrapper:
         Perform login to the server. Request username and password if they
         are not already set.
         """
+        if self.login_failed:
+            if appuifw.query(u"Previous login failed, would you like to try with new username and password.", "query"):
+                self.username = self.password = None
+                self._check_username_password()
         data, response = self.comm.login(self.username, self.password)
         self.login_tries += 1
         if ("status" in data 
             and data["status"].startswith("error")):
             appuifw.note(data["message"], 'error')
+            self.login_tries += 1
             self.login_failed = True
         return data, response
 
@@ -98,10 +104,8 @@ class CommWrapper:
         self.add_log(data, operation, duration)
         #print self.log
         return data, response
-        
+
     def add_log(self, data, operation, duration):
-        # TODO: add max log entries
-        # TODO: implement a log viewer
         self.log.append({
             "status" : data["status"],
             "message" : data["message"],
@@ -110,3 +114,10 @@ class CommWrapper:
             "operation" : operation,
             "keys" : ",".join(data.keys()),
         })
+        if len(self.log) > self.max_log_entries:
+            self.log.pop(0)
+
+    # TODO: implement a log viewer
+    def show_log(self, parent):
+        pass
+
