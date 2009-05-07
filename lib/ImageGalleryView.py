@@ -10,25 +10,25 @@ import http_poster
 import socket
 import simplejson
 # from secretmanager import SecretManager
-import Comm
+# import Comm
+from CommWrapper import CommWrapper
 
 class ImageGalleryView(Base.View):
 
-    def __init__(self, parent, comm=None):
+    def __init__(self, parent, comm = None):
         Base.View.__init__(self, parent)
+        if comm is None:
+            self.comm = self.Main.comm
+        else:
+            self.comm = comm
+        self.cw = CommWrapper(self.comm)
         self.active = False
         self.login_tries = 0
         self.password = u""
-        if comm is not None:
-            self.comm = comm
-        else:
-            self.host = appuifw.query(u"Host", "text", u"www.plok.in")
-            if not self.host:
-                self.host = u"test.plok.in"
-            self.comm = Comm.Comm(self.host, "/api/test.php")
-        #self.comm = Comm.Comm("10.0.2.2:8880", "/api/test.php")
         # TODO: create way to change these
-        self.tags = [u"action",u"animals",u"architecture",u"nature",u"object",u"people",u"traffic",u"view"]
+        self.tags = [u"action",u"animals",u"architecture",
+                     u"drink",u"food",u"nature",
+                     u"object",u"people",u"traffic",u"view"]
         #self.visibilities = [u"PUBLIC",u"RESTRICTED:community",u"RESTRICTED:friends",u"RESTRICTED:family",u"PRIVATE"]
         self.visibilities = [ 
                              u"PRIVATE", 
@@ -78,9 +78,9 @@ class ImageGalleryView(Base.View):
         self.load_image_metadata()
         self.timer.after(0.01, self.update_filelist)
         self.update()
-        if not self.comm.sessionid and self.login_tries == 0:
-            self.login()
-            self.update()
+        #if not self.comm.sessionid and self.login_tries == 0:
+        #    self.login()
+        #    self.update()
             #else:
             #    appuifw.note(u"Select Login from the menu if you want to do it later!", 'info')
     
@@ -432,11 +432,9 @@ class ImageGalleryView(Base.View):
             for key in ["caption", "tags", "visibility", "id"]:
                 if key in current_img:
                     params[key] = current_img[key].encode("utf-8")
-            ip = appuifw.InfoPopup()
-            ip.show(u"Updating metadata...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
-            data, response = self.comm._send_request("update_file", params)
-            ip.hide()
-            #print data, type(data)
+            data, response = self.cw.send_request("update_file",
+                                                  params=params,
+                                                  infotext=u"Updating metadata...")
             if "status" in data and data["status"] == "ok":
                 current_img["status"] = u"synchronized"
                 notetype = "info"
@@ -478,12 +476,14 @@ class ImageGalleryView(Base.View):
             for key in ["caption", "tags", "visibility"]:
                 if key in current_img:
                     params[key] = current_img[key].encode("utf-8")
+            data, response = self.cw.send_request("send_file", 
+                                                  infotext=u"Uploading file...")
                       
-            ip = appuifw.InfoPopup()
-            ip.show(u"Uploading file...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
-            data, response = self.comm._send_multipart_request("send_file", 
-                                                               params, files)
-            ip.hide()
+            #ip = appuifw.InfoPopup()
+            #ip.show(u"Uploading file...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
+            #data, response = self.comm._send_multipart_request("send_file", 
+            #                                                   params, files)
+            #ip.hide()
             # print data, type(data)
             if "status" in data and data["status"] == "ok":
                 current_img["status"] = u"synchronized"
