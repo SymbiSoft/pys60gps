@@ -188,6 +188,11 @@ class Comm:
                 data = {"status" : "error:communication:network", 
                         "message" : message}
                 response = None
+            except httplib.CannotSendRequest:
+                message = u"Network not available. (CannotSendRequest)"
+                data = {"status" : "error:communication:network", 
+                        "message" : message}
+                response = None
             # These are raised if server is connected but it does return 
             # a single byte (e.g in Segmentation fault -case) 
             except httplib.BadStatusLine: # Python 2.5

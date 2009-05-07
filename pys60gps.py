@@ -175,12 +175,14 @@ class GpsApp:
         # Configuration/settings
         self.config_file = os.path.join(self.datadir, "settings.ini")
         self.config = {} # TODO: read these from a configuration file
-        self.apid = None # Default access point
+        self.apid = None # Default access point id
+        self.apo = None # Default access point 
         self.read_config()
         #if self.config.has_key("apid"):
         #    self._select_access_point(self.config["apid"])
         # Center meridian
-        self.select_access_point()
+        self.ask_accesspoint()
+        #self.select_access_point()
         self.LongOrigin = None
         # Some counters
         self.counters = {"cellid":0,
@@ -256,8 +258,18 @@ class GpsApp:
         if self.apid:
             self.apo = socket.access_point(self.apid)
             socket.set_default_access_point(self.apo)
-            self.apo.start()
+            #self.apo.start()
 
+    def ask_accesspoint(self):
+        """One more version to select access point"""
+        ap_dict = socket.access_points()    # 'iapid' and 'name' in dict
+        sel_item = appuifw.popup_menu([i['name'] for i in ap_dict],
+                                      u"Select network to use")
+        if sel_item != None:    # != Cancel
+            if self.apo:
+                self.apo.stop()      
+            self.apo = socket.access_point(ap_dict[sel_item]['iapid'])
+            socket.set_default_access_point(self.apo)
 
     def _select_access_point(self, apid = None):
         """
