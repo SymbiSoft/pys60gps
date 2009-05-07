@@ -236,9 +236,9 @@ class GpsApp:
         self.menu_entries.append(((u"Nearby"), ListdataView(self)))
         self.menu_entries.append(((u"Opennetmap.org chat"), SimpleChatView(self, self.comm)))
         self.menu_entries.append(((u"Twitter"), TwitterView(self)))
-        self.menu_entries.append(((u"GPS Info"), GpsView(self)))
         self.menu_entries.append(((u"Sysinfo"), SysinfoView(self)))
         self.menu_entries.append(((u"WLAN"), WlanView(self)))
+        self.menu_entries.append(((u"GPS Info"), GpsView(self)))
         # Create main menu from that sequence
         self.main_menu = [item[0] for item in self.menu_entries]
         # Create list of views from that sequence
@@ -249,7 +249,7 @@ class GpsApp:
         #print self.read_log_cache_filenames("track")
 
     def get_sis_version(self):
-        self.get_geolocation_params()
+        # self.get_geolocation_params()
         return SIS_VERSION
 
     def select_access_point(self, apid = None):
@@ -268,7 +268,8 @@ class GpsApp:
         if sel_item != None:    # != Cancel
             if self.apo:
                 self.apo.stop()      
-            self.apo = socket.access_point(ap_dict[sel_item]['iapid'])
+            self.apid = ap_dict[sel_item]['iapid']
+            self.apo = socket.access_point(self.apid)
             socket.set_default_access_point(self.apo)
 
     def _select_access_point(self, apid = None):
@@ -614,8 +615,10 @@ class GpsApp:
                 lambda:self.set_config_var(u"Host[:port]", "text", "host")),
             (u"Script (%s)" % self.config["script"], 
                 lambda:self.set_config_var(u"Script", "text", "script")),
-            (u"Access point (%s)" % self.config["apid"], # TODO: show the name instead of apid 
-                lambda:self._select_access_point()),
+            (u"Access point" , # TODO: show the name instead of apid 
+                lambda:self.ask_accesspoint()),
+            #(u"Access point (%s)" % self.config["apid"], # TODO: show the name instead of apid 
+            #    lambda:self._select_access_point()),
         ))
             
         plok_menu = (u"Plok", (
