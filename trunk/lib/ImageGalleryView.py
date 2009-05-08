@@ -7,7 +7,6 @@ import key_codes
 import e32
 import graphics
 import http_poster
-import socket
 import simplejson
 # from secretmanager import SecretManager
 # import Comm
@@ -454,13 +453,6 @@ class ImageGalleryView(Base.View):
             if "status" in current_img and current_img["status"] == u"synchronized":
                 appuifw.note(u"Already uploaded", 'info')
                 return
-            if self.Main.apid == None:
-                self.Main.apid = socket.select_access_point()
-            if self.Main.apid:
-                self.apo = socket.access_point(self.Main.apid)
-                socket.set_default_access_point(self.apo)
-                self.apo.start()
-                
             if appuifw.query(u'Send image really? There is no undo.', 'query') is None:
                 return
             current_img["status"] = u"synchronizing"
@@ -479,12 +471,6 @@ class ImageGalleryView(Base.View):
             data, response = self.cw.send_request("send_file", 
                                                   infotext=u"Uploading file...")
                       
-            #ip = appuifw.InfoPopup()
-            #ip.show(u"Uploading file...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
-            #data, response = self.comm._send_multipart_request("send_file", 
-            #                                                   params, files)
-            #ip.hide()
-            # print data, type(data)
             if "status" in data and data["status"] == "ok":
                 current_img["status"] = u"synchronized"
                 notetype = "info"
