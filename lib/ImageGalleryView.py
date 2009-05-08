@@ -469,6 +469,8 @@ class ImageGalleryView(Base.View):
                 if key in current_img:
                     params[key] = current_img[key].encode("utf-8")
             data, response = self.cw.send_request("send_file", 
+                                                  params=params,
+                                                  files=files,
                                                   infotext=u"Uploading file...")
                       
             if "status" in data and data["status"] == "ok":
