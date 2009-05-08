@@ -24,6 +24,7 @@ class ImageGalleryView(Base.View):
         self.active = False
         self.login_tries = 0
         self.password = u""
+        self.groups = [] # groups, channels, or something
         # TODO: create way to change these
         self.tags = [u"action",u"animals",u"architecture",
                      u"drink",u"food",u"nature",
@@ -67,8 +68,9 @@ class ImageGalleryView(Base.View):
         self.imagemenu.append((u"1. Caption", lambda: self.ask_caption()))
         self.canvas.bind(key_codes.EKey2,lambda: self.ask_tags())
         self.imagemenu.append((u"2. Tags", lambda: self.ask_tags()))
-        self.canvas.bind(key_codes.EKey3,lambda: self.toggle_visibility())
-        self.imagemenu.append((u"3. Visibility", lambda: self.toggle_visibility()))
+        if self.visibilities:
+            self.canvas.bind(key_codes.EKey3,lambda: self.toggle_visibility())
+            self.imagemenu.append((u"3. Visibility", lambda: self.toggle_visibility()))
         self.canvas.bind(key_codes.EKeyBackspace,lambda: self.delete_current())
         self.imagemenu.append((u"C. Delete", lambda: self.delete_current()))
         self.canvas.bind(key_codes.EKeySelect,lambda: self.show_current())
@@ -77,27 +79,7 @@ class ImageGalleryView(Base.View):
         self.load_image_metadata()
         self.timer.after(0.01, self.update_filelist)
         self.update()
-        #if not self.comm.sessionid and self.login_tries == 0:
-        #    self.login()
-        #    self.update()
-            #else:
-            #    appuifw.note(u"Select Login from the menu if you want to do it later!", 'info')
     
-    def login(self):
-        if not self.password:
-            self.password = appuifw.query(u"Password for '%s@%s' or cancel. (%d)" \
-                % (self.Main.config["username"], self.comm.host, 
-                                 self.login_tries), "text", u"")
-        if self.password:
-            ip = appuifw.InfoPopup()
-            ip.show(u"Logging in...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
-            data, response = self.comm.login(self.Main.config["username"], self.password)
-            ip.hide()
-            appuifw.note(u"%s" % data["message"], 'info')
-            self.login_tries += 1
-        else:
-            appuifw.note(u"No password set", 'error')
-
     def _update_menu(self):
         """Update left options key to fit current context"""
         if self.current_img < 0:
@@ -111,7 +93,7 @@ class ImageGalleryView(Base.View):
                                 (u"Close", self.handle_close),
                                 ]
             if not self.comm.sessionid:
-                appuifw.app.menu.insert(1, (u"Login", self.login))
+                appuifw.app.menu.insert(1, (u"Login", self.cw.login))
         else: # Some image is currently open
             default = [(u"Close", self.handle_close),]
             menu = default + self.imagemenu
@@ -191,6 +173,14 @@ class ImageGalleryView(Base.View):
         #img.text((5, 200), u"Free RAM: %d kB" % (sysinfo.free_ram()/1024), font=font)
         #img.blit(self.get_mainscreen())
         l = 45
+        if self.comm.sessionid:
+            login_color = 0x99ff99
+            logged_in = u"Logged in as %s@%s" % (self.comm.username, self.comm.host)
+        else:
+            login_color = 0xff9999
+            logged_in = u"You are not logged in"
+        img.text((5, l), logged_in, font=font, fill=login_color)
+        l = l + lheight
         img.text((5, l), u"%d total images" % (len(self.IMG_NAMES.keys())), font=font, fill=0xccccff)
         l = l + lheight
         img.text((5, l), u"%d NEW images" % (len(self.IMG_NEW_LIST)), font=font, fill=0xccccff)
@@ -207,14 +197,6 @@ class ImageGalleryView(Base.View):
         img.text((5, l), u"Press up to come back to this screen", font=font, fill=0xccccff)
         l = l + lheight
         img.text((5, l), u"Press 'enter' to view original image", font=font, fill=0xccccff)
-        if self.comm.sessionid:
-            login_color = 0x99ff99
-            logged_in = u"Logged in as %s@%s" % (self.Main.config["username"], self.comm.host)
-        else:
-            login_color = 0xff9999
-            logged_in = u"You are not logged in"
-        l = l + lheight
-        img.text((5, l), logged_in, font=font, fill=login_color)
         return img
 
     def update(self, dummy=(0, 0, 0, 0)):
@@ -258,10 +240,11 @@ class ImageGalleryView(Base.View):
             self.canvas.text((margin, textline), u"2 %s" % (text), font=font, fill=0xccccff)
             textline = textline + lineheight
             # Write visibility
-            if "visibility" in i: text = i["visibility"]
-            else: text = u""
-            self.canvas.text((margin, textline), u"3 %s" % (text), font=font, fill=0xccccff)
-            textline = textline + lineheight
+            if self.visibilities:
+                if "visibility" in i: text = i["visibility"]
+                else: text = u""
+                self.canvas.text((margin, textline), u"3 %s" % (text), font=font, fill=0xccccff)
+                textline = textline + lineheight
             # Sync text
             if "status" in i: text = i["status"]
             else: text = u"not sync'ed"
@@ -446,13 +429,22 @@ class ImageGalleryView(Base.View):
         """Send image to the server. Initial/test version."""
         if self.current_img >= 0:
             current_img = self.IMG_LIST[self.current_img]
-            # TODO: split this function to upload the file or update metadata
+            params = {"operation" : "send_file",
+                      "sender" : self.Main.config["username"].encode("utf-8"), 
+                      }
             if "id" in current_img:
                 self.update_metadata()
                 return
             if "status" in current_img and current_img["status"] == u"synchronized":
                 appuifw.note(u"Already uploaded", 'info')
                 return
+            if len(self.groups) > 0:
+                grouplist = [x[0] for x in self.groups]
+                choice = appuifw.popup_menu(grouplist, u"Select the group (or cancel)")
+                # choice = appuifw.multi_selection_list(grouplist, search_field = 1)
+                # choice = appuifw.selection_list(grouplist, search_field = 1)
+                if choice is None: return
+                params["group_id"] = self.groups[choice][1]            
             if appuifw.query(u'Send image really? There is no undo.', 'query') is None:
                 return
             current_img["status"] = u"synchronizing"
@@ -462,9 +454,6 @@ class ImageGalleryView(Base.View):
             f.close()
             # Create "files"-list which contains all files to send
             files = [("newfile", os.path.basename(filename), filedata)]
-            params = {"operation" : "send_file",
-                      "sender" : self.Main.config["username"].encode("utf-8"), 
-                      }
             for key in ["caption", "tags", "visibility"]:
                 if key in current_img:
                     params[key] = current_img[key].encode("utf-8")
