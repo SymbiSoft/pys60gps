@@ -69,8 +69,6 @@ draw_startup_screen(canvas, u"PositionHelper")
 import PositionHelper
 draw_startup_screen(canvas, u"Comm")
 import Comm
-draw_startup_screen(canvas, u"TopWindow")
-import TopWindow
 
 draw_startup_screen(canvas, u"TrackView")
 from TrackView import TrackView

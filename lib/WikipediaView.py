@@ -4,7 +4,6 @@ import Base
 import appuifw
 import key_codes
 import e32
-import TopWindow
 import graphics
 import time
 import re
