@@ -234,7 +234,7 @@ class GpsTrackTab(BaseInfoTab):
             self.Main.start_read_position()
 
         appuifw.app.menu = [#(u"Update", self.update),
-                            (u"Stop GPS", self.stop_gps)
+                            (u"Stop GPS", self.stop_gps),
                             (u"Close", self.handle_close),
                             ]
         self.canvas.bind(key_codes.EKeyHash, lambda: self.change_meters_per_px(1))
@@ -251,7 +251,7 @@ class GpsTrackTab(BaseInfoTab):
         self.canvas.bind(key_codes.EKey4, self.Main.wlanscan)
         self.canvas.bind(key_codes.EKey6, self.Main.bluetoothscan)
 
-        appuifw.app.menu.insert(0, (u"Stop GPS", self.stop_gps))
+        # appuifw.app.menu.insert(0, (u"Stop GPS", self.stop_gps))
         appuifw.app.menu.insert(0, (u"Send track via bluetooth", self.send_track))
         appuifw.app.menu.insert(0, (u"Send cellids via bluetooth", self.send_cellids))
         appuifw.app.menu.insert(0, (u"Send debug track via bluetooth", self.send_debug))
