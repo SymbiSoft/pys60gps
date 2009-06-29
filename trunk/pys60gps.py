@@ -227,13 +227,14 @@ class GpsApp:
         self.menu_entries.append(((u"Track"), TrackView(self)))
         plokcomm = Comm.Comm(self.config["plokhost"], 
                              self.config["plokscript"],
-                             username=self.config["username"])
+                             username=self.config["username"],
+                             password=self.config["plokpassword"])
         self.menu_entries.append(((u"Images"), ImageGalleryView(self, plokcomm)))
         self.menu_entries.append(((u"Latest Ploks"), PlokView(self, plokcomm)))
         self.menu_entries.append(((u"Plok.in chat"), SimpleChatView(self, plokcomm)))
         self.menu_entries.append(((u"Nearby"), ListdataView(self)))
         self.menu_entries.append(((u"Opennetmap.org chat"), SimpleChatView(self, self.comm)))
-        self.menu_entries.append(((u"Twitter"), TwitterView(self)))
+        # self.menu_entries.append(((u"Twitter"), TwitterView(self)))
         self.menu_entries.append(((u"Sysinfo"), SysinfoView(self)))
         self.menu_entries.append(((u"WLAN"), WlanView(self)))
         self.menu_entries.append(((u"GPS Info"), GpsView(self)))
@@ -332,6 +333,7 @@ class GpsApp:
             "script" : u"/api/",
             "plokhost" : u"www.plok.in", # Temporary solution to handle 2 different Comm-servers
             "plokscript" : u"/api/",
+            "plokpassword" : u"",
         }
         # List here all configuration keys, which must be defined before use
         # If a config key has key "function", it's called to define value
@@ -611,8 +613,8 @@ class GpsApp:
 #                lambda:self.set_config_var(u"Group", "text", "group")),
             (u"Host (%s)" % self.config["host"], 
                 lambda:self.set_config_var(u"Host[:port]", "text", "host")),
-            (u"Script (%s)" % self.config["script"], 
-                lambda:self.set_config_var(u"Script", "text", "script")),
+            #(u"Script (%s)" % self.config["script"], 
+            #    lambda:self.set_config_var(u"Script", "text", "script")),
             (u"Access point" , # TODO: show the name instead of apid 
                 lambda:self.ask_accesspoint()),
             #(u"Access point (%s)" % self.config["apid"], # TODO: show the name instead of apid 
@@ -622,8 +624,10 @@ class GpsApp:
         plok_menu = (u"Plok", (
             (u"PlokHost (%s)" % self.config["plokhost"], 
                 lambda:self.set_config_var(u"PlokHost[:port]", "text", "plokhost")),
-            (u"PlokScript (%s)" % self.config["plokscript"], 
-                lambda:self.set_config_var(u"PlokScript", "text", "plokscript")),
+            #(u"PlokScript (%s)" % self.config["plokscript"], 
+            #    lambda:self.set_config_var(u"PlokScript", "text", "plokscript")),
+            (u"Plok Password (*****)", 
+                lambda:self.set_config_var(u"Plok Password", "code", "plokpassword")),
         ))
             
 
@@ -749,7 +753,17 @@ class GpsApp:
         # Flush delivery data into a zip file
         if len(self.data[delivery_key]) >= max_data_items:
             self.flush_delivery_data()
-    
+
+    def clear_all_data(self):
+        """
+        Flush all pending delivery data objects to files and 
+        then clear self.data. 
+        """
+        self.flush_delivery_data()
+        for key in self.data.keys():
+            if isinstance(self.data[key], list):
+                self.data[key] = []
+        
     def flush_delivery_data(self):
         # FIXME: docstring
         # FIXME: errorhandling
@@ -762,7 +776,8 @@ class GpsApp:
                 mode = "w"
             current_time = time.time()
             now = time.localtime(current_time)[:6]
-            name = time.strftime("delivery-%Y%m%d-%H%M%S.json", time.localtime(current_time))
+            name = time.strftime("delivery-%Y%m%d-%H%M%S.json", 
+                                 time.localtime(current_time))
             file = zipfile.ZipFile(filename, mode)
             info = zipfile.ZipInfo(name)
             info.date_time = now
@@ -782,7 +797,7 @@ class GpsApp:
         """
         # TODO: errorhandling
         # FIXME: this is messy
-        self.flush_delivery_data()
+        self.flush_delivery_data() 
         filename = os.path.join(self.datadir, "delivery.zip")
         if os.path.isfile(filename):
             # FIXME: this asking should be in another function

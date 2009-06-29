@@ -257,6 +257,7 @@ class GpsTrackTab(BaseInfoTab):
         appuifw.app.menu.insert(0, (u"Send debug track via bluetooth", self.send_debug))
         appuifw.app.menu.insert(0, (u"Set meters/pixel", 
                                     lambda:self.set_meters_per_px(appuifw.query(u"Meters","number", self.meters_per_px))))
+        appuifw.app.menu.insert(0, (u"Clear all data", self.Main.clear_all_data))
         appuifw.app.menu.insert(0, (u"Add POI", self.save_poi))
         appuifw.app.menu.insert(0, (u"Download", self.download_pois_new))
         e32.ao_sleep(0.1)
