@@ -229,13 +229,12 @@ class GpsTrackTab(BaseInfoTab):
         self.ui = graphics.Image.new(self.canvas.size)
         appuifw.app.body = self.canvas
         appuifw.app.screen = "normal"
-        if self.Main.read_position_running == True:
-            gps_onoff = u"OFF"
-        else:
-            gps_onoff = u"ON"
-        
-        appuifw.app.menu = [(u"Update", self.update),
-                            (u"GPS %s" % (gps_onoff),self.Main.start_read_position),
+        # FIXME: Main.start_read_position() updates also app.menu
+        if self.Main.read_position_running == False:
+            self.Main.start_read_position()
+
+        appuifw.app.menu = [#(u"Update", self.update),
+                            (u"Stop GPS", self.stop_gps)
                             (u"Close", self.handle_close),
                             ]
         self.canvas.bind(key_codes.EKeyHash, lambda: self.change_meters_per_px(1))
@@ -252,6 +251,7 @@ class GpsTrackTab(BaseInfoTab):
         self.canvas.bind(key_codes.EKey4, self.Main.wlanscan)
         self.canvas.bind(key_codes.EKey6, self.Main.bluetoothscan)
 
+        appuifw.app.menu.insert(0, (u"Stop GPS", self.stop_gps))
         appuifw.app.menu.insert(0, (u"Send track via bluetooth", self.send_track))
         appuifw.app.menu.insert(0, (u"Send cellids via bluetooth", self.send_cellids))
         appuifw.app.menu.insert(0, (u"Send debug track via bluetooth", self.send_debug))
@@ -261,9 +261,11 @@ class GpsTrackTab(BaseInfoTab):
         appuifw.app.menu.insert(0, (u"Add POI", self.save_poi))
         appuifw.app.menu.insert(0, (u"Download", self.download_pois_new))
         e32.ao_sleep(0.1)
-        if self.Main.read_position_running == False:
-            self.Main.start_read_position()
         self.update()
+
+    def stop_gps(self):
+        positioning.stop_position()
+        self.Main.read_position_running = False
 
     def download_pois_new(self):
         self.active = False # FIXME: this shoud be inactive only when query dialog is open
