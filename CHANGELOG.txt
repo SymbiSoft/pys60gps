@@ -1,5 +1,9 @@
 Pys60Gps Changelog
 
+2008-06-28 version 0.3.17
+
+Upgraded version number.
+
 2008-05-15 version 0.3.16
 
 Upgraded version number.

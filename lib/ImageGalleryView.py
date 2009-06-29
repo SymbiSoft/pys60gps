@@ -21,6 +21,7 @@ class ImageGalleryView(Base.View):
         else:
             self.comm = comm
         self.cw = CommWrapper(self.comm)
+        self.ip = appuifw.InfoPopup()
         self.active = False
         self.login_tries = 0
         self.password = u""
@@ -75,9 +76,16 @@ class ImageGalleryView(Base.View):
         self.imagemenu.append((u"C. Delete", lambda: self.delete_current()))
         self.canvas.bind(key_codes.EKeySelect,lambda: self.show_current())
         self.imagemenu.append((u"Show", lambda: self.show_current()))
-        self.timer = e32.Ao_timer()
+        self.ip.show(u"Loading image data. This may take a while", 
+                (50, 50), 180000, 10, appuifw.EHLeftVTop)
+        e32.ao_sleep(0.1) # Needed for successful screen redraw 
+        self.update()
         self.load_image_metadata()
-        self.timer.after(0.01, self.update_filelist)
+        self.ip.hide()
+        self.timer = e32.Ao_timer()
+        self.ip.show(u"Updating image data in the background", 
+                (50, 50), 5000, 10, appuifw.EHLeftVTop)
+        self.timer.after(0.1, self.update_filelist)
         self.update()
     
     def _update_menu(self):
@@ -144,6 +152,7 @@ class ImageGalleryView(Base.View):
         """Load cached image metadata from file if found"""
         if os.path.isfile(self.image_metadatafile):
             f = open(self.image_metadatafile, "rt")
+            # TODO: replace file format with JSON/simplejson
             self.IMG_LIST = eval(f.read())
             f.close()
             missing = [] # Save the index of missing images to a list
@@ -151,12 +160,13 @@ class ImageGalleryView(Base.View):
                 i = self.IMG_LIST[j]
                 if not os.path.isfile(i["path"]):
                     missing.append(j)
-                    appuifw.note(u"File %s was missing" % (i["path"]), 'error')
                 else:
                     self.IMG_NAMES[i["path"]] = i    
                 # TODO: check here also if image exists! Remove from the list if not!
             missing.sort()
             missing.reverse()
+            if len(missing) > 0:
+                appuifw.note(u"%d files are moved or deleted" % (len(missing), 'info'))
             for j in missing:
                 self.IMG_LIST.pop(j)
             #print "Read metadata of %d images from %s.\nMissing %d" % (len(self.IMG_LIST), self.image_metadatafile, len(missing))
@@ -291,16 +301,14 @@ class ImageGalleryView(Base.View):
         for name in names:
             if self.p_ext.search(name):
                 IMG = {}
-                IMG["visibility"] = "PRIVATE"
                 IMG["path"] = os.path.join(dirname,name) # Full path
+                if IMG["path"] in self.IMG_NAMES:
+                    continue # Already found
+                # os.stat is pretty slow in some cases
                 stat = os.stat(IMG["path"])
                 IMG["filesize"] = stat[6] # File size in bytes
                 IMG["gmtime"] = stat[8] # Modification time
-                if IMG["filesize"] == 0:
-                    appuifw.note(u"Deleting 0 file", 'info')
-                    del self.IMG_NAMES[IMG["path"]]
-                if self.IMG_NAMES.has_key(IMG["path"]): 
-                    continue # Already found
+                IMG["visibility"] = "PRIVATE"
                 # Ignore images older than ...
                 #if IMG["gmtime"] < self.gmtime-10*24*60*60: continue #print "wanha", IMG["path"], gmtime-IMG["gmtime"]
                 #f = open(IMG["path"], "rb")
@@ -308,10 +316,14 @@ class ImageGalleryView(Base.View):
                 #f.close()
                 # Calculate md5sum
                 #IMG["md5"] = md5.new(idata).hexdigest() # md5sum
+                if IMG["path"] in self.IMG_NAMES and IMG["filesize"] == 0:
+                    # appuifw.note(u"Deleting 0 file", 'info')
+                    del self.IMG_NAMES[IMG["path"]]
                 if IMG["filesize"] > 0:
                     self.IMG_LIST.append(IMG)
                     self.IMG_NEW_LIST.append(IMG)
                     self.IMG_NAMES[IMG["path"]] = IMG
+        e32.ao_sleep(0.01)
 
     def update_filelist(self):
         for dir in self.directories:
