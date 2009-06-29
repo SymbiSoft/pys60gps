@@ -229,7 +229,13 @@ class GpsTrackTab(BaseInfoTab):
         self.ui = graphics.Image.new(self.canvas.size)
         appuifw.app.body = self.canvas
         appuifw.app.screen = "normal"
+        if self.Main.read_position_running == True:
+            gps_onoff = u"OFF"
+        else:
+            gps_onoff = u"ON"
+        
         appuifw.app.menu = [(u"Update", self.update),
+                            (u"GPS %s" % (gps_onoff),self.Main.start_read_position),
                             (u"Close", self.handle_close),
                             ]
         self.canvas.bind(key_codes.EKeyHash, lambda: self.change_meters_per_px(1))
