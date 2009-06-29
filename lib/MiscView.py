@@ -54,6 +54,7 @@ class BaseTabbedView:
         self.views[self.current_tab].activate()
 
     def handle_tab(self, index):
+        self.views[self.current_tab].t.cancel()
         self.current_tab = index
         self.views[index].activate()
 
@@ -169,15 +170,18 @@ class SysInfoTab(BaseInfoTab):
         lines = []
         lines.append(u"Time: %s" % time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time())))
         try:
-            #lines.append(u"Battery: %s" % sysinfo.battery())
-            #lines.append(u"Signal bars: %d" % sysinfo.signal_bars())
-            #lines.append(u"Signal DBM: %.1f" % sysinfo.signal_dbm())
             lines.append(u"Profile: %s" % sysinfo.active_profile())
             lines.append(u"Twips: %d x %d" % sysinfo.display_twips())
             lines.append(u"Pixels: %d x %d" % sysinfo.display_pixels())
-            lines.append(u"IMEI: %s" % sysinfo.imei())
             lines.append(u"Os version: %d.%d.%d" % sysinfo.os_version())
             lines.append(u"Sw version: %s" % sysinfo.sw_version())
+            lines.append(u"These may crash in 3rd ed FP2 and 5th ed:")
+            lines.append(u"battery(), signal_bars(), signal_dbm(),imei()")
+            # Uncommenting any of these crahses 3rdEd FP2 and 5thEd phones             
+            #lines.append(u"Battery: %s" % sysinfo.battery())
+            #lines.append(u"Signal bars: %d" % sysinfo.signal_bars())
+            #lines.append(u"Signal DBM: %.1f" % sysinfo.signal_dbm())
+            #lines.append(u"IMEI: %s" % sysinfo.imei())
         except:
             lines.append(u"sysinfo not functional")
         return lines
