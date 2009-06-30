@@ -1,3 +1,8 @@
+2009-06-30
+Check GPX specification 
+http://www.topografix.com/gpx_manual.asp
+and change internal trackpoint format to fit it.
+
 2008-01-10
 Consider time resolution decreasing just before send_delivery_data()
 p=re.compile(r"(\d{4})\-(\d{2})\-(\d{2})\T(\d{2})\:(\d{2})\:(\d{2})")
