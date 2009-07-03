@@ -166,7 +166,7 @@ class ImageGalleryView(Base.View):
             missing.sort()
             missing.reverse()
             if len(missing) > 0:
-                appuifw.note(u"%d files are moved or deleted" % (len(missing), 'info'))
+                appuifw.note(u"%d files are moved or deleted" % (len(missing)), 'info')
             for j in missing:
                 self.IMG_LIST.pop(j)
             #print "Read metadata of %d images from %s.\nMissing %d" % (len(self.IMG_LIST), self.image_metadatafile, len(missing))
