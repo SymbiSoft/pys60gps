@@ -23,7 +23,7 @@ def footer():
 def start_folder(name):
     return """<Folder>
  <name>%s</name>
- <visibility>1</visibility>
+ <visibility>0</visibility>
  <open>0</open>""" % name
 
 def end_folder():
@@ -115,6 +115,11 @@ class UglyAndHackyKMLExporterButHeyItWorks:
            self.lasttime > 0:
             self.buf.append(end_placemark())
             self.buf.append(start_placemark(ts))
+        if currenttime == self.lasttime:
+            sys.stderr.write('Multiple timestamps %s\n' % ts )
+            continue
+        # TODO: calculate here the distance between points and if it is too large
+        # ignore one or the other
         self.lasttime = currenttime
         oldfolder = self.folder[:]
         self.folder = [tt[0], tt[1], tt[2]]
