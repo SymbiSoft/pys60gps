@@ -1,12 +1,12 @@
 # $Id$
 
 # DO NOT remove this
-SIS_VERSION = "0.3.17"
+SIS_VERSION = "0.3.18"
 APP_TITLE = u"PyS60GPS"
 
 import appuifw
 import e32
-appuifw.app.orientation = 'portrait'
+# appuifw.app.orientation = 'portrait'
 import time
 
 class Logger:
@@ -103,7 +103,7 @@ from MiscView import SysinfoView, SysInfoTab, E32InfoTab, MemTab, GsmTab, \
 
 ####################################
 # FIXME: move these to an own module
-# These are currently in pys60gps.pu and TrackView.py
+# These are currently in pys60gps.py and TrackView.py
 import math
 rad=math.pi/180
 
@@ -261,7 +261,10 @@ class GpsApp:
 
     def ask_accesspoint(self):
         """One more version to select access point"""
-        ap_dict = socket.access_points()    # 'iapid' and 'name' in dict
+        try: # FIXME: temporary workaround, waiting for bt_socket implementation
+            ap_dict = socket.access_points()    # 'iapid' and 'name' in dict
+        except:
+            return
         sel_item = appuifw.popup_menu([i['name'] for i in ap_dict],
                                       u"Select network to use")
         if sel_item != None:    # != Cancel
@@ -1044,7 +1047,7 @@ class GpsApp:
                 # Time difference between current and the latest saved position
                 timediff = pos["satellites"]["time"] - p0["satellites"]["time"]
                 # Distance between current and the latest saved position
-                if self.has_fix(pos):
+                if self.has_fix(pos) and self.has_fix(p0):
                     dist = Calculate.distance(p0["position"]["latitude"],
                                               p0["position"]["longitude"],
                                               pos["position"]["latitude"],
@@ -1105,7 +1108,7 @@ class GpsApp:
             # Time difference between current and the latest saved position
             timediff = pos["satellites"]["time"] - p0["satellites"]["time"]
             # Distance between current and the latest saved position
-            if self.has_fix(pos): # obsolete "if"
+            if self.has_fix(pos) and self.has_fix(p0): # obsolete "if"
                 dist = Calculate.distance(p0["position"]["latitude"],
                                           p0["position"]["longitude"],
                                           pos["position"]["latitude"],
@@ -1278,12 +1281,14 @@ class GpsApp:
         TODO: Save the track data (to a file) automatically for future use.
         """
         pos["systime"] = time.time()
-        if self.config["track_debug"]:
+        pos["gsm_location"] = location.gsm_location()
+        #if self.config["track_debug"]:
+        if True:
             self.data["position_debug"].append(pos)
-            if len(self.data["position_debug"]) > self.config["max_debugpoints"]:
+            #if len(self.data["position_debug"]) > self.config["max_debugpoints"]:
+            # FIXME: Using trackpoint limit here too (there is no room for extra settings in menu)
+            if len(self.data["position_debug"]) > self.config["max_trackpoints"]:
                 self.data["position_debug"].pop(0)
-            # TODO:
-            # self.data["position_debug"].append(pos)
         if self.has_fix(pos):
             if not self.LongOrigin: # Set center meridian
                 self.LongOrigin = pos["position"]["longitude"]
@@ -1306,16 +1311,19 @@ class GpsApp:
                     p1 = self.data["position"][-2] # used to calculate estimation line
                 else:
                     p1 = None
-                # Distance between current and the latest saved position
-                dist = Calculate.distance(p0["position"]["latitude"],
-                                          p0["position"]["longitude"],
-                                          pos["position"]["latitude"],
-                                          pos["position"]["longitude"],
-                                         )
-                # Difference of heading between current and the latest saved position
-                anglediff = Calculate.anglediff(p0["course"]["heading"], pos["course"]["heading"])
                 # Time difference between current and the latest saved position
                 timediff = pos["satellites"]["time"] - p0["satellites"]["time"]
+                # Distance between current and the latest saved position
+                try:
+                    dist = Calculate.distance(p0["position"]["latitude"],
+                                              p0["position"]["longitude"],
+                                              pos["position"]["latitude"],
+                                              pos["position"]["longitude"],
+                                             )
+                    # Difference of heading between current and the latest saved position
+                    anglediff = Calculate.anglediff(p0["course"]["heading"], pos["course"]["heading"])
+                except:
+                    pass # all defaults to 0
                 
                 # Project a location estimation point (pe) using speed and heading from the latest saved point
                 pe = {}
@@ -1430,6 +1438,11 @@ class GpsApp:
 
     def close(self):
         positioning.stop_position()
+        #appuifw.note(u"Saving debug", 'info')
+        #filename = os.path.join(self.datadir, u"position_debug.json")
+        #f = open(filename, "wt")
+        #f.write(simplejson.dumps(self.data["position_debug"], indent=1) + "\n")
+        #f.close()
         appuifw.app.exit_key_handler = None
         self.running = False
         self.flush_delivery_data()
