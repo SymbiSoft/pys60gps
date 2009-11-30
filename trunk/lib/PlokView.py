@@ -121,7 +121,7 @@ class PlokView(Base.View):
 
     def activate(self):
         self.active = True
-        appuifw.app.screen = "full"
+        appuifw.app.screen = "large"
         #self.canvas = appuifw.Canvas()
         #self.canvas.text((5, 50), u"Loading...", font=(u"Series 60 Sans", 30), fill=0xccffcc)
         #e32.ao_sleep(0.01)
