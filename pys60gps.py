@@ -190,11 +190,12 @@ class GpsApp:
         #self.select_access_point()
         self.LongOrigin = None
         # Some counters
-        self.counters = {"cellid":0,
-                         "wlan":0,
-                         "bluetooth":0,
-                         "track":0,
-                         "delivery":0,
+        self.counters = {"cellid": 0,
+                         "wlan": 0,
+                         "bluetooth": 0,
+                         "track": 0,
+                         "tracklog": 0, # new 
+                         "delivery": 0,
                          }
         self.scanning = {"wlan":False,
                          "bluetooth":False,
@@ -395,8 +396,10 @@ class GpsApp:
         if appuifw.query(u'Confirm configuration reset', 'query') is True:
             os.remove(self.config_file)
             # TODO: create combined exit handler
+            self.save_log_cache("tracklog")
             self.save_log_cache("track")
             self.save_log_cache("cellid") 
+            self.save_log_cache("wlan") 
             appuifw.note(u"You need to restart program now.", 'info')
             self.running = False
             self.lock.signal()
@@ -713,12 +716,22 @@ class GpsApp:
             appuifw.note(unicode(error), 'error')
             raise
 
+    def stop_read_position(self):
+        positioning.stop_position()
+        # Put the last point to the log if it is not there already
+        if len(self.data["track_new"]) > 0 \
+           and self.data["track_new"][-1]['gpstime'] != self.simple_pos['gpstime']:
+            self.simple_pos['reason'] = 'Last'
+            self.append_simple_pos(self.simple_pos)
+        self.flush_all()
+
+
     def start_read_position(self):
         """
         Start or stop reading position.
         """
         if self.read_position_running == True:
-            positioning.stop_position()
+            self.stop_read_position()
             self.read_position_running = False
             self._update_menu() # NOTE: this messes up the menu if this function is called from outside of the main view!
             self.ip.show(u"Stopping GPS...", (50, 50), 3000, 100, appuifw.EHLeftVTop)
@@ -1278,6 +1291,17 @@ class GpsApp:
         else:
             return False
 
+    def append_simple_pos(self, simple_pos):
+        data = simple_pos.copy()
+        data['time'] = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", 
+                                     time.localtime(data['gpstime']))
+        for key in ['systime', 'gpstime', 'x', 'y', 'e', 'n', 'z']:
+            if key in data:
+                del data[key]
+        self.append_log_cache("tracklog", data)
+        if self.counters["tracklog"] % 3 == 0: 
+            self.save_log_cache("tracklog")
+
     def read_position(self, pos):
         """
         positioning.position() callback.
@@ -1302,8 +1326,13 @@ class GpsApp:
         if pys60gpstools.has_fix(simple_pos):
             if not self.LongOrigin: # Set center meridian
                 self.LongOrigin = simple_pos['lon']
-            locationtools.handle_trkpt(simple_pos, self.data["track_new"], 
-                                       LIMITS, self.LongOrigin)
+            # Let handle_trkpt() decide should this pos be saved in tracklog
+            # Here could be several of these with different limits
+            saved = locationtools.handle_trkpt(simple_pos, 
+                                               self.data["track_new"], 
+                                               LIMITS, self.LongOrigin)
+            if saved: # If trackpoint was saved, put it into log file too
+                self.append_simple_pos(simple_pos)
         #####################################################################
         pos["systime"] = time.time()
         pos["gsm_location"] = location.gsm_location()
@@ -1462,8 +1491,16 @@ class GpsApp:
             self.running = False
             self.lock.signal()
 
+    def flush_all(self):
+        self.save_log_cache("tracklog")
+        self.save_log_cache("track")
+        self.save_log_cache("cellid") 
+        self.save_log_cache("wlan")
+        self.flush_delivery_data()
+        
+        
     def close(self):
-        positioning.stop_position()
+        self.stop_read_position()
         #appuifw.note(u"Saving debug", 'info')
         #filename = os.path.join(self.datadir, u"position_debug.json")
         #f = open(filename, "wt")
@@ -1471,10 +1508,7 @@ class GpsApp:
         #f.close()
         appuifw.app.exit_key_handler = None
         self.running = False
-        self.flush_delivery_data()
-        self.save_log_cache("track")
-        self.save_log_cache("cellid") 
-        self.save_log_cache("wlan")
+        self.flush_all()
         self.send_delivery_data(True, True)
         appuifw.app.set_tabs([u"Back to normal"], lambda x: None)
 
@@ -1484,7 +1518,7 @@ try:
     myApp = GpsApp()
     myApp.run()
     appuifw.app.body = oldbody
-    positioning.stop_position()
+    myApp.stop_read_position()
 except:
     # Exception harness
     positioning.stop_position()

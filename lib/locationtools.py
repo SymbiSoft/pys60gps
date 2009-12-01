@@ -127,41 +127,62 @@ def handle_trkpt(pos, tracklog, limits, long_origin):
     Compare pos to 1-2 latest points in tracklog and append pos to it
     if certain conditions are met.
     """
+    # Calculate fake n and e values (fake because we don't use 
+    # valid long_origin but first pos' long)
     set_fake_utm(pos, long_origin)
     # New trackpoint if tracklog is empty or has only 1 point yet
     if len(tracklog) <= 1:
         pos['reason'] = u"Startpoint"
         tracklog.append(pos)
         return 1
+    # Now we have for sure at least 1 trackpoint in log list
+    pos_last = tracklog[-1]
     # New trackpoint max_time has been exceeded
-    timediff = pos['gpstime'] - tracklog[-1]['gpstime']
+    timediff = pos['gpstime'] - pos_last['gpstime']
     if timediff >= limits['max_time']:
         pos['reason'] = u"Timediff %.2f" % (timediff)
         tracklog.append(pos)
         return 2
     # New trackpoint if dist between this and latest saved exceeds threshold
-    last_dist = pos_distance(pos, tracklog[-1])
+    last_dist = pos_distance(pos, pos_last)
     if last_dist >= limits['max_dist']:
         pos['reason'] = u"Distance %2.2f>%.2f" % (last_dist,
                                                   limits['max_dist'])
         tracklog.append(pos)
         return 3
     # New trackpoint if max_trackdiff far from line between 2 latest points
-    dist_line = pos_distance_from_line(tracklog[-1], tracklog[-2], pos)
+    dist_line = pos_distance_from_line(pos_last, tracklog[-2], pos)
     if dist_line >= limits['max_trackdiff']:
         pos['reason'] = u"Distline %2.2f>%.2f" % (dist_line,
                                                   limits['max_trackdiff'])
         tracklog.append(pos)
         return 4
     # New trackpoint if turning
-    anglediff = Calculate.anglediff(tracklog[-1]['course'], pos["course"])
-    if anglediff > limits['max_anglediff'] and last_dist > limits['min_dist']:
-        pos['reason'] = u"Anglediff %2.2f>%.2f" % (anglediff,
-                                                   limits['max_anglediff'])
-        tracklog.append(pos)
-        return 5
+    if 'course' in pos_last and 'course' in pos:
+        anglediff = Calculate.anglediff(pos_last['course'], pos["course"])
+        if anglediff > limits['max_anglediff'] and last_dist > limits['min_dist']:
+            pos['reason'] = u"Anglediff %2.2f>%.2f" % (anglediff,
+                                                       limits['max_anglediff'])
+            tracklog.append(pos)
+            return 5
+    # New trackpoint if too far from estimated point
+    if 'course' in pos_last and 'course' in pos and \
+       'speed' in pos_last and 'speed' in pos:
+        dist_project = pos_last['speed'] * timediff # speed * seconds = distance in meters
+        lat, lon = Calculate.newlatlon(pos_last["lat"], pos_last["lon"], 
+                                       dist_project, pos_last["course"])
+        pos_estimate = {'lat': lat, 'lon': lon}
+        set_fake_utm(pos_estimate, long_origin)
+        dist_estimate = Calculate.distance(pos_estimate['lat'], pos_estimate['lon'],
+                                           pos['lat'], pos['lon'])
+        if dist_estimate > 50.0:
+            pos['reason'] = u"Distestimate %2.1f>%.2f" % (dist_estimate, 50)
+            tracklog.append(pos)
+            return 6
+    return 0
     # TODO:
-    # - speed diff
+    # - speed diff?
+    # - estimation cicrle?
     # - dynamic limits?
 
 
@@ -171,10 +192,11 @@ def _get_poslist():
     """
     import simplejson
     simple_list = []
-    with open(sys.argv[1], "rt") as trackjson:
-        for line in trackjson:
-            pos = simplejson.loads(line)
-            simple_list.append(pys60gpstools.simplify_position(pos))
+    trackjson = open(sys.argv[1], "rt")
+    for line in trackjson:
+        pos = simplejson.loads(line)
+        simple_list.append(pys60gpstools.simplify_position(pos))
+    trackjson.close()
     return simple_list
 
 if __name__ == '__main__':
@@ -209,6 +231,7 @@ if __name__ == '__main__':
             #print POS['reason']
     POS['reason'] = "Last"
     TRACKLOG.append(POS) # add last one
+    sys.stderr.write('TRACKLOG len: %d\n' % len(TRACKLOG))
     # print "<!--Tracklog len %d-->" % len(TRACKLOG)
     import track2kml
     print track2kml.header()

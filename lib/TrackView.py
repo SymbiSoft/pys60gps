@@ -266,7 +266,8 @@ class GpsTrackTab(BaseInfoTab):
         self.update()
 
     def stop_gps(self):
-        positioning.stop_position()
+        self.Main.stop_read_position()
+        #positioning.stop_position()
         self.Main.read_position_running = False
 
     def download_pois_new(self):
