@@ -37,14 +37,17 @@ def draw_startup_screen(canvas, text):
 
 canvas = appuifw.Canvas(redraw_callback=startup_screen)
 appuifw.app.body = canvas
-draw_startup_screen(canvas, u"sys, os, socket, sysinfo, re")
+draw_startup_screen(canvas, u"sys, os, btsocket, sysinfo, re")
 import sys
 
 my_log = Logger()
 #sys.stderr = sys.stdout = my_log
 
 import os
-import socket
+try:
+    import btsocket # pys60 > 1.9
+except:
+    import socket as btsocket
 import sysinfo
 import re
 draw_startup_screen(canvas, u"time, copy")
@@ -65,8 +68,12 @@ draw_startup_screen(canvas, u"Calculate")
 import Calculate
 draw_startup_screen(canvas, u"simplejson")
 import simplejson
-draw_startup_screen(canvas, u"PositionHelper")
-import PositionHelper
+draw_startup_screen(canvas, u"locationtools")
+import locationtools
+
+draw_startup_screen(canvas, u"pys60gpstools")
+import pys60gpstools
+
 draw_startup_screen(canvas, u"Comm")
 import Comm
 
@@ -205,6 +212,7 @@ class GpsApp:
         self.data["delivery_new"] = [] # All data to be sent to the server
         # GPS-position
         self.pos = {} # Contains always the latest position-record
+        self.simple_pos = {} # Contains always the latest position-record
         self.data["position"] = [] # Position history list (positioning.position())
         self.pos_estimate = {} # Contains estimated location, calculated from the latest history point
         self.data["position_debug"] = [] # latest "max_debugpoints" 
@@ -253,37 +261,34 @@ class GpsApp:
 
     def select_access_point(self, apid = None):
         if self.apid == None:
-            self.apid = socket.select_access_point()
+            self.apid = btsocket.select_access_point()
         if self.apid:
-            self.apo = socket.access_point(self.apid)
-            socket.set_default_access_point(self.apo)
+            self.apo = btsocket.access_point(self.apid)
+            btsocket.set_default_access_point(self.apo)
             #self.apo.start()
 
     def ask_accesspoint(self):
         """One more version to select access point"""
-        try: # FIXME: temporary workaround, waiting for bt_socket implementation
-            ap_dict = socket.access_points()    # 'iapid' and 'name' in dict
-        except:
-            return
+        ap_dict = btsocket.access_points()    # 'iapid' and 'name' in dict
         sel_item = appuifw.popup_menu([i['name'] for i in ap_dict],
                                       u"Select network to use")
         if sel_item != None:    # != Cancel
             if self.apo:
                 self.apo.stop()      
             self.apid = ap_dict[sel_item]['iapid']
-            self.apo = socket.access_point(self.apid)
-            socket.set_default_access_point(self.apo)
+            self.apo = btsocket.access_point(self.apid)
+            btsocket.set_default_access_point(self.apo)
 
     def _select_access_point(self, apid = None):
         """
-        Shortcut for socket.select_access_point() 
+        Shortcut for btsocket.select_access_point() 
         TODO: save selected access point to the config
         TODO: allow user to change access point later
         """
         if apid is not None:
             self.apid = apid
         else:
-            access_points = socket.access_points()
+            access_points = btsocket.access_points()
             sort_key = "iapid"
             decorated = [(dict_[sort_key], dict_) for dict_ in access_points]
             decorated.sort()
@@ -295,8 +300,8 @@ class GpsApp:
             if selected is not None:
                 self.apid = ap_ids[selected]
         if self.apid:
-            self.apo = socket.access_point(self.apid)
-            socket.set_default_access_point(self.apo)
+            self.apo = btsocket.access_point(self.apid)
+            btsocket.set_default_access_point(self.apo)
             self.config["apid"] = self.apid
             self.save_config()
             self._update_menu()
@@ -699,10 +704,10 @@ class GpsApp:
             appuifw.note(u"Bluetooth is not supported in emulator", 'error')
             return # Emulator crashes after this
         try:
-            bt_addr, services = socket.bt_obex_discover()
+            bt_addr, services = btsocket.bt_obex_discover()
             service = services.values()[0]
             # Upload the file
-            socket.bt_obex_send_file(bt_addr, service, filename)
+            btsocket.bt_obex_send_file(bt_addr, service, filename)
             appuifw.note(u"File '%s' sent" % filename)
         except Exception, error:
             appuifw.note(unicode(error), 'error')
@@ -1280,6 +1285,26 @@ class GpsApp:
         Keep latest n position objects in the data["position"] list.
         TODO: Save the track data (to a file) automatically for future use.
         """
+        #####################################################################
+        ############ NEW STUFF ###################
+        simple_pos = pys60gpstools.simplify_position(pos)
+        simple_pos["systime"] = time.time()
+        # Track simplification parameters
+        LIMITS = {
+            'max_trackdiff': 10.0, # meters
+            'min_dist': 10.0, # meters
+            'max_dist': 1000.0, # meters
+            'min_time': 0.0, # seconds
+            'max_time': 60.0, # seconds
+            'max_anglediff': 30.0, # degrees
+        }
+        
+        if pys60gpstools.has_fix(simple_pos):
+            if not self.LongOrigin: # Set center meridian
+                self.LongOrigin = simple_pos['lon']
+            locationtools.handle_trkpt(simple_pos, self.data["track_new"], 
+                                       LIMITS, self.LongOrigin)
+        #####################################################################
         pos["systime"] = time.time()
         pos["gsm_location"] = location.gsm_location()
         #if self.config["track_debug"]:
@@ -1392,6 +1417,7 @@ class GpsApp:
             pass
         # Save the new pos to global (current) self.pos
         self.pos = pos
+        self.simple_pos = simple_pos
         # Read gsm-cell changes
         self.read_gsm_location()
         # Scan wlan's automatically
