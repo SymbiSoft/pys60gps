@@ -559,10 +559,10 @@ class GpsApp:
                 appuifw.note(u"Can't download POIs, position unknown.", 'error')
                 return
         params["lat"] = "%.6f" % simple_pos['lat']
-        params["lon"] = "%.6f" % simple_pos['lat']
+        params["lon"] = "%.6f" % simple_pos['lon']
         # Testing
-        # params["lat"] = "60.275"
-        # params["lon"] = "24.98"
+        #params["lat"] = "60.275"
+        #params["lon"] = "24.98"
         e32.ao_sleep(0.05) # let the querypopup disappear
         self.ip.show(u"Downloading...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
         data, response = self.comm._send_request("get_pois", params)
@@ -578,15 +578,20 @@ class GpsApp:
             # appuifw.note(u"Got %s objects!" % len(geometries), 'info')
         else:
             appuifw.note(u"Did not find geojson from response. Maybe wrong keyword or no objects in neighbourhood?", 'error')
-        appuifw.note(u"Sorry, rest of this function is broken", 'error')
-        return
-        # FIXME:
-        for geom in geometries:
-            lon, lat = geom["coordinates"]
-            (z, e, n) = self._WGS84_UTM(lat, lon, LongOrigin=None)
-            geom["coordinates_en"] = [e, n]
+        #print geometries
+        self.data["pois_downloaded_new"] = []
+        for g in geometries:
+            p = {}
+            if 'title' in g['properties']:
+                p['text'] = g['properties']['title']
+            else:
+                p['text'] = u''
+            p['lon'], p['lat'] = g["coordinates"]
+            locationtools.set_fake_utm(p, self.LongOrigin)
+            self.data["pois_downloaded_new"].append(p)
+        #appuifw.note(u"pois %d" %len(self.data["pois_downloaded_new"]), 'error')
         self.downloading_pois_test = False
-        self.data["pois_downloaded_new"] = geometries
+        #self.data["pois_downloaded_new"] = geometries
 
     def _update_menu(self):
         """Update main view's left menu."""
