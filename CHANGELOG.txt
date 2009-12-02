@@ -1,5 +1,9 @@
 Pys60Gps Changelog
 
+2008-12-02 version 0.3.18
+
+A lot of improvements in Track log and view.
+
 2008-06-29 version 0.3.17
 
 Added possibility to clear data on Track.

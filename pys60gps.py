@@ -450,12 +450,12 @@ class GpsApp:
         """
         Find all gps, gsm and wlan signals currently available.
         """
-        geolocation = {"version" : "0.0.1"}
+        geolocation = {"version" : "0.0.2"}
         # Try to get gps location
-        pos = self.pos
-        if self.has_fix(pos):
-            geolocation["lat"] = "%.6f" % pos["position"]["latitude"]
-            geolocation["lon"] = "%.6f" % pos["position"]["longitude"]
+        simple_pos = self.simple_pos
+        if pys60gpstools.has_fix(simple_pos):
+            geolocation["lat"] = "%.6f" % pos['lat']
+            geolocation["lon"] = "%.6f" % pos['lon']
         # Try to scan wlan base stations
         wlan_devices = []
         try:
@@ -530,7 +530,7 @@ class GpsApp:
         return params
 
 
-    def download_pois_new(self, pos = None):
+    def download_pois_new(self, simple_pos = None):
         """
         Download geojson objects from the internet using Comm-module.
         """
@@ -547,16 +547,19 @@ class GpsApp:
                   "group" : str(self.config["group"]),
                   "pys60gps_version" : self.get_sis_version(),
                   })
-        if pos == None:
-            if self.has_fix(self.pos):
-                pos = self.pos
-            elif (len(self.data["position"]) > 0 and self.has_fix(self.data["position"][-1])):
-                pos = self.data["position"][-1]
+        if simple_pos == None:
+            # Try current pos
+            if pys60gpstools.has_fix(self.simple_pos):
+                simple_pos = self.simple_pos
+            # Try latest pos in tracklog
+            elif (len(self.data["track_new"]) > 0 and \
+                  pys60gpstools.has_fix(self.data["track_new"][-1])):
+                simple_pos = self.data["track_new"][-1]
             else:
                 appuifw.note(u"Can't download POIs, position unknown.", 'error')
                 return
-        params["lat"] = "%.6f" % pos["position"]["latitude"]
-        params["lon"] = "%.6f" % pos["position"]["longitude"]
+        params["lat"] = "%.6f" % simple_pos['lat']
+        params["lon"] = "%.6f" % simple_pos['lat']
         # Testing
         # params["lat"] = "60.275"
         # params["lon"] = "24.98"
@@ -575,6 +578,9 @@ class GpsApp:
             # appuifw.note(u"Got %s objects!" % len(geometries), 'info')
         else:
             appuifw.note(u"Did not find geojson from response. Maybe wrong keyword or no objects in neighbourhood?", 'error')
+        appuifw.note(u"Sorry, rest of this function is broken", 'error')
+        return
+        # FIXME:
         for geom in geometries:
             lon, lat = geom["coordinates"]
             (z, e, n) = self._WGS84_UTM(lat, lon, LongOrigin=None)
@@ -1134,7 +1140,7 @@ class GpsApp:
         Do automatically _wlanscan() if certain contitions are met.
         """
         simple_pos = self.simple_pos
-        if self.has_fix(simple_pos) is False:
+        if pys60gpstools.has_fix(simple_pos) is False:
             return # Do not save scan automatically, if there is no fix
         dist_time_flag = False
         dist = 0
@@ -1143,13 +1149,13 @@ class GpsApp:
             # Time difference between current and the latest saved position
             timediff = simple_pos["gpstime"] - p0["gpstime"]
             # Distance between current and the latest saved position
-            if self.has_fix(simple_pos) and self.has_fix(p0): # obsolete "if"
+            if pys60gpstools.has_fix(p0): # obsolete "if"
                 dist = Calculate.distance(p0['lat'],
                                           p0['lon'],
                                           simple_pos['lat'],
                                           simple_pos['lon'],
                                          )
-            # NOTE: pos["position"]["latitude"] may be a NaN!
+            # NOTE: pos["lat"] may be a NaN!
             # NaN >= 500 is True
             # NaN > 500 is False in Python 2.2!!!
             if ((dist > self.config["max_wlan_dist"] 
@@ -1197,9 +1203,8 @@ class GpsApp:
         #data["comment"] = u""
         data["duration"] = duration
         data["wlanlist"] = wlan_devices
-        #if not self.has_fix(pos): # TODO: move this interaction to some other function, e.g in tracktab
         #    data["comment"] = appuifw.query(u"No GPS fix, add text comment", "text", u"")
-        if not data.has_key("systime"):
+        if 'systime' not in data:
             # FIXME: create function to get ISO systime string
             # TODO: use above function here and everywhere
             data["systime"] = self.get_iso_systime()
@@ -1222,7 +1227,7 @@ class GpsApp:
         elif "info" in data:
             appuifw.note(data["info"], 'info')
             return {}
-        if not self.has_fix(self.pos): # TODO: move this interaction to some other function, e.g in tracktab
+        if not pys60gpstools.has_fix(self.simple_pos): # TODO: move this interaction to some other function, e.g in tracktab
             data["comment"] = appuifw.query(u"No GPS fix, add text comment", "text", u"")
         return data            
 
@@ -1242,15 +1247,15 @@ class GpsApp:
             appuifw.note(u"Bluetooth scan already running!", 'error')
             return False
         self.scanning["bluetooth"] = True
-        pos = copy.deepcopy(self.pos)
-        if not self.has_fix(pos): # TODO: move this interaction to some other function, e.g in tracktab
+        simple_pos = copy.deepcopy(self.simple_pos)
+        if not pys60gpstools.has_fix(simple_pos): # TODO: move this interaction to some other function, e.g in tracktab
             # Query this before, because finddevices() may take several minutes
             comment = appuifw.query(u"No GPS fix, add text comment", "text", u"")
         else:
             comment = u""
         starttime = time.clock()
         bt_devices = lightblue.finddevices()
-        data = self.simplify_position(pos, isotime=True)
+        data = self.archive_simple_pos(simple_pos)
         data["duration"] = time.clock() - starttime
         if comment != u"": data["comment"] = comment
         btlist = []
@@ -1271,42 +1276,6 @@ class GpsApp:
         self.scanning["bluetooth"] = False
         return data
 
-    def _calculate_UTM(self, pos, LongOrigin=None):
-        """
-        Calculate UTM coordinates and append them to pos. 
-        pos["position"]["latitude"] and 
-        pos["position"]["longitude"] must exist and be float.
-        """
-        if self.LongOrigin:
-             LongOrigin = self.LongOrigin
-        try:
-            (pos["position"]["z"], 
-             pos["position"]["e"], 
-             pos["position"]["n"]) = self._WGS84_UTM(pos["position"]["latitude"],
-                                                     pos["position"]["longitude"],
-                                                     LongOrigin)
-            return True
-        except:
-            # TODO: line number and exception text here too?
-            self.log(u"exception", u"Failed to LLtoUTM()")
-            return False
-
-    def _WGS84_UTM(self, lat, lon, LongOrigin=None):
-        """
-        Calculate UTM coordinates.
-        Return lat, lon and pseudo zone. 
-        """
-        if self.LongOrigin:
-             LongOrigin = self.LongOrigin
-        return LatLongUTMconversion.LLtoUTM(23, # Wgs84
-                                            lat, lon, LongOrigin)
-
-    def has_fix(self, pos):
-        """Return True if pos has a fix."""
-        if pos.has_key("position") and  pos["position"].has_key("latitude") and str(pos["position"]["latitude"]) != "NaN":
-            return True
-        else:
-            return False
 
     def archive_simple_pos(self, simple_pos):
         """
@@ -1333,16 +1302,16 @@ class GpsApp:
         Save the latest position object to the self.pos.
         Keep latest n position objects in the data["position"] list.
         """
-        #####################################################################
-        ############ NEW STUFF ###################
+        # Convert deep and verbose position dict to a flat and simple one
         simple_pos = pys60gpstools.simplify_position(pos)
+        # Add system time too
         simple_pos["systime"] = time.time()
-        
+        # Save pos to tracklog
         if pys60gpstools.has_fix(simple_pos):
             if not self.LongOrigin: # Set center meridian
                 self.LongOrigin = simple_pos['lon']
-            # Let handle_trkpt() decide should this pos be saved in tracklog
-            # Here could be several of these with different limits
+            # Saving all pos dicts takes a lot of storage, 
+            # let handle_trkpt() decide should this pos be saved in tracklog
             self.trackcalc = \
                 locationtools.handle_trkpt(simple_pos, 
                                            self.data["track_new"], 
@@ -1350,7 +1319,12 @@ class GpsApp:
             # If trackpoint was saved, put it into log file too
             if 'reason' in simple_pos: 
                 self.append_simple_pos(simple_pos)
+        # Save always the new pos to global self.pos for use in elsewhere
+        self.simple_pos = simple_pos
+
+        
         #####################################################################
+        # Backwards compatibility
         pos["systime"] = time.time()
         pos["gsm_location"] = location.gsm_location()
         #if self.config["track_debug"]:
@@ -1372,7 +1346,6 @@ class GpsApp:
             pass
         # Save the new pos to global (current) self.pos
         self.pos = pos
-        self.simple_pos = simple_pos
         # Read gsm-cell changes
         self.gsmscan()
         # Scan wlan's automatically
