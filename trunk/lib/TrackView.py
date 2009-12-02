@@ -220,14 +220,23 @@ class GpsTrackTab(BaseInfoTab):
                  "cellid":False,
                  "wlan":False,
                 }
+    canvas = None
+
+    def resize_cb(self, dummy=(0,0,0,0)):
+        if self.canvas:
+            self.ui = graphics.Image.new(self.canvas.size)
+            self.center_x = self.canvas.size[0]/2
+            self.center_y = self.canvas.size[1]/2
+        
 
     def activate(self):
         self.active = True
         appuifw.app.exit_key_handler = self.handle_close
-        self.canvas = appuifw.Canvas(redraw_callback=self.update)
-        size = self.canvas.size
-        self.center_x = size[0]
-        self.center_y = size[1]
+        self.canvas = appuifw.Canvas(redraw_callback=self.update,
+                                     resize_callback=self.resize_cb)
+        self.center_x = self.canvas.size[0]/2
+        self.center_y = self.canvas.size[1]/2
+        #self.resize_cb()
         self.ui = graphics.Image.new(self.canvas.size)
         appuifw.app.body = self.canvas
         appuifw.app.screen = "normal"
@@ -610,8 +619,8 @@ class GpsTrackTab(BaseInfoTab):
             # FIXME: no hardcoded values here
             if (p.has_key("x") 
                and p1.has_key("x") 
-               and (-120 < p["x"] < 120 or -120 < p1["x"] < 120) 
-               and (-120 < p["y"] < 120 or -120 < p1["y"] < 120) 
+               and (-self.center_x < p["x"] < self.center_x or -self.center_x < p1["x"] < self.center_x) 
+               and (-self.center_y < p["y"] < self.center_y or -self.center_y < p1["y"] < self.center_y) 
                and timediff <= max_timediff):
                 self.ui.point([p["x"]+self.center_x, p["y"]+self.center_y], outline=0xff0000, width=5)
                 self.ui.line([p["x"]+self.center_x, p["y"]+self.center_y, 
@@ -636,11 +645,11 @@ class GpsTrackTab(BaseInfoTab):
             # FIXME: no hardcoded values here
             if (p.has_key("x") 
                and p1.has_key("x") 
-               and (-120 < p["x"] < 120 or -120 < p1["x"] < 120) 
-               and (-120 < p["y"] < 120 or -120 < p1["y"] < 120) 
+               and (-self.center_x < p["x"] < self.center_x or -self.center_x < p1["x"] < self.center_x) 
+               and (-self.center_y < p["y"] < self.center_y or -self.center_y < p1["y"] < self.center_y) 
                and timediff <= max_timediff):
                 self.ui.point([p["x"]+self.center_x, p["y"]+self.center_y], outline=0x888800, width=5)
-                self.ui.line([p["x"]+self.center_x, p["y"]+self.center_y, 
+                self.ui.line([p["x"]+self.center_x, p["y"]+self.center_y,
                               p1["x"]+self.center_x, p1["y"]+self.center_y], outline=0x008888, width=3)
                 lines_drawn = lines_drawn + 1
             p1 = p
@@ -659,7 +668,9 @@ class GpsTrackTab(BaseInfoTab):
 
     def draw_texts(self):
         helpfont = (u"Series 60 Sans", 12)
-        self.ui.text((2,15), u"%d m between points" % self.Main.config["min_trackpoint_distance"], font=helpfont, fill=0x999999)
+        #self.ui.text((2,15), u"%d m between points" % self.Main.config["min_trackpoint_distance"], font=helpfont, fill=0x999999)
+        self.ui.text((2,15), u"Canvas: %d x %d" % (self.canvas.size), font=helpfont, fill=0x999999)
+        
         self.ui.text((2,27), u"%d/%d points in history" % 
              (len(self.Main.data["position"]), self.Main.config["max_trackpoints"]), font=helpfont, fill=0x999999)
         
@@ -671,8 +682,11 @@ class GpsTrackTab(BaseInfoTab):
         if self.seen_counter > 0:
             self.ui.text((100,63), u"Eaten %d" % self.seen_counter, font=helpfont, fill=0x999999)
         
-        if self.simple_center_pos and 'e' in self.simple_center_po:
-            self.ui.text((2,75), u"E %.2f" % self.simple_center_pos["e"], font=helpfont, fill=0x999999)
+        try:
+            e_text = u"E %.2f" % self.simple_center_pos["e"]
+        except:
+            e_text = u"E error"
+        self.ui.text((2,75), e_text, font=helpfont, fill=0x999999)
 
     def draw_scalebar(self):
         """Draw the scale bar"""
@@ -707,8 +721,9 @@ class GpsTrackTab(BaseInfoTab):
         poi_r = 5 # POI circles radius
         ch_l = 10 # Crosshair length
         # TODO: determine center from canvas width/height
-        self.center_x = center_x = 120
-        self.center_y = center_y = 120
+        center_x = self.center_x
+        center_y = self.center_y
+        #self.center_y = center_y = 120
         # TODO: cleanup here!
         self.ui.clear()
         # Print some information about track
