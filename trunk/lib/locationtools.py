@@ -1,4 +1,5 @@
 # -*- coding: utf8 -*-
+# $Id: TrackView.py 226 2009-12-02 10:21:37Z aapris $
 """
 Reduce the number of trackpoints to save.
 
@@ -109,10 +110,11 @@ def pos_distance(pos1, pos2):
     """Return distance between two pos objects, calculated from lat/lon."""
     try:
         return Calculate.distance(pos1['lat'], pos1['lon'],
-                              pos2['lat'], pos2['lon'])
+                                  pos2['lat'], pos2['lon'])
     except:
-        print pos1['lat'], pos1['lon'], pos2['lat'], pos2['lon']
-        raise
+        print "exception in Calculate.distance:", \
+               pos1['lat'], pos1['lon'], pos2['lat'], pos2['lon']
+        return 0.0
 
 
 def pos_distance_from_line(p1, p2, pos):
