@@ -78,7 +78,7 @@ draw_startup_screen(canvas, u"Comm")
 import Comm
 
 draw_startup_screen(canvas, u"TrackView")
-from TrackView import TrackView
+import TrackView; reload(TrackView)
 
 draw_startup_screen(canvas, u"SimpleChatView")
 from SimpleChatView import SimpleChatView
@@ -200,6 +200,18 @@ class GpsApp:
         self.scanning = {"wlan":False,
                          "bluetooth":False,
                          }
+        # FIXME: temporarely here, these should be in settings
+        # Track simplification parameters
+        self.LIMITS = {
+            'max_linediff': 5.0, # meters
+            'min_dist': 10.0, # meters
+            'max_dist': 1000.0, # meters
+            'min_time': 0.0, # seconds
+            'max_time': 60.0, # seconds
+            'max_anglediff': 30.0, # degrees
+            'max_dist_estimate': 50.0, # meters        
+        }
+
         # Data-repository
         self.data = {}
         self.data["gsm_location"] = [] # GSM-cellid history list (location.gsm_location())
@@ -214,6 +226,7 @@ class GpsApp:
         # GPS-position
         self.pos = {} # Contains always the latest position-record
         self.simple_pos = {} # Contains always the latest position-record
+        self.trackcalc = {} # Contains handle_trkpt()'s result dict
         self.data["position"] = [] # Position history list (positioning.position())
         self.pos_estimate = {} # Contains estimated location, calculated from the latest history point
         self.data["position_debug"] = [] # latest "max_debugpoints" 
@@ -233,7 +246,7 @@ class GpsApp:
         self.speed_history = []
         # Put all menu entries and views as tuples into a sequence
         self.menu_entries = []
-        self.menu_entries.append(((u"Track"), TrackView(self)))
+        self.menu_entries.append(((u"Track"), TrackView.TrackView(self)))
         plokcomm = Comm.Comm(self.config["plokhost"], 
                              self.config["plokscript"],
                              username=self.config["username"],
@@ -1307,31 +1320,23 @@ class GpsApp:
         positioning.position() callback.
         Save the latest position object to the self.pos.
         Keep latest n position objects in the data["position"] list.
-        TODO: Save the track data (to a file) automatically for future use.
         """
         #####################################################################
         ############ NEW STUFF ###################
         simple_pos = pys60gpstools.simplify_position(pos)
         simple_pos["systime"] = time.time()
-        # Track simplification parameters
-        LIMITS = {
-            'max_trackdiff': 10.0, # meters
-            'min_dist': 10.0, # meters
-            'max_dist': 1000.0, # meters
-            'min_time': 0.0, # seconds
-            'max_time': 60.0, # seconds
-            'max_anglediff': 30.0, # degrees
-        }
         
         if pys60gpstools.has_fix(simple_pos):
             if not self.LongOrigin: # Set center meridian
                 self.LongOrigin = simple_pos['lon']
             # Let handle_trkpt() decide should this pos be saved in tracklog
             # Here could be several of these with different limits
-            saved = locationtools.handle_trkpt(simple_pos, 
-                                               self.data["track_new"], 
-                                               LIMITS, self.LongOrigin)
-            if saved: # If trackpoint was saved, put it into log file too
+            self.trackcalc = \
+                locationtools.handle_trkpt(simple_pos, 
+                                           self.data["track_new"], 
+                                           self.LIMITS, self.LongOrigin)
+            # If trackpoint was saved, put it into log file too
+            if 'reason' in simple_pos: 
                 self.append_simple_pos(simple_pos)
         #####################################################################
         pos["systime"] = time.time()
@@ -1380,23 +1385,26 @@ class GpsApp:
                     pass # all defaults to 0
                 
                 # Project a location estimation point (pe) using speed and heading from the latest saved point
-                pe = {}
-                # timediff = time.time() - p0['systime']
-                dist_project = p0["course"]["speed"] * timediff # speed * seconds = distance in meters
-                lat, lon = Calculate.newlatlon(p0["position"]["latitude"], p0["position"]["longitude"], 
-                                               dist_project, p0["course"]["heading"])
-                pe["position"] = {}
-                pe["position"]["latitude"] = lat
-                pe["position"]["longitude"] = lon
-                self.Main._calculate_UTM(pe)
-                self.pos_estimate = pe
-                # This calculates the distance between the current point and the estimated point.
-                # Perhaps ellips could be more optime?
-                dist_estimate = Calculate.distance(pe["position"]["latitude"],
-                                          pe["position"]["longitude"],
-                                          pos["position"]["latitude"],
-                                          pos["position"]["longitude"],
-                                         )
+                try:
+                    pe = {}
+                    # timediff = time.time() - p0['systime']
+                    dist_project = p0["course"]["speed"] * timediff # speed * seconds = distance in meters
+                    lat, lon = Calculate.newlatlon(p0["position"]["latitude"], p0["position"]["longitude"], 
+                                                   dist_project, p0["course"]["heading"])
+                    pe["position"] = {}
+                    pe["position"]["latitude"] = lat
+                    pe["position"]["longitude"] = lon
+                    self.Main._calculate_UTM(pe)
+                    self.pos_estimate = pe
+                    # This calculates the distance between the current point and the estimated point.
+                    # Perhaps ellips could be more optime?
+                    dist_estimate = Calculate.distance(pe["position"]["latitude"],
+                                              pe["position"]["longitude"],
+                                              pos["position"]["latitude"],
+                                              pos["position"]["longitude"],
+                                             )
+                except:
+                    pass
                 # This calculates the distance of the current point from the estimation vector
                 # In the future this will be an alternate to the estimation circle
                 if p0.has_key("course") and p0["course"].has_key("speed") and p0["course"].has_key("heading"):
@@ -1408,7 +1416,7 @@ class GpsApp:
                     dist_line  = distance_from_line(p0["position"]["e"], p0["position"]["n"],
                                                     p1["position"]["e"], p1["position"]["n"],
                                                     pos["position"]["e"],pos["position"]["n"])
-                                         
+
             else: # Always append the first point with fix
                 self.data["position"].append(pos)
             self.data["dist_line"] = dist_line

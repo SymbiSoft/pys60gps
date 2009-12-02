@@ -517,31 +517,22 @@ class GpsTrackTab(BaseInfoTab):
             p["canvas_xy"] = [x, y]
 
     def draw_point_estimation(self, pos):
-        if len(self.Main.data["position"]) > 0: 
-            pe = self.Main.pos_estimate
+        if len(self.Main.data["position"]) > 0 and 'pos_estimate' in self.Main.trackcalc:
+            pe = self.Main.trackcalc['pos_estimate']
             err_radius = self.Main.config["estimated_error_radius"] # meters
             ell_r = err_radius / self.meters_per_px 
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, self.pc, pe)
-            if pe.has_key("x"):
+            self._calculate_canvas_xy_new(self.ui, self.meters_per_px, self.simple_pc, pe)
+            if 'x' in pe:
                 self.ui.ellipse([(pe["x"]+self.center_x-ell_r,pe["y"]+self.center_y-ell_r),
                                  (pe["x"]+self.center_x+ell_r,pe["y"]+self.center_y+ell_r)], outline=0x9999ff)
             # Draw accurancy circle
             # FIXME: this doesn't draw the circle to the current position, instead to the map center
-            acc_radius = pos["position"]["horizontal_accuracy"]
-            if acc_radius > 0:
-                acc_r = acc_radius / self.meters_per_px 
-                self.ui.ellipse([(self.center_x-acc_r,self.center_y-acc_r),
-                                 (self.center_x+acc_r,self.center_y+acc_r)], outline=0xccffcc)
-            if self.Main.data["trip_distance"] >= 1000.0:
-                trip = u"%.2f km" % (self.Main.data["trip_distance"] / 1000)
-            else:
-                trip = u"%.1f m" % (self.Main.data["trip_distance"])
-            # TODO REMOVE:
-            # trip = u"%.1f m" % (self.Main.data["trip_distance"])
-            #self.ui.text(([10, 230]), u"%.1f km/h %.1f' %s" % (pos["course"]["speed"]*3.6, pos["course"]["heading"],  trip),
-            # TODO: replace ' with hex representation of degree sign (ASCII b0, UNICODE ?) 
-            self.ui.text(([10, 230]), u"%.1f m/s %.1f' %s" % (pos["course"]["speed"], pos["course"]["heading"],  trip), 
-                                      font=(u"Series 60 Sans", 18), fill=0x000000)
+            if 'hacc' in pos:
+                acc_radius = pos['hacc']
+                if acc_radius > 0:
+                    acc_r = acc_radius / self.meters_per_px 
+                    self.ui.ellipse([(self.center_x-acc_r,self.center_y-acc_r),
+                                     (self.center_x+acc_r,self.center_y+acc_r)], outline=0xccffcc)
 
     def draw_course_arrow(self, pos):        
         if pys60gpstools.has_fix(pos) and 'course' in pos and 'speed' in pos:
@@ -577,26 +568,9 @@ class GpsTrackTab(BaseInfoTab):
             except:
                 x0, y0 = 0, 0
                 x, y = 0, 0
-            #x,y = project_point(x0, y0, p["course"]["speed"]*3.6, p["course"]["heading"])
-            self.ui.line([x0+self.center_x, y0+self.center_y, x+self.center_x, y+self.center_y], outline=0xffff99, 
-                          width=1+(self.Main.config["max_estimation_vector_distance"]/self.meters_per_px/2))
-            #dist  = distance_from_vector(p["position"]["e"], p["position"]["n"],
-            #                             p["course"]["speed"]*3.6, p["course"]["heading"],
-            #                             pos["position"]["e"],pos["position"]["n"])
-            dist = self.Main.data["dist_line"]
-            s=50
-            i=15
-            try:
-                d = math.sqrt((p["e"] - pos["e"])**2 + (p["n"] - pos["n"])**2)
-            except:
-                d = -1
-            self.ui.text((150, s), u"%.1f m (ldist)" % (dist), font=(u"Series 60 Sans", i), fill=0x000000)
-            s = s + i
-            self.ui.text((150, s), u"%.1f m (pdist)" % (abs(d)), font=(u"Series 60 Sans", i), fill=0x000000)
-            if self.Main.data.has_key("dist_2_latest"):
-                s = s + i
-                self.ui.text((150, s), u"%.1f m" % (self.Main.data["dist_2_latest"]), font=(u"Series 60 Sans", i), fill=0x000000)
-            #self.ui.text((160, s), u"%d %d %d %d" % (x0, y0, x, y), font=(u"Series 60 Sans", 10), fill=0x000000)
+            self.ui.line([x0+self.center_x, y0+self.center_y, x+self.center_x, y+self.center_y], 
+                          outline=0xffff99, 
+                          width=1+int(self.Main.config["max_estimation_vector_distance"]/self.meters_per_px/2))
 
     def draw_points(self, points, color):
         for p in points:
@@ -666,32 +640,99 @@ class GpsTrackTab(BaseInfoTab):
             self.ui.point([20, 10], outline=0xffff00, width=10)
 
 
-    def draw_texts(self):
-        helpfont = (u"Series 60 Sans", 12)
+    def draw_texts(self, pos):
+        helpfont_size = 12
+        text_y = 3
+        helpfont = (u"Series 60 Sans", helpfont_size)
+        #text_y += helpfont_size
         #self.ui.text((2,15), u"%d m between points" % self.Main.config["min_trackpoint_distance"], font=helpfont, fill=0x999999)
-        self.ui.text((2,15), u"Canvas: %d x %d" % (self.canvas.size), font=helpfont, fill=0x999999)
-        
-        self.ui.text((2,27), u"%d/%d points in history" % 
-             (len(self.Main.data["position"]), self.Main.config["max_trackpoints"]), font=helpfont, fill=0x999999)
-        
-        self.ui.text((2,39), u"Press joystick to save a POI", font=helpfont, fill=0x999999)
-        self.ui.text((2,51), u"Press * or # to zoom", font=helpfont, fill=0x999999)
-        self.ui.text((2,63), u"Debug %s" % self.Main.config["track_debug"], font=helpfont, fill=0x999999)
-        self.ui.text((80,63), u"(%d/%d)" % (len(self.Main.data["track_new"]), 
-                                            len(self.Main.data["position_debug"])), font=helpfont, fill=0x999999)
-        if self.seen_counter > 0:
-            self.ui.text((100,63), u"Eaten %d" % self.seen_counter, font=helpfont, fill=0x999999)
+        #text_y += helpfont_size
+        #self.ui.text((2, text_y), u"Canvas: %d x %d" % (self.canvas.size), 
+        #             font=helpfont, fill=0x999999)
+
+        text_y += helpfont_size
+        self.ui.text((2, text_y), u"Track 1,2: %d/%d,%d/%d" % (
+                        len(self.Main.data["position"]), 
+                        self.Main.config["max_trackpoints"],
+                        len(self.Main.data["track_new"]), 
+                        len(self.Main.data["position_debug"]), 
+                        ), 
+                        font=helpfont, fill=0x999999)
+
+        #text_y += helpfont_size
+        #self.ui.text((2, text_y), u"Press joystick to save a POI", 
+        #             font=helpfont, fill=0x999999)
+        #text_y += helpfont_size
+        #self.ui.text((2, text_y), u"Press * or # to zoom", font=helpfont, fill=0x999999)
+
+        #text_y += helpfont_size
+        #self.ui.text((2, text_y), u"Debug %s" % self.Main.config["track_debug"], 
+        #             font=helpfont, fill=0x999999)
         
         try:
             e_text = u"E %.2f" % self.simple_center_pos["e"]
+            text_y += helpfont_size
+            self.ui.text((2,text_y), e_text, font=helpfont, fill=0x999999)
         except:
-            e_text = u"E error"
-        self.ui.text((2,75), e_text, font=helpfont, fill=0x999999)
+            pass
+
+        # TODO: this track calculation to own function
+        barfont = (u"Series 60 Sans", 10)
+        def barbarbar(barsize, text, val, max):
+            """
+            Draw a bar which shows the how the relation 
+            between val and max value.
+            """
+            if max == 0:
+                return
+            (x1, y1, x2, y2) = barsize
+            barwidth = x2 - x1
+            # Outline
+            self.ui.rectangle((x1, y1, x2, y2), outline=0x80f080)
+            # Fillings
+            fill_w = val / max * barwidth
+            if val < max:
+                color = 0x80ff80
+            else:
+                color = 0xff8080
+            self.ui.rectangle((x1, y1, fill_w, y2), fill=color)
+            self.ui.text((x1, y2 - 1), text % (val, max), 
+                        font=barfont, fill=0x999999)
+
+        if self.Main.trackcalc:
+            tc = self.Main.trackcalc
+            x1 = 2
+            barwidth = 50
+            x2 = x1 + barwidth
+            bars = [
+                ('timediff', u"Time: %.1f/%.1f m", 'max_time'),
+                ('lastdist', u"Dist: %.1f/%.1f m", 'max_dist'),
+                ('linedist', u"Line: %.1f/%.1f m", 'max_linediff'),
+                ('estimatedist', u"Est.: %.1f/%.1f m", 'max_dist_estimate'),
+            ]
+            for bar in bars:
+                if bar[0]  in tc:
+                    text_y += helpfont_size
+                    barbarbar((x1, text_y - helpfont_size, x2, text_y),
+                              bar[1], tc[bar[0]], self.Main.LIMITS[bar[2]])
+
+
+        try:
+            if self.Main.data["trip_distance"] >= 1000.0:
+                trip = u"%.2f km" % (self.Main.data["trip_distance"] / 1000)
+            else:
+                trip = u"%.1f m" % (self.Main.data["trip_distance"])
+            self.ui.text(([10, 230]), u"%.1f m/s %.1f' %s" % (pos["speed"], pos["course"],  trip), 
+                                  font=(u"Series 60 Sans", 18), fill=0x000000)
+        except:
+            pass
+
 
     def draw_scalebar(self):
-        """Draw the scale bar"""
+        """Draw the scale bar."""
         scale_bar_width = 50 # pixels
-        scale_bar_x = 150    # x location
+        #scale_bar_x = 150    # x location
+        scale_bar_x = self.canvas.size[0] - 60    # x location
         scale_bar_y = 20     # y location
         scale_value = scale_bar_width * self.meters_per_px
         if scale_value > 1000: 
@@ -762,7 +803,7 @@ class GpsTrackTab(BaseInfoTab):
         self.draw_track()
         self.draw_track_new()
         self.draw_statusbar(simple_pos)
-        self.draw_texts()
+        self.draw_texts(simple_pos)
         self.draw_scalebar()
         
     #def draw_pois_private(self):
