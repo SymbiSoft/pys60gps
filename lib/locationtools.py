@@ -127,59 +127,66 @@ def handle_trkpt(pos, tracklog, limits, long_origin):
     Compare pos to 1-2 latest points in tracklog and append pos to it
     if certain conditions are met.
     """
+    res = {}
     # Calculate fake n and e values (fake because we don't use 
     # valid long_origin but first pos' long)
     set_fake_utm(pos, long_origin)
     # New trackpoint if tracklog is empty or has only 1 point yet
     if len(tracklog) <= 1:
-        pos['reason'] = u"Startpoint"
+        pos['reason'] = u"Start"
         tracklog.append(pos)
-        return 1
+        return res
     # Now we have for sure at least 1 trackpoint in log list
     pos_last = tracklog[-1]
     # New trackpoint max_time has been exceeded
-    timediff = pos['gpstime'] - pos_last['gpstime']
-    if timediff >= limits['max_time']:
-        pos['reason'] = u"Timediff %.2f" % (timediff)
+    res['timediff'] = pos['gpstime'] - pos_last['gpstime']
+    if res['timediff'] >= limits['max_time']:
+        pos['reason'] = u"Timediff %.2f" % (res['timediff'])
         tracklog.append(pos)
-        return 2
+        return res
     # New trackpoint if dist between this and latest saved exceeds threshold
-    last_dist = pos_distance(pos, pos_last)
-    if last_dist >= limits['max_dist']:
-        pos['reason'] = u"Distance %2.2f>%.2f" % (last_dist,
+    res['lastdist'] = pos_distance(pos, pos_last)
+    if res['lastdist'] >= limits['max_dist']:
+        pos['reason'] = u"Distance %2.2f>%.2f" % (res['lastdist'],
                                                   limits['max_dist'])
         tracklog.append(pos)
-        return 3
-    # New trackpoint if max_trackdiff far from line between 2 latest points
-    dist_line = pos_distance_from_line(pos_last, tracklog[-2], pos)
-    if dist_line >= limits['max_trackdiff']:
-        pos['reason'] = u"Distline %2.2f>%.2f" % (dist_line,
-                                                  limits['max_trackdiff'])
+        return res
+    # New trackpoint if max_linediff far from line between 2 latest points
+    res['linedist'] = pos_distance_from_line(pos_last, tracklog[-2], pos)
+    if res['linedist'] >= limits['max_linediff']:
+        pos['reason'] = u"Distline %2.2f>%.2f" % (res['linedist'],
+                                                  limits['max_linediff'])
         tracklog.append(pos)
-        return 4
+        return res
     # New trackpoint if turning
     if 'course' in pos_last and 'course' in pos:
-        anglediff = Calculate.anglediff(pos_last['course'], pos["course"])
-        if anglediff > limits['max_anglediff'] and last_dist > limits['min_dist']:
-            pos['reason'] = u"Anglediff %2.2f>%.2f" % (anglediff,
-                                                       limits['max_anglediff'])
+        res['coursediff'] = Calculate.anglediff(pos_last['course'], 
+                                                pos["course"])
+        if res['coursediff'] > limits['max_anglediff'] and \
+           res['lastdist'] > limits['min_dist']:
+            pos['reason'] = u"Anglediff %2.2f>%.2f" % (res['coursediff'],
+                                                    limits['max_anglediff'])
             tracklog.append(pos)
-            return 5
+            return res
     # New trackpoint if too far from estimated point
+    # Estimated point is calculated from latest point's course and speed
     if 'course' in pos_last and 'course' in pos and \
        'speed' in pos_last and 'speed' in pos:
-        dist_project = pos_last['speed'] * timediff # speed * seconds = distance in meters
+        # speed * seconds = distance in meters
+        dist_project = pos_last['speed'] * res['timediff']
         lat, lon = Calculate.newlatlon(pos_last["lat"], pos_last["lon"], 
                                        dist_project, pos_last["course"])
         pos_estimate = {'lat': lat, 'lon': lon}
         set_fake_utm(pos_estimate, long_origin)
-        dist_estimate = Calculate.distance(pos_estimate['lat'], pos_estimate['lon'],
-                                           pos['lat'], pos['lon'])
-        if dist_estimate > 50.0:
-            pos['reason'] = u"Distestimate %2.1f>%.2f" % (dist_estimate, 50)
+        res['estimatedist'] = Calculate.distance(pos_estimate['lat'], 
+                                                 pos_estimate['lon'],
+                                                 pos['lat'], pos['lon'])
+        if res['estimatedist'] > limits['max_dist_estimate']:
+            pos['reason'] = u"Estimate %2.1f>%.2f" % (res['estimatedist'], 
+                                                  limits['max_dist_estimate'])
             tracklog.append(pos)
-            return 6
-    return 0
+            return res
+    return res
     # TODO:
     # - speed diff?
     # - estimation cicrle?
@@ -201,19 +208,9 @@ def _get_poslist():
 
 if __name__ == '__main__':
     POSLOG = []
-    TRACKLOG = []
     LOSTFIX = True
     LONG_ORIGIN = None
 
-    # Track simplification parameters
-    LIMITS = {
-        'max_trackdiff': 10.0, # meters
-        'min_dist': 10.0, # meters
-        'max_dist': 1000.0, # meters
-        'min_time': 0.0, # seconds
-        'max_time': 60.0, # seconds
-        'max_anglediff': 30.0, # degrees
-    }
     for POS in _get_poslist():
         if pys60gpstools.has_fix(POS):
             if LOSTFIX == True:
@@ -225,24 +222,60 @@ if __name__ == '__main__':
         #print LOSTFIX
     if POSLOG:
         LONG_ORIGIN = POSLOG[0]['lon']
+    # Track simplification parameters
+    LIMITS = {
+        'max_linediff': 10.0, # meters
+        'min_dist': 10.0, # meters
+        'max_dist': 1000.0, # meters
+        'min_time': 0.0, # seconds
+        'max_time': 60.0, # seconds
+        'max_anglediff': 30.0, # degrees
+        'max_dist_estimate': 50.0, # meters        
+    }
+    # TRACK1
+    TRACKLOG = []
     for POS in POSLOG:
-        if handle_trkpt(POS, TRACKLOG, LIMITS, LONG_ORIGIN):
-            pass
-            #print POS['reason']
-    POS['reason'] = "Last"
-    TRACKLOG.append(POS) # add last one
-    sys.stderr.write('TRACKLOG len: %d\n' % len(TRACKLOG))
+        handle_trkpt(POS, TRACKLOG, LIMITS, LONG_ORIGIN)
+    sys.stderr.write('TRACKLOG1 len: %d\n' % len(TRACKLOG))
+
+    LIMITS = {
+        'max_linediff': 3.0, # meters
+        'min_dist': 5.0, # meters
+        'max_dist': 1000.0, # meters
+        'min_time': 0.0, # seconds
+        'max_time': 60.0, # seconds
+        'max_anglediff': 30.0, # degrees
+        'max_dist_estimate': 20.0, # meters        
+    }
+    # TRACK1
+    TRACKLOG2 = []
+    for POS in POSLOG:
+        handle_trkpt(POS, TRACKLOG2, LIMITS, LONG_ORIGIN)
+    sys.stderr.write('TRACKLOG2 len: %d\n' % len(TRACKLOG2))
+    
     # print "<!--Tracklog len %d-->" % len(TRACKLOG)
     import track2kml
     print track2kml.header()
-    print track2kml.start_placemark("All")
+    print track2kml.start_placemark("All", 'ffffffff')
     for POS in _get_poslist():
         if pys60gpstools.has_fix(POS):
             print "%(lon).6f,%(lat).6f" % POS
     PLACEMARKS = []
     print track2kml.end_placemark()
-    print track2kml.start_placemark("Reduced", 'ffffffff')
+    print track2kml.start_placemark("Red", 'ff0000ff')
     for POS in TRACKLOG:
+        print "%(lon).6f,%(lat).6f" % POS
+        #print POS
+        des = time.strftime(u"%H:%M:%S ", time.localtime(POS['gpstime']))
+        des += u"%(speed).1f m/s %(course).1f° %(hdop).1f" % POS
+        PLACEMARKS.append(track2kml.placemark({
+            'name': "%s" % POS['reason'][:1],
+            'description': des,
+            'coordinates': "%(lon).6f,%(lat).6f" % POS,
+        }))
+    print track2kml.end_placemark()
+    print track2kml.start_placemark("Blue", 'ffff0000')
+    for POS in TRACKLOG2:
         print "%(lon).6f,%(lat).6f" % POS
         #print POS
         des = time.strftime(u"%H:%M:%S ", time.localtime(POS['gpstime']))
