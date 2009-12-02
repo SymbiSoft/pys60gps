@@ -107,8 +107,12 @@ def set_fake_utm(pos, long_origin=None):
 # Helpers
 def pos_distance(pos1, pos2):
     """Return distance between two pos objects, calculated from lat/lon."""
-    return Calculate.distance(pos1['lat'], pos1['lon'],
+    try:
+        return Calculate.distance(pos1['lat'], pos1['lon'],
                               pos2['lat'], pos2['lon'])
+    except:
+        print pos1['lat'], pos1['lon'], pos2['lat'], pos2['lon']
+        raise
 
 
 def pos_distance_from_line(p1, p2, pos):
@@ -143,21 +147,21 @@ def handle_trkpt(pos, tracklog, limits, long_origin):
     if res['timediff'] >= limits['max_time']:
         pos['reason'] = u"Timediff %.2f" % (res['timediff'])
         tracklog.append(pos)
-        return res
+        #return res
     # New trackpoint if dist between this and latest saved exceeds threshold
     res['lastdist'] = pos_distance(pos, pos_last)
     if res['lastdist'] >= limits['max_dist']:
         pos['reason'] = u"Distance %2.2f>%.2f" % (res['lastdist'],
                                                   limits['max_dist'])
         tracklog.append(pos)
-        return res
+        #return res
     # New trackpoint if max_linediff far from line between 2 latest points
     res['linedist'] = pos_distance_from_line(pos_last, tracklog[-2], pos)
     if res['linedist'] >= limits['max_linediff']:
         pos['reason'] = u"Distline %2.2f>%.2f" % (res['linedist'],
                                                   limits['max_linediff'])
         tracklog.append(pos)
-        return res
+        #return res
     # New trackpoint if turning
     if 'course' in pos_last and 'course' in pos:
         res['coursediff'] = Calculate.anglediff(pos_last['course'], 
@@ -167,7 +171,7 @@ def handle_trkpt(pos, tracklog, limits, long_origin):
             pos['reason'] = u"Anglediff %2.2f>%.2f" % (res['coursediff'],
                                                     limits['max_anglediff'])
             tracklog.append(pos)
-            return res
+            #return res
     # New trackpoint if too far from estimated point
     # Estimated point is calculated from latest point's course and speed
     if 'course' in pos_last and 'course' in pos and \
@@ -181,11 +185,12 @@ def handle_trkpt(pos, tracklog, limits, long_origin):
         res['estimatedist'] = Calculate.distance(pos_estimate['lat'], 
                                                  pos_estimate['lon'],
                                                  pos['lat'], pos['lon'])
+        res['pos_estimate'] = pos_estimate
         if res['estimatedist'] > limits['max_dist_estimate']:
             pos['reason'] = u"Estimate %2.1f>%.2f" % (res['estimatedist'], 
                                                   limits['max_dist_estimate'])
             tracklog.append(pos)
-            return res
+            #return res
     return res
     # TODO:
     # - speed diff?
