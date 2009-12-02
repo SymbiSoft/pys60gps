@@ -6,66 +6,50 @@ import e32
 import time
 import sys
 import os
-import socket
-import sysinfo
 import re
 import time
 import copy
-import zipfile
-import positioning
-import location
 import key_codes
 import graphics
-import audio
-import LatLongUTMconversion
-import Calculate
 import simplejson
 import PositionHelper
-import Comm
 import pys60gpstools
 import locationtools
 
-####################################
-# FIXME: move these to an own module
-# These are currently in pys60gps.pu and TrackView.py
+ARROW_POINTS = [(-0.0,  0.0), ( 0.0,  0.0), ( 1.0, 20.0), ( 5.0, 15.0),
+                ( 0.0, 25.0), (-5.0, 15.0), (-1.0, 20.0),
+                ]
+
 import math
-rad=math.pi/180
+def rotate(points, xoff, yoff, angle, zoom):
+    """
+    Rotate polygon which is defined in points.
+    """
 
-def project_point(x0, y0, dist, angle):
-    """Project a new point from point x0,y0 to given direction and angle."""
-    # TODO: check that the docstring is correct
-    # TODO: check that alghorithm below is correct
-    y1 = y0 + math.cos(angle * rad) * dist
-    x1 = x0 + math.cos((90 - angle) * rad) * dist
-    return x1, y1
+    # Convert integer angle to radians for math.sin() and math.cos().
+    angle_rad = angle * 2 * math.pi / 360.0
 
-def slope(x0, y0, x1, y1):
-    """Calculate the slope of the line joining two points."""
-    if x0 == x1: return 0
-    return 1.0*(y0-y1)/(x0-x1)
+    # Rotate, scale and transpose points.
+    rot_points = []
+    for point in points:
+        # Get original point coordinates.
+        x, y = point
 
-def intercept(x, y, a):
-    """Return the y-value (c) where the line intercepts y-axis."""
-    # TODO: check that the docstring is correct
-    return y-a*x
+        # Rotate
+        rot_x = math.cos(angle_rad) * x - math.sin(angle_rad) * y
+        rot_y = math.sin(angle_rad) * x + math.cos(angle_rad) * y
 
-def distance(a,b,c,m,n):
-    return abs(a*m+b*n+c)/math.sqrt(a**2+b**2)
+        # Scale
+        rot_x *= zoom
+        rot_y *= zoom
 
-def distance_from_vector(x0, y0, dist, angle, x, y):
-    x1, y1 = project_point(x0, y0, dist, angle)
-    a = slope(x0, y0, x1, y1)
-    c = intercept(x0, y0, a)
-    dist = distance(a, -1, c, x, y)
-    return dist
+        # Transpose
+        rot_x += xoff
+        rot_y += yoff
 
-def distance_from_line(x0, y0, x1, y1, x, y):
-    a = slope(x0, y0, x1, y1)
-    c = intercept(x0, y0, a)
-    dist = distance(a, -1, c, x, y)
-    return dist
-####################################
-
+        # Append new point coordinates to a list.
+        rot_points.append((rot_x, rot_y))
+    return rot_points
 
 
 # TODO: move these to separate file
@@ -530,46 +514,21 @@ class GpsTrackTab(BaseInfoTab):
                     self.ui.ellipse([(self.center_x-acc_r,self.center_y-acc_r),
                                      (self.center_x+acc_r,self.center_y+acc_r)], outline=0xccffcc)
 
-    def draw_course_arrow(self, pos):        
-        if pys60gpstools.has_fix(pos) and 'course' in pos and 'speed' in pos:
+    def draw_course_arrow(self, pos):
+        if pys60gpstools.has_fix(pos) and 'course' in pos:
             p = copy.deepcopy(pos)
             self._calculate_canvas_xy_new(self.ui, self.meters_per_px, self.simple_pc, p)
-            try:
-                p1 = {}
-                #p1["position"] = {}
-                p1["e"], p1["n"] = project_point(p["e"], p["n"], 
-                                                 50*self.meters_per_px, p["course"])
-                self._calculate_canvas_xy_new(self.ui, self.meters_per_px, self.simple_pc, p1)
-                x0, y0 = p["x"], p["y"]
-                x, y = p1["x"], p1["y"]
-                self.ui.line([x0+self.center_x, y0+self.center_y, x+self.center_x, y+self.center_y], outline=0x0000ff, width=2)
-            except:
-                # Probably speed or heading was missing?
-                pass
-
-    def draw_direction_line(self, pos):
-        # Copy latest saved position from history
-        if len(self.Main.data["track_new"]) == 0:
-            return
-        p = copy.deepcopy(self.Main.data["track_new"][-1])
-        if pys60gpstools.has_fix(pos) and 'course' in pos and 'speed' in pos \
-                                      and 'course' in p and 'speed' in p:
-            self._calculate_canvas_xy_new(self.ui, self.meters_per_px, self.simple_pc, p)
-            # Project new point from latest point, heading and speed
-            p1 = {}
-            p1["position"] = {}
-            x, y = project_point(p["e"], p["n"], p["speed"]*20, p["course"])
-            p1["e"], p1["n"] = x, y
-            try:
-                self._calculate_canvas_xy_new(self.ui, self.meters_per_px, self.simple_pc, p1)
-                x0, y0 = p["x"], p["y"]
-                x, y = p1["x"], p1["y"]
-            except:
-                x0, y0 = 0, 0
-                x, y = 0, 0
-            self.ui.line([x0+self.center_x, y0+self.center_y, x+self.center_x, y+self.center_y], 
-                          outline=0xffff99, 
-                          width=1+int(self.Main.config["max_estimation_vector_distance"]/self.meters_per_px/2))
+            xoff = self.ui.size[0] / 2
+            yoff = self.ui.size[1] / 2
+            if 'x' in p:
+                xoff = xoff + p['x']
+            if 'y' in p:
+                yoff = yoff + p['y']
+            zoom = 2.0
+            angle = (p['course'] + 180) % 360
+            rot_points = rotate(ARROW_POINTS, xoff, yoff, angle, zoom)
+            self.ui.polygon(rot_points, fill = 0xffff00, outline = 0x999900,
+                           width = 1)
 
     def draw_points(self, points, color):
         for p in points:
@@ -619,31 +578,14 @@ class GpsTrackTab(BaseInfoTab):
         helpfont_size = 12
         text_y = 3
         helpfont = (u"Series 60 Sans", helpfont_size)
-        #text_y += helpfont_size
-        #self.ui.text((2,15), u"%d m between points" % self.Main.config["min_trackpoint_distance"], font=helpfont, fill=0x999999)
-        #text_y += helpfont_size
-        #self.ui.text((2, text_y), u"Canvas: %d x %d" % (self.canvas.size), 
-        #             font=helpfont, fill=0x999999)
 
         text_y += helpfont_size
-        self.ui.text((2, text_y), u"Track 1,2: %d/%d,%d/%d" % (
-                        0,0, #len(self.Main.data["position"]), 
-                        #self.Main.config["max_trackpoints"],
+        self.ui.text((2, text_y), u"Track: %d/%d" % (
                         len(self.Main.data["track_new"]), 
                         len(self.Main.data["position_debug"]), 
                         ), 
                         font=helpfont, fill=0x999999)
 
-        #text_y += helpfont_size
-        #self.ui.text((2, text_y), u"Press joystick to save a POI", 
-        #             font=helpfont, fill=0x999999)
-        #text_y += helpfont_size
-        #self.ui.text((2, text_y), u"Press * or # to zoom", font=helpfont, fill=0x999999)
-
-        #text_y += helpfont_size
-        #self.ui.text((2, text_y), u"Debug %s" % self.Main.config["track_debug"], 
-        #             font=helpfont, fill=0x999999)
-        
         try:
             e_text = u"E %.2f" % self.simple_center_pos["e"]
             text_y += helpfont_size
@@ -673,7 +615,8 @@ class GpsTrackTab(BaseInfoTab):
             self.ui.rectangle((x1, y1, fill_w, y2), fill=color)
             self.ui.text((x1, y2 - 1), text % (val, max), 
                         font=barfont, fill=0x999999)
-
+        # Draw several bars, which indicate how close is the saving
+        # of next track log point
         if self.Main.trackcalc:
             tc = self.Main.trackcalc
             x1 = 2
@@ -754,86 +697,40 @@ class GpsTrackTab(BaseInfoTab):
         j = 0
         pos = self.Main.pos # the current position during this update()
         simple_pos = self.Main.simple_pos # the current position during this update()
-        # pc is the current center point
-        if self.center_pos:
-            self.pc = pc = self.center_pos
-        else:
-            self.pc = pc = pos
-        # NEW STYLE
+        # simple_pc is the current center point
         if self.simple_center_pos:
             self.simple_pc = simple_pc = self.simple_center_pos
         else:
             self.simple_pc = simple_pc = simple_pos
-
-        self.poi_width = 20 / self.meters_per_px # show pois relative to zoom level
+        # plot pois size relative to zoom level
+        self.poi_width = 20 / self.meters_per_px 
         if self.poi_width < 1: self.poi_width = 1
         if self.poi_width > 10: self.poi_width = 10
         
         self.draw_point_estimation(pos)
-        self.draw_direction_line(simple_pos)
         self.draw_course_arrow(simple_pos)
         self.draw_points(self.Main.data["gsm_location"], 0x9999ff)
         self.draw_points(self.Main.data["wlan"], 0x0000ff)
-        #self.draw_points(self.Main.data["wlan"], 0x0000ff)
         self.draw_track_new()
         self.draw_statusbar(simple_pos)
         self.draw_texts(simple_pos)
         self.draw_scalebar()
-        
-    #def draw_pois_private(self):
-        for p in self.Main.data["pois_private"]:
-            self._calculate_canvas_xy_new(self.ui, self.meters_per_px, self.simple_pc, p)
-            if 'x' in p:
-                self.ui.point([p["x"]+self.center_x, p["y"]+self.center_y], outline=0x0000ff, width=5)
-                self.ui.ellipse([(p["x"]+self.center_x-poi_r,p["y"]+self.center_y-poi_r),
-                                 (p["x"]+self.center_x+poi_r,p["y"]+self.center_y+poi_r)], outline=0x0000ff)
-                # There is a bug in image.text (fixed in 1.4.4?), so text must be drawn straight to the canvas
-                self.ui.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x9999ff)
+        self.draw_points(self.Main.data["pois_downloaded_new"], 0x990000)
+        self.draw_points(self.Main.data["pois_private"], 0x000099)
 
-#        for p in self.Main.data["pois_downloaded_new"]:
-#            new_pc = {"coordinates_en" : [pc["position"]["e"], pc["position"]["n"]]}
-#            self._calculate_canvas_xy_point(self.meters_per_px, new_pc, p)
-#            if "canvas_xy" in p:
-#                x, y = p["canvas_xy"]
-#                pointcolor = 0x660000
-#                bordercolor = 0x0000ff
-#                self.ui.point([x+self.center_x, y+self.center_y], outline=pointcolor, width=self.poi_width)
-#                #self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
-#                #                 (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=bordercolor)
-#                if "title" in p["properties"]:
-#                    text = u"%s" % p["properties"]["title"]
-#                else:
-#                    text = u"%s" % p["properties"]["cnt"]
-#                self.ui.text(([x+130, y+125]), text, font=(u"Series 60 Sans", 10), fill=0x666600)
-
-
-        # New style: use main apps data structures directly and _calculate_canvas_xy() to get pixel xy.
-        # TODO: to a function
-        ##############################################        
-        for i in range(len(self.Main.data["position_debug"])-1, -1, -1):
+        # Plot debug points
+        pd = self.Main.data["position_debug"]
+        for i in range(len(pd)-1, -1, -1):
             j = j + 1
-            if j > 120: break # draw only last x debug points
-            p = pys60gpstools.simplify_position(self.Main.data["position_debug"][i])
+            if j > 60: break # draw only last x debug points
+            p = pys60gpstools.simplify_position(pd[i])
             locationtools.set_fake_utm(p, self.Main.LongOrigin)
-            self._calculate_canvas_xy_new(self.ui, self.meters_per_px, self.simple_pc, p)
+            self._calculate_canvas_xy_new(self.ui, self.meters_per_px, 
+                                          self.simple_pc, p)
             if 'x' in p:
-                self.ui.point([p["x"]+self.center_x, p["y"]+self.center_y], outline=0x000066, width=3)
-            #print p
-            continue
-            #    self._calculate_canvas_xy(self.ui, self.meters_per_px, self.pc, p)
-
-            try:
-                self.ui, self.meters_per_px, self.simple_pc, p
-                p["x"] = int((-self.simple_pc["e"] + p["position"]["e"]) / self.meters_per_px)
-                p["y"] = int((self.simple_pc["position"]["n"] - p["position"]["n"]) / self.meters_per_px)
-                self.ui.point([p["x"]+self.center_x, p["y"]+self.center_y], outline=0x000066, width=3)
-            except:
-                raise
-                pass
-            
+                self.ui.point([p["x"]+self.center_x, p["y"]+self.center_y], 
+                              outline=0x000066, width=3)
 
         self.canvas.blit(self.ui)
         if self.active and self.Main.focus:
             self.t.after(0.5, self.update)
-
-
