@@ -1,3 +1,4 @@
+# -*- coding: utf8 -*-
 # $Id$
 
 import appuifw
@@ -305,15 +306,14 @@ class GpsTrackTab(BaseInfoTab):
         create a new center from current point,
         points per pixel and direction
         """
-        if not self.center_pos:
-            if not self.Main.pos: # empty position, no gps connected since start
+        if not self.simple_center_pos:
+            if not self.Main.simple_pos: # empty position, no gps connected since start
                 appuifw.note(u"No GPS", 'error')
                 return
-            if self.Main.has_fix(self.Main.pos):
-                self.center_pos = copy.deepcopy(self.Main.pos)
+            if pys60gpstools.has_fix(self.Main.simple_pos):
                 self.simple_center_pos = copy.deepcopy(self.Main.simple_pos)
-            elif len(self.Main.data["position"]) > 0 and self.Main.has_fix(self.Main.data["position"][-1]):
-                self.center_pos = copy.deepcopy(self.Main.data["position"][-1])
+            elif len(self.Main.data["track_new"]) > 0 and \
+                 pys60gpstools.has_fix(self.Main.data["track_new"][-1]):
                 self.simple_center_pos = copy.deepcopy(self.Main.data["track_new"][-1])
             else:
                 appuifw.note(u"No FIX", 'error')
@@ -321,22 +321,18 @@ class GpsTrackTab(BaseInfoTab):
         move_m = self.meters_per_px * 50
         if (1,0) == (x,y):
             # direction = u"east"
-            self.center_pos["position"]["e"] = self.center_pos["position"]["e"] + move_m
             self.simple_center_pos["e"] = self.simple_center_pos["e"] + move_m
             # TODO: calc lat and lon here too
         elif (0,1) == (x,y):
             # direction = u"south"
-            self.center_pos["position"]["n"] = self.center_pos["position"]["n"] - move_m
             self.simple_center_pos["n"] = self.simple_center_pos["n"] - move_m
             # TODO: calc lat and lon here too
         elif (-1,0) == (x,y):
             # direction = u"west"
-            self.center_pos["position"]["e"] = self.center_pos["position"]["e"] - move_m
             self.simple_center_pos["e"] = self.simple_center_pos["e"] - move_m
             # TODO: calc lat and lon here too
         elif (0,-1) == (x,y):
             # direction = u"north"
-            self.center_pos["position"]["n"] = self.center_pos["position"]["n"] + move_m
             self.simple_center_pos["n"] = self.simple_center_pos["n"] + move_m
             # TODO: calc lat and lon here too
         self.update()
@@ -465,14 +461,13 @@ class GpsTrackTab(BaseInfoTab):
         Saves a point to the "pois" list.
         """
         # TODO: put POIs to the global data dictionary
-        if not self.Main.pos: # empty position, no gps connected yet
+        if not self.Main.simple_pos: # empty position, no gps connected yet
             appuifw.note(u"No GPS", 'error')
             return
         
-        pos = self.Main.pos
+        pos = self.Main.simple_pos
         # Default name is gps timestamp (UTC) with timezone info (time.altzone)
-        ts = unicode(time.strftime(u"%H:%M:%SZ ", time.localtime(pos["satellites"]["time"])))
-        # print pos
+        ts = unicode(time.strftime(u"%H:%M:%SZ ", time.localtime(simple_pos["gpstime"])))
         pos["text"] = appuifw.query(u"Name", "text", ts)
         if pos["text"] is not None: # user did not press Cancel
             self.Main.data["pois_private"].append(pos)
@@ -574,34 +569,10 @@ class GpsTrackTab(BaseInfoTab):
 
     def draw_points(self, points, color):
         for p in points:
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, self.pc, p)
+            self._calculate_canvas_xy_new(self.ui, self.meters_per_px, self.simple_pc, p)
             if p.has_key("x"):
                 self.ui.text(([p["x"]+self.center_x+10, p["y"]+self.center_y+5]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0xccccff)
                 self.ui.point([p["x"]+self.center_x, p["y"]+self.center_y], outline=color, width=self.poi_width)
-
-    # Draw track if it exists
-    def draw_track(self):
-        if len(self.Main.data["position"]) > 0:
-            p1 = self.Main.data["position"][-1]
-        lines_drawn = 0
-        for i in range(len(self.Main.data["position"])-1, -1, -1): # draw trackpoints backwards
-            p = self.Main.data["position"][i]
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, self.pc, p)
-            max_timediff = 120 # seconds
-            timediff = abs(p["satellites"]["time"] - p1["satellites"]["time"])
-            # Draw only lines which are inside canvas/screen
-            # FIXME: no hardcoded values here
-            if (p.has_key("x") 
-               and p1.has_key("x") 
-               and (-self.center_x < p["x"] < self.center_x or -self.center_x < p1["x"] < self.center_x) 
-               and (-self.center_y < p["y"] < self.center_y or -self.center_y < p1["y"] < self.center_y) 
-               and timediff <= max_timediff):
-                self.ui.point([p["x"]+self.center_x, p["y"]+self.center_y], outline=0xff0000, width=5)
-                self.ui.line([p["x"]+self.center_x, p["y"]+self.center_y, 
-                              p1["x"]+self.center_x, p1["y"]+self.center_y], outline=0x00ff00, width=2)
-                lines_drawn = lines_drawn + 1
-            p1 = p
-
 
     # Draw track if it exists
     def draw_track_new(self):
@@ -652,8 +623,8 @@ class GpsTrackTab(BaseInfoTab):
 
         text_y += helpfont_size
         self.ui.text((2, text_y), u"Track 1,2: %d/%d,%d/%d" % (
-                        len(self.Main.data["position"]), 
-                        self.Main.config["max_trackpoints"],
+                        0,0, #len(self.Main.data["position"]), 
+                        #self.Main.config["max_trackpoints"],
                         len(self.Main.data["track_new"]), 
                         len(self.Main.data["position_debug"]), 
                         ), 
@@ -800,7 +771,6 @@ class GpsTrackTab(BaseInfoTab):
         self.draw_points(self.Main.data["gsm_location"], 0x9999ff)
         self.draw_points(self.Main.data["wlan"], 0x0000ff)
         #self.draw_points(self.Main.data["wlan"], 0x0000ff)
-        self.draw_track()
         self.draw_track_new()
         self.draw_statusbar(simple_pos)
         self.draw_texts(simple_pos)
@@ -808,29 +778,29 @@ class GpsTrackTab(BaseInfoTab):
         
     #def draw_pois_private(self):
         for p in self.Main.data["pois_private"]:
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, self.pc, p)
-            if p.has_key("x"):
+            self._calculate_canvas_xy_new(self.ui, self.meters_per_px, self.simple_pc, p)
+            if 'x' in p:
                 self.ui.point([p["x"]+self.center_x, p["y"]+self.center_y], outline=0x0000ff, width=5)
                 self.ui.ellipse([(p["x"]+self.center_x-poi_r,p["y"]+self.center_y-poi_r),
                                  (p["x"]+self.center_x+poi_r,p["y"]+self.center_y+poi_r)], outline=0x0000ff)
                 # There is a bug in image.text (fixed in 1.4.4?), so text must be drawn straight to the canvas
                 self.ui.text(([p["x"]+130, p["y"]+125]), u"%s" % p["text"], font=(u"Series 60 Sans", 10), fill=0x9999ff)
 
-        for p in self.Main.data["pois_downloaded_new"]:
-            new_pc = {"coordinates_en" : [pc["position"]["e"], pc["position"]["n"]]}
-            self._calculate_canvas_xy_point(self.meters_per_px, new_pc, p)
-            if "canvas_xy" in p:
-                x, y = p["canvas_xy"]
-                pointcolor = 0x660000
-                bordercolor = 0x0000ff
-                self.ui.point([x+self.center_x, y+self.center_y], outline=pointcolor, width=self.poi_width)
-                #self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
-                #                 (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=bordercolor)
-                if "title" in p["properties"]:
-                    text = u"%s" % p["properties"]["title"]
-                else:
-                    text = u"%s" % p["properties"]["cnt"]
-                self.ui.text(([x+130, y+125]), text, font=(u"Series 60 Sans", 10), fill=0x666600)
+#        for p in self.Main.data["pois_downloaded_new"]:
+#            new_pc = {"coordinates_en" : [pc["position"]["e"], pc["position"]["n"]]}
+#            self._calculate_canvas_xy_point(self.meters_per_px, new_pc, p)
+#            if "canvas_xy" in p:
+#                x, y = p["canvas_xy"]
+#                pointcolor = 0x660000
+#                bordercolor = 0x0000ff
+#                self.ui.point([x+self.center_x, y+self.center_y], outline=pointcolor, width=self.poi_width)
+#                #self.ui.ellipse([(p["x"]+center_x-poi_r,p["y"]+center_y-poi_r),
+#                #                 (p["x"]+center_x+poi_r,p["y"]+center_y+poi_r)], outline=bordercolor)
+#                if "title" in p["properties"]:
+#                    text = u"%s" % p["properties"]["title"]
+#                else:
+#                    text = u"%s" % p["properties"]["cnt"]
+#                self.ui.text(([x+130, y+125]), text, font=(u"Series 60 Sans", 10), fill=0x666600)
 
 
         # New style: use main apps data structures directly and _calculate_canvas_xy() to get pixel xy.

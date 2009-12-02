@@ -1,3 +1,4 @@
+# -*- coding: utf8 -*-
 # $Id$
 
 # DO NOT remove this
@@ -1050,15 +1051,18 @@ class GpsApp:
                                              pos["satellites"]["satellites"])
         return data
 
-    # TODO: rename gsmscan ? (alike wlanscan, btscan)
-    def read_gsm_location(self):
+
+    def gsmscan(self):
         """
         Read gsm_location/cellid changes and save them to the gsm history list.
         """
-        if not self.pos: return
+        # Return immediately if there is not good and fresh position info
+        if not self.simple_pos or \
+           pys60gpstools.has_fix(self.simple_pos) is False or \
+           (time.time() - self.simple_pos['systime']) > 3: 
+            return
         # Take the latest position and append gsm data into it if necessary
-        # TODO: is it necessary to save cellid if there is no fix? 
-        pos = copy.deepcopy(self.pos)
+        simple_pos = copy.deepcopy(self.simple_pos)
         l = location.gsm_location()
         if e32.in_emulator(): # Do some random cell changes if in emulator
             import random
@@ -1076,13 +1080,13 @@ class GpsApp:
             if len(self.data["gsm_location"]) > 0:
                 p0 = self.data["gsm_location"][-1] # use the latest saved point in history
                 # Time difference between current and the latest saved position
-                timediff = pos["satellites"]["time"] - p0["satellites"]["time"]
+                timediff = simple_pos['gpstime'] - p0['gpstime']
                 # Distance between current and the latest saved position
-                if self.has_fix(pos) and self.has_fix(p0):
-                    dist = Calculate.distance(p0["position"]["latitude"],
-                                              p0["position"]["longitude"],
-                                              pos["position"]["latitude"],
-                                              pos["position"]["longitude"],
+                if pys60gpstools.has_fix(simple_pos) and pys60gpstools.has_fix(p0):
+                    dist = Calculate.distance(p0['lat'],
+                                              p0['lon'],
+                                              simple_pos['lat'],
+                                              simple_pos['lon'],
                                              )
                 # NOTE: pos["position"]["latitude"] may be a NaN!
                 # NaN >= 500 is True
@@ -1100,7 +1104,7 @@ class GpsApp:
                 or (len(self.data["gsm_location"]) > 0 and 
                    (l != self.data["gsm_location"][-1]['gsm']['cellid']))
                 or dist_time_flag):
-                data = self.simplify_position(pos, isotime=True)
+                data = self.archive_simple_pos(simple_pos)
                 cell = {"cellid" : "%s,%s,%s,%s" % (l)}
                 try: # This needs some capability (ReadDeviceData?)
                     cell["signal_bars"] = sysinfo.signal_bars()
@@ -1111,10 +1115,10 @@ class GpsApp:
                     pass
                 # We put this gsm cellid in a list, because in the future there may be several (like in wlan)
                 data["gsmlist"] = [cell]
-                pos["gsm"] = gsm_location
-                pos["text"] = l[3]
+                simple_pos["gsm"] = gsm_location
+                simple_pos["text"] = l[3]
                 self.append_log_cache("cellid", data)
-                self.data["gsm_location"].append(pos)
+                self.data["gsm_location"].append(simple_pos)
                 self.counters["cellid"] = self.counters["cellid"] + 1
                 # save cached cellids to a permanent file after n lines
                 if self.counters["cellid"] % 4 == 0:
@@ -1129,21 +1133,21 @@ class GpsApp:
         """
         Do automatically _wlanscan() if certain contitions are met.
         """
-        pos = self.pos
-        if self.has_fix(pos) is False:
+        simple_pos = self.simple_pos
+        if self.has_fix(simple_pos) is False:
             return # Do not save scan automatically, if there is no fix
         dist_time_flag = False
         dist = 0
         if len(self.data["wlan"]) > 0:
             p0 = self.data["wlan"][-1] # use the latest saved point in history
             # Time difference between current and the latest saved position
-            timediff = pos["satellites"]["time"] - p0["satellites"]["time"]
+            timediff = simple_pos["gpstime"] - p0["gpstime"]
             # Distance between current and the latest saved position
-            if self.has_fix(pos) and self.has_fix(p0): # obsolete "if"
-                dist = Calculate.distance(p0["position"]["latitude"],
-                                          p0["position"]["longitude"],
-                                          pos["position"]["latitude"],
-                                          pos["position"]["longitude"],
+            if self.has_fix(simple_pos) and self.has_fix(p0): # obsolete "if"
+                dist = Calculate.distance(p0['lat'],
+                                          p0['lon'],
+                                          simple_pos['lat'],
+                                          simple_pos['lon'],
                                          )
             # NOTE: pos["position"]["latitude"] may be a NaN!
             # NaN >= 500 is True
@@ -1304,13 +1308,21 @@ class GpsApp:
         else:
             return False
 
-    def append_simple_pos(self, simple_pos):
+    def archive_simple_pos(self, simple_pos):
+        """
+        Remove unnecessary keys from simple_pos and convert gpstime
+        to ISO-time.
+        """
         data = simple_pos.copy()
         data['time'] = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", 
                                      time.localtime(data['gpstime']))
         for key in ['systime', 'gpstime', 'x', 'y', 'e', 'n', 'z']:
             if key in data:
                 del data[key]
+        return data
+
+    def append_simple_pos(self, simple_pos):
+        data = self.archive_simple_pos(simple_pos)
         self.append_log_cache("tracklog", data)
         if self.counters["tracklog"] % 3 == 0: 
             self.save_log_cache("tracklog")
@@ -1348,105 +1360,11 @@ class GpsApp:
             # FIXME: Using trackpoint limit here too (there is no room for extra settings in menu)
             if len(self.data["position_debug"]) > self.config["max_trackpoints"]:
                 self.data["position_debug"].pop(0)
-        if self.has_fix(pos):
-            if not self.LongOrigin: # Set center meridian
-                self.LongOrigin = pos["position"]["longitude"]
-            self._calculate_UTM(pos)
-            # Calculate distance between the current pos and the latest history pos
-            dist = 0
-            dist_estimate = 0
-            dist_line = 0
-            anglediff = 0
-            timediff = 0
-            minanglediff = 30 # FIXME: hardcoded value, make configurable
-            mindist = 10 # FIXME: hardcoded value, make configurable
-            # Maximum time between points in seconds
-            maxtimediff = 60 # FIXME: hardcoded value, make configurable
-            if pos["position"]["horizontal_accuracy"] > mindist: # horizontal_accuracy may be NaN
-                mindist = pos["position"]["horizontal_accuracy"]
-            if len(self.data["position"]) > 0:
-                p0 = self.data["position"][-1] # use the latest saved point in history
-                if len(self.data["position"]) > 1:
-                    p1 = self.data["position"][-2] # used to calculate estimation line
-                else:
-                    p1 = None
-                # Time difference between current and the latest saved position
-                timediff = pos["satellites"]["time"] - p0["satellites"]["time"]
-                # Distance between current and the latest saved position
-                try:
-                    dist = Calculate.distance(p0["position"]["latitude"],
-                                              p0["position"]["longitude"],
-                                              pos["position"]["latitude"],
-                                              pos["position"]["longitude"],
-                                             )
-                    # Difference of heading between current and the latest saved position
-                    anglediff = Calculate.anglediff(p0["course"]["heading"], pos["course"]["heading"])
-                except:
-                    pass # all defaults to 0
-                
-                # Project a location estimation point (pe) using speed and heading from the latest saved point
-                try:
-                    pe = {}
-                    # timediff = time.time() - p0['systime']
-                    dist_project = p0["course"]["speed"] * timediff # speed * seconds = distance in meters
-                    lat, lon = Calculate.newlatlon(p0["position"]["latitude"], p0["position"]["longitude"], 
-                                                   dist_project, p0["course"]["heading"])
-                    pe["position"] = {}
-                    pe["position"]["latitude"] = lat
-                    pe["position"]["longitude"] = lon
-                    self.Main._calculate_UTM(pe)
-                    self.pos_estimate = pe
-                    # This calculates the distance between the current point and the estimated point.
-                    # Perhaps ellips could be more optime?
-                    dist_estimate = Calculate.distance(pe["position"]["latitude"],
-                                              pe["position"]["longitude"],
-                                              pos["position"]["latitude"],
-                                              pos["position"]["longitude"],
-                                             )
-                except:
-                    pass
-                # This calculates the distance of the current point from the estimation vector
-                # In the future this will be an alternate to the estimation circle
-                if p0.has_key("course") and p0["course"].has_key("speed") and p0["course"].has_key("heading"):
-                    dist_line  = distance_from_vector(p0["position"]["e"], p0["position"]["n"],
-                                                      p0["course"]["speed"]*3.6, p0["course"]["heading"],
-                                                      pos["position"]["e"],pos["position"]["n"])
-                if p1 and p0.has_key("course") and p0["course"].has_key("speed") and p0["course"].has_key("heading") \
-                 and p1.has_key("course") and p1["course"].has_key("speed") and p1["course"].has_key("heading"):
-                    dist_line  = distance_from_line(p0["position"]["e"], p0["position"]["n"],
-                                                    p1["position"]["e"], p1["position"]["n"],
-                                                    pos["position"]["e"],pos["position"]["n"])
-
-            else: # Always append the first point with fix
-                self.data["position"].append(pos)
-            self.data["dist_line"] = dist_line
-            # If the dinstance exceeds the treshold, save the position object to the history list
-            # TODO: think which is the best order of these (most probable to the first place)
-            if   (dist > self.config["min_trackpoint_distance"]) \
-              or (dist_line > self.config["max_estimation_vector_distance"]) \
-              or ((dist > mindist) and (dist_estimate > self.config["estimated_error_radius"])) \
-              or ((dist > mindist) and (anglediff > minanglediff)) \
-              or (timediff > maxtimediff): 
-                self.data["position"].append(pos)
-                #####################################################
-                data = self.simplify_position(pos, isotime=True)
-                try: del data["systime"]
-                except: pass
-                self.append_log_cache("track", data)
-                self.counters["track"] = self.counters["track"] + 1
-                # save cellids after n lines
-                if self.counters["track"] % 10 == 0: 
-                    self.save_log_cache("track")
-                # If data["position"] is too long, remove some of the oldest points
-                if len(self.data["position"]) > self.config["max_trackpoints"]:
-                    self.data["position"].pop(0) # pop twice to reduce the number of points
         # Calculate the distance between the newest and the previous pos and add it to trip_distance
         try: # TODO: do not add if time between positions is more than e.g. 120 sec
-            if pos["satellites"]["time"] - self.pos["satellites"]["time"] < 120:
-                #d = Calculate.distance(self.pos["position"]["latitude"],self.pos["position"]["longitude"],
-                #                       pos["position"]["latitude"], pos["position"]["longitude"])
-                # This should be cheaper
-                d = math.sqrt((self.pos["position"]["e"] - pos["position"]["e"])**2 + (self.pos["position"]["n"] - pos["position"]["n"])**2)
+            if simple_pos['gpstime'] - self.simple_pos['gpstime'] < 120:
+                d = math.sqrt((self.simple_pos["e"] - simple_pos["e"])**2 \
+                            + (self.simple_pos["n"] - simple_pos["n"])**2)
                 self.data["trip_distance"] = self.data["trip_distance"] + d
                 self.data["dist_2_latest"] = d
                 #self.data["debug"] = u"E:%.1f N:%.1f" % (abs(self.pos["position"]["e"] - pos["position"]["e"]), abs(self.pos["position"]["n"] - pos["position"]["n"]))
@@ -1456,7 +1374,7 @@ class GpsApp:
         self.pos = pos
         self.simple_pos = simple_pos
         # Read gsm-cell changes
-        self.read_gsm_location()
+        self.gsmscan()
         # Scan wlan's automatically
         self.auto_wlanscan()
         # TODO: wlanscan() here if it is time to do it
