@@ -23,6 +23,7 @@ import simplejson
 import PositionHelper
 import Comm
 import pys60gpstools
+import locationtools
 
 ####################################
 # FIXME: move these to an own module
@@ -465,12 +466,12 @@ class GpsTrackTab(BaseInfoTab):
             appuifw.note(u"No GPS", 'error')
             return
         
-        pos = self.Main.simple_pos
+        simple_pos = self.Main.simple_pos
         # Default name is gps timestamp (UTC) with timezone info (time.altzone)
         ts = unicode(time.strftime(u"%H:%M:%SZ ", time.localtime(simple_pos["gpstime"])))
-        pos["text"] = appuifw.query(u"Name", "text", ts)
-        if pos["text"] is not None: # user did not press Cancel
-            self.Main.data["pois_private"].append(pos)
+        simple_pos["text"] = appuifw.query(u"Name", "text", ts)
+        if simple_pos["text"] is not None: # user did not press Cancel
+            self.Main.data["pois_private"].append(simple_pos)
         else:  # user pressed cancel -> no POI
             pass
             #pos["text"] = u"" # empty text
@@ -547,9 +548,12 @@ class GpsTrackTab(BaseInfoTab):
                 pass
 
     def draw_direction_line(self, pos):
-        if pys60gpstools.has_fix(pos) and 'course' in pos and 'speed' in pos:
-            # Copy latest saved position from history
-            p = copy.deepcopy(self.Main.data["track_new"][-1])
+        # Copy latest saved position from history
+        if len(self.Main.data["track_new"]) == 0:
+            return
+        p = copy.deepcopy(self.Main.data["track_new"][-1])
+        if pys60gpstools.has_fix(pos) and 'course' in pos and 'speed' in pos \
+                                      and 'course' in p and 'speed' in p:
             self._calculate_canvas_xy_new(self.ui, self.meters_per_px, self.simple_pc, p)
             # Project new point from latest point, heading and speed
             p1 = {}
@@ -808,13 +812,23 @@ class GpsTrackTab(BaseInfoTab):
         ##############################################        
         for i in range(len(self.Main.data["position_debug"])-1, -1, -1):
             j = j + 1
-            if j > 60: break # draw only last x debug points
-            p = self.Main.data["position_debug"][i]
-            self._calculate_canvas_xy(self.ui, self.meters_per_px, self.pc, p)
-            try:
-            #if self.Main.has_fix(p):
+            if j > 120: break # draw only last x debug points
+            p = pys60gpstools.simplify_position(self.Main.data["position_debug"][i])
+            locationtools.set_fake_utm(p, self.Main.LongOrigin)
+            self._calculate_canvas_xy_new(self.ui, self.meters_per_px, self.simple_pc, p)
+            if 'x' in p:
                 self.ui.point([p["x"]+self.center_x, p["y"]+self.center_y], outline=0x000066, width=3)
-            except: 
+            #print p
+            continue
+            #    self._calculate_canvas_xy(self.ui, self.meters_per_px, self.pc, p)
+
+            try:
+                self.ui, self.meters_per_px, self.simple_pc, p
+                p["x"] = int((-self.simple_pc["e"] + p["position"]["e"]) / self.meters_per_px)
+                p["y"] = int((self.simple_pc["position"]["n"] - p["position"]["n"]) / self.meters_per_px)
+                self.ui.point([p["x"]+self.center_x, p["y"]+self.center_y], outline=0x000066, width=3)
+            except:
+                raise
                 pass
             
 
