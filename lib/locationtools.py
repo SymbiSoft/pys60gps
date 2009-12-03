@@ -153,20 +153,20 @@ def handle_trkpt(pos, tracklog, limits, long_origin):
     pos_last = tracklog[-1]
     # New trackpoint max_time has been exceeded
     res['timediff'] = pos['gpstime'] - pos_last['gpstime']
-    if res['timediff'] >= limits['max_time']:
+    if res['timediff'] >= limits['max_time'] and 'reason' not in pos:
         pos['reason'] = u"Timediff %.2f" % (res['timediff'])
         tracklog.append(pos)
         #return res
     # New trackpoint if dist between this and latest saved exceeds threshold
     res['lastdist'] = pos_distance(pos, pos_last)
-    if res['lastdist'] >= limits['max_dist']:
+    if res['lastdist'] >= limits['max_dist'] and 'reason' not in pos:
         pos['reason'] = u"Distance %2.2f>%.2f" % (res['lastdist'],
                                                   limits['max_dist'])
         tracklog.append(pos)
         #return res
     # New trackpoint if max_linediff far from line between 2 latest points
     res['linedist'] = pos_distance_from_line(pos_last, tracklog[-2], pos)
-    if res['linedist'] >= limits['max_linediff']:
+    if res['linedist'] >= limits['max_linediff'] and 'reason' not in pos:
         pos['reason'] = u"Distline %2.2f>%.2f" % (res['linedist'],
                                                   limits['max_linediff'])
         tracklog.append(pos)
@@ -176,7 +176,8 @@ def handle_trkpt(pos, tracklog, limits, long_origin):
         res['coursediff'] = Calculate.anglediff(pos_last['course'], 
                                                 pos["course"])
         if res['coursediff'] > limits['max_anglediff'] and \
-           res['lastdist'] > limits['min_dist']:
+           res['lastdist'] > limits['min_dist'] and \
+           'reason' not in pos:
             pos['reason'] = u"Anglediff %2.2f>%.2f" % (res['coursediff'],
                                                     limits['max_anglediff'])
             tracklog.append(pos)
@@ -184,7 +185,8 @@ def handle_trkpt(pos, tracklog, limits, long_origin):
     # New trackpoint if too far from estimated point
     # Estimated point is calculated from latest point's course and speed
     if 'course' in pos_last and 'course' in pos and \
-       'speed' in pos_last and 'speed' in pos:
+       'speed' in pos_last and 'speed' in pos and \
+       'reason' not in pos:
         # speed * seconds = distance in meters
         dist_project = pos_last['speed'] * res['timediff']
         lat, lon = Calculate.newlatlon(pos_last["lat"], pos_last["lon"], 
