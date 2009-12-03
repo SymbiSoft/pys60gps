@@ -143,7 +143,7 @@ def handle_trkpt(pos, tracklog, limits, long_origin):
         tracklog.append(pos)
         return res
     # If only 3 satellites are used, increase limits a lot
-    if 'sat' in POS and POS['sat'] == 3:
+    if 'sat' in pos and pos['sat'] == 3:
         limits = limits.copy() # Create local copy which will be altered
         limits['max_dist'] = limits['max_dist'] * 5
         limits['max_linediff'] = limits['max_linediff'] * 5
