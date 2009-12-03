@@ -1324,14 +1324,8 @@ class GpsApp:
             # If trackpoint was saved, put it into log file too
             if 'reason' in simple_pos: 
                 self.append_simple_pos(simple_pos)
-        # Save always the new pos to global self.pos for use in elsewhere
-        self.simple_pos = simple_pos
-
         
-        #####################################################################
-        # Backwards compatibility
-        pos["systime"] = time.time()
-        pos["gsm_location"] = location.gsm_location()
+        # Save original pos object for debugging purposes
         #if self.config["track_debug"]:
         if True:
             self.data["position_debug"].append(pos)
@@ -1339,23 +1333,31 @@ class GpsApp:
             # FIXME: Using trackpoint limit here too (there is no room for extra settings in menu)
             if len(self.data["position_debug"]) > self.config["max_trackpoints"]:
                 self.data["position_debug"].pop(0)
-        # Calculate the distance between the newest and the previous pos and add it to trip_distance
-        try: # TODO: do not add if time between positions is more than e.g. 120 sec
+        # Calculate the distance between the newest and 
+        # the previous pos and add it to trip_distance
+        try:
             if simple_pos['gpstime'] - self.simple_pos['gpstime'] < 120:
                 d = math.sqrt((self.simple_pos["e"] - simple_pos["e"])**2 \
                             + (self.simple_pos["n"] - simple_pos["n"])**2)
                 self.data["trip_distance"] = self.data["trip_distance"] + d
                 self.data["dist_2_latest"] = d
-                #self.data["debug"] = u"E:%.1f N:%.1f" % (abs(self.pos["position"]["e"] - pos["position"]["e"]), abs(self.pos["position"]["n"] - pos["position"]["n"]))
-        except: # FIXME: check first do both positions exist and has_fix(), then 
+        except: # FIXME: check first do both positions exist and has_fix(), then
             pass
+        # Save always the new pos to global self.pos for use in elsewhere
+        self.simple_pos = simple_pos
+
+        #####################################################################
+        # Backwards compatibility
+        pos["systime"] = time.time()
+        pos["gsm_location"] = location.gsm_location()
+
         # Save the new pos to global (current) self.pos
         self.pos = pos
         # Read gsm-cell changes
         self.gsmscan()
         # Scan wlan's automatically
         self.auto_wlanscan()
-        # TODO: wlanscan() here if it is time to do it
+        # TODO: remove/rewrite
         # Experimental speed history, to be rewritten
         speed_key = (u'%d'%time.time())[:-1]
          # If speed_history is empty add the first item or key has changed (every 10th second)
@@ -1382,7 +1384,10 @@ class GpsApp:
         Reboots the phone by calling Starter.exe
         """
         if appuifw.query(u"Reboot phone", 'query'):
-            e32.start_exe(u'Z:\\System\\Programs\\Starter.exe', '', 0)
+            try:
+                e32.start_exe(u'Z:\\System\\Programs\\Starter.exe', '', 0)
+            except:
+                appuifw.note(u"Not supported in this model.", 'error')
 
     def handle_select(self):
         self.views[self.listbox.current()].activate()
