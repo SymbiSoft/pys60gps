@@ -96,61 +96,12 @@ from PlokView import PlokView
 draw_startup_screen(canvas, u"ListdataView")
 from ListdataView import ListdataView
 
-draw_startup_screen(canvas, u"ListdataView")
-from ListdataView import ListdataView
-
-draw_startup_screen(canvas, u"ListdataView")
-from ListdataView import ListdataView
-
-draw_startup_screen(canvas, u"ListdataView")
-from ListdataView import ListdataView
+draw_startup_screen(canvas, u"TestView")
+import TestView; reload(TestView)
 
 draw_startup_screen(canvas, u"MiscView")
 from MiscView import SysinfoView, SysInfoTab, E32InfoTab, MemTab, GsmTab, \
                      WlanTab, GpsView, GpsInfoTab, GpsSpeedTab, WlanView
-
-####################################
-# FIXME: move these to an own module
-# These are currently in pys60gps.py and TrackView.py
-import math
-rad=math.pi/180
-
-def project_point(x0, y0, dist, angle):
-    """Project a new point from point x0,y0 to given direction and angle."""
-    # TODO: check that the docstring is correct
-    # TODO: check that alghorithm below is correct
-    y1 = y0 + math.cos(angle * rad) * dist
-    x1 = x0 + math.cos((90 - angle) * rad) * dist
-    return x1, y1
-
-def slope(x0, y0, x1, y1):
-    """Calculate the slope of the line joining two points."""
-    if x0 == x1: return 0
-    return 1.0*(y0-y1)/(x0-x1)
-
-def intercept(x, y, a):
-    """Return the y-value (c) where the line intercepts y-axis."""
-    # TODO: check that the docstring is correct
-    return y-a*x
-
-def distance(a,b,c,m,n):
-    return abs(a*m+b*n+c)/math.sqrt(a**2+b**2)
-
-def distance_from_vector(x0, y0, dist, angle, x, y):
-    x1, y1 = project_point(x0, y0, dist, angle)
-    a = slope(x0, y0, x1, y1)
-    c = intercept(x0, y0, a)
-    dist = distance(a, -1, c, x, y)
-    return dist
-
-def distance_from_line(x0, y0, x1, y1, x, y):
-    a = slope(x0, y0, x1, y1)
-    c = intercept(x0, y0, a)
-    dist = distance(a, -1, c, x, y)
-    return dist
-####################################
-
-
 
 
 class GpsApp:
@@ -195,7 +146,6 @@ class GpsApp:
                          "wlan": 0,
                          "bluetooth": 0,
                          "track": 0,
-                         "tracklog": 0, # new 
                          "delivery": 0,
                          }
         self.scanning = {"wlan":False,
@@ -259,6 +209,7 @@ class GpsApp:
         self.menu_entries.append(((u"Opennetmap.org chat"), SimpleChatView(self, self.comm)))
         # self.menu_entries.append(((u"Twitter"), TwitterView(self)))
         self.menu_entries.append(((u"Sysinfo"), SysinfoView(self)))
+        self.menu_entries.append(((u"Tests"), TestView.TestView(self)))
         self.menu_entries.append(((u"WLAN"), WlanView(self)))
         self.menu_entries.append(((u"GPS Info"), GpsView(self)))
         # Create main menu from that sequence
@@ -410,7 +361,6 @@ class GpsApp:
         if appuifw.query(u'Confirm configuration reset', 'query') is True:
             os.remove(self.config_file)
             # TODO: create combined exit handler
-            self.save_log_cache("tracklog")
             self.save_log_cache("track")
             self.save_log_cache("cellid") 
             self.save_log_cache("wlan") 
@@ -737,9 +687,11 @@ class GpsApp:
             # Upload the file
             btsocket.bt_obex_send_file(bt_addr, service, filename)
             appuifw.note(u"File '%s' sent" % filename)
+            return True
         except Exception, error:
             appuifw.note(unicode(error), 'error')
-            raise
+            return False
+            # raise
 
     def stop_read_position(self):
         positioning.stop_position()
@@ -1297,9 +1249,9 @@ class GpsApp:
 
     def append_simple_pos(self, simple_pos):
         data = self.archive_simple_pos(simple_pos)
-        self.append_log_cache("tracklog", data)
-        if self.counters["tracklog"] % 3 == 0: 
-            self.save_log_cache("tracklog")
+        self.append_log_cache("track", data)
+        if self.counters["track"] % 3 == 0: 
+            self.save_log_cache("track")
 
     def read_position(self, pos):
         """
@@ -1401,7 +1353,6 @@ class GpsApp:
             self.lock.signal()
 
     def flush_all(self):
-        self.save_log_cache("tracklog")
         self.save_log_cache("track")
         self.save_log_cache("cellid") 
         self.save_log_cache("wlan")
