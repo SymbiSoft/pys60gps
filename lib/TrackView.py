@@ -563,6 +563,8 @@ class GpsTrackTab(BaseInfoTab):
             p1 = p
 
     def draw_statusbar(self, pos):
+        """Draw a red, yellow or green colored dot depending GPS state."""
+        # FIXME: do this better
         if self.Main.read_position_running:
             if pys60gpstools.has_fix(pos):
                 self.ui.point([10, 10], outline=0x00ff00, width=10)
@@ -575,12 +577,13 @@ class GpsTrackTab(BaseInfoTab):
 
 
     def draw_texts(self, pos):
+        """Draw some informative texts on the Track canvas."""
         helpfont_size = 12
         text_y = 3
         helpfont = (u"Series 60 Sans", helpfont_size)
 
         text_y += helpfont_size
-        self.ui.text((2, text_y), u"Track: %d/%d" % (
+        self.ui.text((105, text_y), u"Track: %d/%d" % (
                         len(self.Main.data["track_new"]), 
                         len(self.Main.data["position_debug"]), 
                         ), 
@@ -593,6 +596,10 @@ class GpsTrackTab(BaseInfoTab):
         except:
             pass
 
+    def draw_tracklogbars(self, pos):
+        helpfont_size = 12
+        text_y = 3
+        helpfont = (u"Series 60 Sans", helpfont_size)
         # TODO: this track calculation to own function
         barfont = (u"Series 60 Sans", 10)
         def barbarbar(barsize, text, val, max):
@@ -620,7 +627,7 @@ class GpsTrackTab(BaseInfoTab):
         if self.Main.trackcalc:
             tc = self.Main.trackcalc
             x1 = 2
-            barwidth = 50
+            barwidth = 100
             x2 = x1 + barwidth
             bars = [
                 ('timediff', u"Time: %.1f/%.1f m", 'max_time'),
@@ -635,24 +642,27 @@ class GpsTrackTab(BaseInfoTab):
                               bar[1], tc[bar[0]], self.Main.LIMITS[bar[2]])
 
 
+    def draw_speedinfo(self, pos):
+        # FIXME: do this better
         try:
             if self.Main.data["trip_distance"] >= 1000.0:
                 trip = u"%.2f km" % (self.Main.data["trip_distance"] / 1000)
             else:
                 trip = u"%.1f m" % (self.Main.data["trip_distance"])
-            self.ui.text(([10, 230]), u"%.1f m/s %.1f' %s" % (pos["speed"], pos["course"],  trip), 
-                                  font=(u"Series 60 Sans", 18), fill=0x000000)
+            y = self.canvas.size[1] - 10
+            # Speed may be missing
+            self.ui.text((2, y), u"%.1f m/s %s" % (pos["speed"], trip), 
+                         font=(u"Series 60 Sans", 18), fill=0x000000)
         except:
             pass
 
 
     def draw_scalebar(self):
         """Draw the scale bar."""
-        scale_bar_width = 50 # pixels
-        #scale_bar_x = 150    # x location
-        scale_bar_x = self.canvas.size[0] - 60    # x location
-        scale_bar_y = 20     # y location
-        scale_value = scale_bar_width * self.meters_per_px
+        sb_width = 50 # pixels
+        x1 = self.canvas.size[0] - 55    # x location
+        y1 = 10     # y location
+        scale_value = sb_width * self.meters_per_px
         if scale_value > 1000: 
             scale_text = u"%.1f km" % (scale_value / 1000.0)
         else:
@@ -661,11 +671,11 @@ class GpsTrackTab(BaseInfoTab):
             mppx_text = u"%d m/px" % self.meters_per_px
         else:
             mppx_text = u"%d cm/px" % (self.meters_per_px * 100)
-        self.ui.text((scale_bar_x + 5, 18), scale_text, font=(u"Series 60 Sans", 10), fill=0x333333)
-        self.ui.text((scale_bar_x + 5, 32), mppx_text, font=(u"Series 60 Sans", 10), fill=0x333333)
-        self.ui.line([scale_bar_x, 20, scale_bar_x + scale_bar_width, 20], outline=0x0000ff, width=1)
-        self.ui.line([scale_bar_x, 15, scale_bar_x, 25], outline=0x0000ff, width=1)
-        self.ui.line([scale_bar_x + scale_bar_width, 15, scale_bar_x + scale_bar_width, 25], outline=0x0000ff, width=1)
+        self.ui.text((x1 + 5, y1 + 3), scale_text, font=(u"Series 60 Sans", 10), fill=0x333333)
+        self.ui.text((x1 + 5, y1 + 17), mppx_text, font=(u"Series 60 Sans", 10), fill=0x333333)
+        self.ui.line([x1, y1 + 5, x1 + sb_width, y1 + 5], outline=0x0000ff, width=1)
+        self.ui.line([x1, y1, x1, y1 + 10], outline=0x0000ff, width=1)
+        self.ui.line([x1 + sb_width, y1, x1 + sb_width, y1 + 10], outline=0x0000ff, width=1)
 
 
     def update(self, dummy=(0, 0, 0, 0)):
@@ -714,9 +724,11 @@ class GpsTrackTab(BaseInfoTab):
         self.draw_track_new()
         self.draw_statusbar(simple_pos)
         self.draw_texts(simple_pos)
+        self.draw_tracklogbars(simple_pos)
         self.draw_scalebar()
         self.draw_points(self.Main.data["pois_downloaded_new"], 0x990000)
         self.draw_points(self.Main.data["pois_private"], 0x000099)
+        self.draw_speedinfo(simple_pos)
 
         # Plot debug points
         pd = self.Main.data["position_debug"]
@@ -724,7 +736,8 @@ class GpsTrackTab(BaseInfoTab):
             j = j + 1
             if j > 60: break # draw only last x debug points
             p = pys60gpstools.simplify_position(pd[i])
-            locationtools.set_fake_utm(p, self.Main.LongOrigin)
+            if pys60gpstools.has_fix(p):
+                locationtools.set_fake_utm(p, self.Main.LongOrigin)
             self._calculate_canvas_xy_new(self.ui, self.meters_per_px, 
                                           self.simple_pc, p)
             if 'x' in p:
