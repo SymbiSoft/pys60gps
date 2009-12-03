@@ -30,26 +30,63 @@ def end_folder():
     return """ </Folder>"""
 
 
-def start_placemark(name):
+def start_placemark(name, color='ffffff00'):
     return """ <Placemark>
   <name>%s</name>
   <description></description>
   <Style>
    <LineStyle>
    <width>3</width>
-   <color>ffffff00</color>
+   <color>%s</color>
    </LineStyle>
   </Style>
   <LineString>
   <extrude>1</extrude>
   <tessellate>1</tessellate>
   <altitudeMode>relative</altitudeMode>
-  <coordinates>""" % name
+  <coordinates>""" % (name, color)
 
 def end_placemark():
     return """  </coordinates>
   </LineString>
  </Placemark>"""
+
+
+def end_placemark():
+    return """  </coordinates>
+  </LineString>
+ </Placemark>"""
+
+def placemark(data):
+    return """
+<Placemark>
+<name>%(name)s</name>
+<description>%(description)s</description>
+ <visibility>1</visibility>
+ <viewRefreshTime>120</viewRefreshTime>
+ <Style>
+ <IconStyle>
+ <Icon>
+ <href>root://icons/palette-4.png</href>
+ <x>32</x>
+ <y>0</y>
+ </Icon>
+ </IconStyle>
+ </Style>
+ <Point>
+ <extrude>1</extrude>
+ <altitudeMode>
+ relativeToGround
+ </altitudeMode>
+ <coordinates>
+  %(coordinates)s
+ </coordinates>
+ </Point>
+</Placemark>
+""" % data
+
+
+
 
 """
 TODO: flush buffer after e.g. 1000 lines
@@ -116,8 +153,8 @@ class UglyAndHackyKMLExporterButHeyItWorks:
             self.buf.append(end_placemark())
             self.buf.append(start_placemark(ts))
         if currenttime == self.lasttime:
+            #continue
             sys.stderr.write('Multiple timestamps %s\n' % ts )
-            continue
         # TODO: calculate here the distance between points and if it is too large
         # ignore one or the other
         self.lasttime = currenttime
