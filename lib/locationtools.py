@@ -142,6 +142,13 @@ def handle_trkpt(pos, tracklog, limits, long_origin):
         pos['reason'] = u"Start"
         tracklog.append(pos)
         return res
+    # If only 3 satellites are used, increase limits a lot
+    if 'sat' in POS and POS['sat'] == 3:
+        limits = limits.copy() # Create local copy which will be altered
+        limits['max_dist'] = limits['max_dist'] * 5
+        limits['max_linediff'] = limits['max_linediff'] * 5
+        limits['max_anglediff'] = 361
+        limits['max_dist_estimate'] = limits['max_dist_estimate'] * 10
     # Now we have for sure at least 1 trackpoint in log list
     pos_last = tracklog[-1]
     # New trackpoint max_time has been exceeded
@@ -266,7 +273,7 @@ if __name__ == '__main__':
     print track2kml.start_placemark("All", 'ffffffff')
     for POS in _get_poslist():
         if pys60gpstools.has_fix(POS):
-            print "%(lon).6f,%(lat).6f" % POS
+            print "%(lon).6f,%(lat).6f <!-- %(sat)d/%(satinview)d %(hdop).1f-->" % POS
     PLACEMARKS = []
     print track2kml.end_placemark()
     print track2kml.start_placemark("Red", 'ff0000ff')
