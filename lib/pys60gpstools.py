@@ -80,9 +80,12 @@ def has_fix(pos):
     """
     Return True if pos has lat and lon keys and both are real floats
     (not NaN or Inf).
+    Lat and lon may be something like 2.04788006273e-314 
+    in some weird situations?
     """
     if 'lat' in pos and isfloat(pos['lat']) and \
-       'lon' in pos and isfloat(pos['lon']) :
+       'lon' in pos and isfloat(pos['lon']) and \
+       abs(pos['lat']) > 2e-10:
         return True
     else:
         return False
