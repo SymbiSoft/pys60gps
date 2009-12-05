@@ -969,52 +969,6 @@ class GpsApp:
         else:
             return "%s%s" % (prefix, hours)
 
-    # TODO: check and test this
-    def simplify_position(self, pos, isotime=False):
-        """
-        Extract common values from a positioning's position object.
-        NOTE: some values may be in certain situations NaN:s,
-        """
-        data = {}
-        if not pos: return data
-        if pos.has_key("systime"):
-            if (time.time() - pos["systime"]) > 1: # If position is more than 1 seconds old
-                data["gpsage"] = time.time() - pos["systime"]
-            if isotime:
-                data["systime"] = time.strftime(u"%Y-%m-%dT%H:%M:%S", time.localtime(pos["systime"])) + self._get_timezone()
-            else:
-                data["systime"] = pos["systime"]
-        if pos.has_key("position"):
-            if (pos["position"].has_key("latitude") 
-                  and -90 <= pos["position"]["latitude"] <= 90):        
-                data["lat"] = pos["position"]["latitude"]
-                data["lon"] = pos["position"]["longitude"]
-            if (pos["position"].has_key("altitude") 
-                  and pos["position"]["altitude"] > -10000):        
-                data["alt_m"] = pos["position"]["altitude"]
-        if pos.has_key("course"):
-            if pos["course"].has_key("speed"): 
-                data["speed_kmh"] = pos["course"]["speed"] * 3.6
-            if pos["course"].has_key("heading"): 
-                data["heading"] = pos["course"]["heading"]
-        if pos.has_key("satellites"):
-            if pos["satellites"].has_key("time"):
-                if isotime:
-                    data["gpstime"] = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", 
-                                                    time.localtime(pos["satellites"]["time"]))
-                else:
-                    data["gpstime"] = pos["satellites"]["time"]
-            try:
-                data["hdop"] = pos["satellites"]["horizontal_dop"]
-                data["vdop"] = pos["satellites"]["vertical_dop"]
-                data["tdop"] = pos["satellites"]["time_dop"]
-            except:
-                pass
-            data["satellites"] = "%d/%d"  % (pos["satellites"]["used_satellites"], 
-                                             pos["satellites"]["satellites"])
-        return data
-
-
     def gsmscan(self):
         """
         Read gsm_location/cellid changes and save them to the gsm history list.
@@ -1118,7 +1072,7 @@ class GpsApp:
             if ((dist > self.config["max_wlan_dist"] 
                 or timediff > self.config["max_wlan_time"])
                 and timediff > 6
-                and pos["course"]["speed"]*3.6 < self.config["max_wlan_speed"]):
+                and simple_pos["speed"]*3.6 < self.config["max_wlan_speed"]):
                 dist_time_flag = True
         if ((len(self.data["wlan"]) == 0
             or dist_time_flag)):
@@ -1140,7 +1094,7 @@ class GpsApp:
         starttime = time.clock()
         wlan_devices = wlantools.scan(False)
         duration = time.clock() - starttime
-        pos = copy.deepcopy(self.pos)
+        simple_pos = copy.deepcopy(self.simple_pos)
         for w in wlan_devices:
             # Lowercase all keys and Remove possible null-characters, hidden SSID shows as nulls
             for k,v in w.items():
@@ -1156,8 +1110,8 @@ class GpsApp:
                 self.scanning["wlan"] = False
                 return {"info":u"WLAN scan too fast, skipping this one!"}
         self.wlan_devices_latest = wlan_devices
-        data = self.simplify_position(pos, isotime=True)
-        #data["comment"] = u""
+        data = self.archive_simple_pos(simple_pos)
+
         data["duration"] = duration
         data["wlanlist"] = wlan_devices
         #    data["comment"] = appuifw.query(u"No GPS fix, add text comment", "text", u"")
@@ -1169,8 +1123,8 @@ class GpsApp:
         if self.counters["wlan"] % 5 == 0:
             self.save_log_cache("wlan")
         # Add a pos to be drawn on the canvas
-        pos["text"] = u"%d" % len(wlan_devices)
-        self.data["wlan"].append(pos)
+        simple_pos["text"] = u"%d" % len(wlan_devices)
+        self.data["wlan"].append(simple_pos)
         if len(self.data["wlan"]) > 100:
             self.data["wlan"].pop(0)
         self.scanning["wlan"] = False
@@ -1229,7 +1183,7 @@ class GpsApp:
             self.save_log_cache("bluetooth")
         # Add a pos to be drawn on the canvas
         pos["text"] = u"%d" % len(data["btlist"])
-        self.data["bluetooth"].append(pos)
+        self.data["bluetooth"].append(simple_pos)
         self.scanning["bluetooth"] = False
         return data
 
