@@ -326,7 +326,6 @@ class GpsTrackTab(BaseInfoTab):
         """
         Reset center_pos so current position is the center again.
         """
-        self.center_pos = {}
         self.simple_center_pos = {}
         self.update()
 
@@ -711,7 +710,7 @@ class GpsTrackTab(BaseInfoTab):
         if self.simple_center_pos:
             self.simple_pc = simple_pc = self.simple_center_pos
         else:
-            self.simple_pc = simple_pc = simple_pos
+            self.simple_pc = simple_pc = self.Main.last_fix
         # plot pois size relative to zoom level
         self.poi_width = 20 / self.meters_per_px 
         if self.poi_width < 1: self.poi_width = 1
