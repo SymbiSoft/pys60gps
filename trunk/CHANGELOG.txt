@@ -2,7 +2,7 @@ Pys60Gps Changelog
 
 2008-12-02 version 0.3.18
 
-A lot of improvements in Track log and view.
+Added initial KML export. A lot of improvements in Track log and view.
 
 2008-06-29 version 0.3.17
 
