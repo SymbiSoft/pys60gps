@@ -1,3 +1,20 @@
+# -*- coding: utf8 -*-
+# $Id$
+
+"""
+Image browser for S60 phones.
+
+Supports
+- browsing images
+- adding and editing some basic metadata
+- sending image to a web server
+
+NOTE:
+Functions in os-module return plain str objects but
+all PyS60 functions (e.g. in Image module, appuifw.Content_handler) want unicode objects
+as parameters, so be careful when handling filenames, paths etc.
+"""
+
 import Base
 import time
 import os
@@ -158,10 +175,10 @@ class ImageGalleryView(Base.View):
             missing = [] # Save the index of missing images to a list
             for j in range(len(self.IMG_LIST)):
                 i = self.IMG_LIST[j]
-                if not os.path.isfile(i["path"]):
+                if not os.path.isfile(i['path']):
                     missing.append(j)
                 else:
-                    self.IMG_NAMES[i["path"]] = i    
+                    self.IMG_NAMES[i['path']] = i    
                 # TODO: check here also if image exists! Remove from the list if not!
             missing.sort()
             missing.reverse()
@@ -261,18 +278,18 @@ class ImageGalleryView(Base.View):
             self.canvas.text((margin, textline), u"0 Sync with server (%s)" % text, font=font, fill=0xccccff)
             textline = textline + lineheight
             # Show image
-            thumbs = self.find_thumbnails(i["path"])
+            thumbs = self.find_thumbnails(i['path'])
             if i.has_key("small"):
                 small = i["small"]
             elif thumbs.has_key("170x128"): # pregenerated thumbnail was found
                 try:
-                    small = graphics.Image.open(thumbs["170x128"]["path"])
+                    small = graphics.Image.open(thumbs["170x128"]['path'].decode('utf8'))
                 except:
                     small = graphics.Image.new((170,128))
             else: # generate and save thumbnail
-                i["small"] = self.save_thumbnail(i["path"], (170, 128))
+                i["small"] = self.save_thumbnail(i['path'], (170, 128))
                 small = i["small"]
-                #image = graphics.Image.open(i["path"])
+                #image = graphics.Image.open(i['path'])
                 #small = image.resize((170, 128), keepaspect=1)
                 #del(image)
             try:
@@ -297,32 +314,35 @@ class ImageGalleryView(Base.View):
 
     def store_filenames_cb(self, arg, dirname, names):
         # Do not check folders like "_PAlbTN"
-        if dirname.startswith("_"): return
+        if dirname.startswith("_"):
+            return
         for name in names:
             if self.p_ext.search(name):
                 IMG = {}
-                IMG["path"] = os.path.join(dirname,name) # Full path
-                if IMG["path"] in self.IMG_NAMES:
+                # NOTE! os-functions return filenames as str's, but they are
+                # utf-8 encoded!
+                IMG['path'] = os.path.join(dirname,name) # Full path
+                if IMG['path'] in self.IMG_NAMES:
                     continue # Already found
                 # os.stat is pretty slow in some cases
-                stat = os.stat(IMG["path"])
+                stat = os.stat(IMG['path'])
                 IMG["filesize"] = stat[6] # File size in bytes
                 IMG["gmtime"] = stat[8] # Modification time
                 IMG["visibility"] = "PRIVATE"
                 # Ignore images older than ...
-                #if IMG["gmtime"] < self.gmtime-10*24*60*60: continue #print "wanha", IMG["path"], gmtime-IMG["gmtime"]
-                #f = open(IMG["path"], "rb")
+                #if IMG["gmtime"] < self.gmtime-10*24*60*60: continue #print "wanha", IMG['path'], gmtime-IMG["gmtime"]
+                #f = open(IMG['path'], "rb")
                 #idata = f.read()
                 #f.close()
                 # Calculate md5sum
                 #IMG["md5"] = md5.new(idata).hexdigest() # md5sum
-                if IMG["path"] in self.IMG_NAMES and IMG["filesize"] == 0:
+                if IMG['path'] in self.IMG_NAMES and IMG["filesize"] == 0:
                     # appuifw.note(u"Deleting 0 file", 'info')
-                    del self.IMG_NAMES[IMG["path"]]
+                    del self.IMG_NAMES[IMG['path']]
                 if IMG["filesize"] > 0:
                     self.IMG_LIST.append(IMG)
                     self.IMG_NEW_LIST.append(IMG)
-                    self.IMG_NAMES[IMG["path"]] = IMG
+                    self.IMG_NAMES[IMG['path']] = IMG
         e32.ao_sleep(0.01)
 
     def update_filelist(self):
@@ -348,7 +368,7 @@ class ImageGalleryView(Base.View):
             thumbinstance = os.path.join(thumbbasedir, thumb, basename + "_" + thumb) # E.g. "030820083076.jpg_170x128"
             if os.path.isfile(thumbinstance):
                 width, height = thumb.split("x") # e.g. "178x120" -> (178, 120)
-                thumbnails_available[thumb] = {"path":thumbinstance, "width":width, "height":height}
+                thumbnails_available[thumb] = {'path':thumbinstance, "width":width, "height":height}
         return thumbnails_available
     
     def save_thumbnail(self, imagefilename, size=(170,128)):
@@ -358,9 +378,9 @@ class ImageGalleryView(Base.View):
         """
         basename, dirname, thumbbasedir = self._get_thumbnail_path_components(imagefilename)
         try: # TODO: dummy try/except here for now, in the future error logging here
-            image = graphics.Image.open(imagefilename)
+            image = graphics.Image.open(imagefilename.decode('utf8'))
         except:
-            appuifw.note(u"Could not open %s" % (imagefilename), 'error')
+            appuifw.note(u"Could not open %s" % (imagefilename.decode('utf8')), 'error')
             self.delete_current()
             self.current_img = 0
             #self.IMG_LIST.pop(self.current_img)
@@ -373,7 +393,7 @@ class ImageGalleryView(Base.View):
             os.makedirs(thumbdir)
         thumbinstance = os.path.join(thumbdir, basename + "_" + thumb) # E.g. "030820083076.jpg_170x128"
         small = image.resize(size, keepaspect=1)
-        small.save(thumbinstance, format="JPEG", quality=60)
+        small.save(thumbinstance.decode('utf8'), format="JPEG", quality=60)
         return small
 
     def ask_caption(self):
@@ -460,7 +480,7 @@ class ImageGalleryView(Base.View):
             if appuifw.query(u'Send image really? There is no undo.', 'query') is None:
                 return
             current_img["status"] = u"synchronizing"
-            filename = current_img["path"]
+            filename = current_img['path']
             f=open(filename, 'r')
             filedata = f.read()
             f.close()
@@ -489,7 +509,7 @@ class ImageGalleryView(Base.View):
         """Delete current image permanently."""
         if (self.current_img >= 0 and 
            appuifw.query(u'Delete current image %d/%d permanently?' % (self.current_img+1, len(self.IMG_LIST)), 'query') is True):
-            os.remove(self.IMG_LIST[self.current_img]["path"])
+            os.remove(self.IMG_LIST[self.current_img]['path'])
             self.IMG_LIST.pop(self.current_img)
             self.current_img = self.current_img - 1
             e32.ao_sleep(0.05) # let the query popup disappear before update
@@ -498,7 +518,7 @@ class ImageGalleryView(Base.View):
     def show_current(self):
         """Call function which shows current original image file"""
         if self.current_img >= 0:
-            self.show_file(self.IMG_LIST[self.current_img]["path"])
+            self.show_file(self.IMG_LIST[self.current_img]['path'])
             self.update()
 
     def show_file(self, path):
@@ -507,12 +527,12 @@ class ImageGalleryView(Base.View):
         Return False if file was not found, otherwise return True.
         """
         if not os.path.isfile(path):
-            appuifw.note(u"File %s not found" % (path), 'error')
+            appuifw.note(u"File '%s' not found" % (path.decode('utf8')), 'error')
             return False
         else:
             lock=e32.Ao_lock()
             content_handler = appuifw.Content_handler(lock.signal)
-            content_handler.open(path)
+            content_handler.open(path.decode('utf8'))
             lock.wait()
             return True
 
