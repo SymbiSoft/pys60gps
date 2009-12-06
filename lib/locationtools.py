@@ -1,5 +1,5 @@
 # -*- coding: utf8 -*-
-# $Id: TrackView.py 226 2009-12-02 10:21:37Z aapris $
+# $Id$
 """
 Reduce the number of trackpoints to save.
 
