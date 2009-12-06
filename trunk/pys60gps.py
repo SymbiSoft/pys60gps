@@ -47,12 +47,15 @@ my_log = Logger()
 import os
 try:
     import btsocket # pys60 > 1.9
+    ip = appuifw.InfoPopup()
+    ip.show(u"Got btsocket!", (50, 50), 2000, 100, appuifw.EHLeftVTop)
 except:
     import socket as btsocket
 import sysinfo
 import re
-draw_startup_screen(canvas, u"time, copy")
+draw_startup_screen(canvas, u"time, math, copy")
 import time
+import math
 import copy
 draw_startup_screen(canvas, u"zipfile")
 import zipfile
@@ -84,11 +87,11 @@ import TrackView; reload(TrackView)
 draw_startup_screen(canvas, u"SimpleChatView")
 from SimpleChatView import SimpleChatView
 
-draw_startup_screen(canvas, u"TwitterView")
-from TwitterView import TwitterView
+#draw_startup_screen(canvas, u"TwitterView")
+#from TwitterView import TwitterView
 
 draw_startup_screen(canvas, u"ImageGalleryView")
-from ImageGalleryView import ImageGalleryView
+import ImageGalleryView; reload(ImageGalleryView)
 
 draw_startup_screen(canvas, u"PlokView")
 from PlokView import PlokView
@@ -100,9 +103,10 @@ draw_startup_screen(canvas, u"TestView")
 import TestView; reload(TestView)
 
 draw_startup_screen(canvas, u"MiscView")
-from MiscView import SysinfoView, SysInfoTab, E32InfoTab, MemTab, GsmTab, \
-                     WlanTab, GpsView, GpsInfoTab, GpsSpeedTab, WlanView
-
+#from MiscView import SysinfoView, SysInfoTab, E32InfoTab, MemTab, GsmTab, \
+#                     WlanTab, GpsView, GpsInfoTab, GpsSpeedTab, WlanView
+from MiscView import GpsView# , GpsInfoTab, GpsSpeedTab, WlanView
+from MiscView import WlanView
 
 class GpsApp:
     __id__ = u'$Id$'
@@ -177,6 +181,7 @@ class GpsApp:
         # GPS-position
         self.pos = {} # Contains always the latest position-record
         self.simple_pos = {} # Contains always the latest position-record
+        self.last_fix = None # Contains always the latest position-record with fix
         self.trackcalc = {} # Contains handle_trkpt()'s result dict
         self.data["position"] = [] # Position history list (positioning.position())
         self.pos_estimate = {} # Contains estimated location, calculated from the latest history point
@@ -198,20 +203,20 @@ class GpsApp:
         # Put all menu entries and views as tuples into a sequence
         self.menu_entries = []
         self.menu_entries.append(((u"Track"), TrackView.TrackView(self)))
+        self.menu_entries.append(((u"GPS Info"), GpsView(self)))
         plokcomm = Comm.Comm(self.config["plokhost"], 
                              self.config["plokscript"],
                              username=self.config["username"],
                              password=self.config["plokpassword"])
-        self.menu_entries.append(((u"Images"), ImageGalleryView(self, plokcomm)))
-        self.menu_entries.append(((u"Latest Ploks"), PlokView(self, plokcomm)))
+        self.menu_entries.append(((u"Images"), ImageGalleryView.ImageGalleryView(self, plokcomm)))
         self.menu_entries.append(((u"Plok.in chat"), SimpleChatView(self, plokcomm)))
+        self.menu_entries.append(((u"Latest Ploks"), PlokView(self, plokcomm)))
         self.menu_entries.append(((u"Nearby"), ListdataView(self)))
         self.menu_entries.append(((u"Opennetmap.org chat"), SimpleChatView(self, self.comm)))
         # self.menu_entries.append(((u"Twitter"), TwitterView(self)))
-        self.menu_entries.append(((u"Sysinfo"), SysinfoView(self)))
+        #self.menu_entries.append(((u"Sysinfo"), SysinfoView(self)))
         self.menu_entries.append(((u"Tests"), TestView.TestView(self)))
         self.menu_entries.append(((u"WLAN"), WlanView(self)))
-        self.menu_entries.append(((u"GPS Info"), GpsView(self)))
         # Create main menu from that sequence
         self.main_menu = [item[0] for item in self.menu_entries]
         # Create list of views from that sequence
@@ -404,8 +409,8 @@ class GpsApp:
         # Try to get gps location
         simple_pos = self.simple_pos
         if pys60gpstools.has_fix(simple_pos):
-            geolocation["lat"] = "%.6f" % pos['lat']
-            geolocation["lon"] = "%.6f" % pos['lon']
+            geolocation["lat"] = "%.6f" % simple_pos['lat']
+            geolocation["lon"] = "%.6f" % simple_pos['lon']
         # Try to scan wlan base stations
         wlan_devices = []
         try:
@@ -937,16 +942,6 @@ class GpsApp:
             pass # Failed. TODO: error logging here
             raise
 
-#    def read_log_cache_filenames(self, logname):
-#        """Get a list of cache files."""
-#        log_dir = os.path.join(self.datadir, logname) # use separate directories
-#        if os.path.isdir(log_dir):
-#            files = os.listdir(log_dir)
-#            selected = appuifw.multi_selection_list(files, style="checkbox", search_field=1)
-#            return files 
-#        else:
-#            return []
-
 
     # TODO: put this into some generic tool module
     def get_iso_systime(self):
@@ -1182,7 +1177,7 @@ class GpsApp:
         if self.counters["bluetooth"] % 1 == 0:
             self.save_log_cache("bluetooth")
         # Add a pos to be drawn on the canvas
-        pos["text"] = u"%d" % len(data["btlist"])
+        simple_pos["text"] = u"%d" % len(data["btlist"])
         self.data["bluetooth"].append(simple_pos)
         self.scanning["bluetooth"] = False
         return data
@@ -1219,6 +1214,7 @@ class GpsApp:
         simple_pos["systime"] = time.time()
         # Save pos to tracklog
         if pys60gpstools.has_fix(simple_pos):
+            self.last_fix = simple_pos
             if not self.LongOrigin: # Set center meridian
                 self.LongOrigin = simple_pos['lon']
             # Saving all pos dicts takes a lot of storage, 
@@ -1247,7 +1243,8 @@ class GpsApp:
                             + (self.simple_pos["n"] - simple_pos["n"])**2)
                 self.data["trip_distance"] = self.data["trip_distance"] + d
                 self.data["dist_2_latest"] = d
-        except: # FIXME: check first do both positions exist and has_fix(), then
+        except Exception, e: # FIXME: check first do both positions exist and has_fix(), then
+            #print e
             pass
         # Save always the new pos to global self.pos for use in elsewhere
         self.simple_pos = simple_pos
@@ -1269,8 +1266,8 @@ class GpsApp:
          # If speed_history is empty add the first item or key has changed (every 10th second)
         if len(self.speed_history) == 0 or self.speed_history[-1]["key"] != speed_key:
             self.speed_history.append({"key":speed_key, 
-                                       "speedmax":pos["course"]["speed"],
-                                       "speedmin":pos["course"]["speed"],
+                                       "speedmax":simple_pos["speed"],
+                                       "speedmin":simple_pos["speed"],
                                        "time":pos["satellites"]["time"],
                                        })
         else:
@@ -1288,6 +1285,7 @@ class GpsApp:
     def reboot(self):
         """
         Reboots the phone by calling Starter.exe
+        Doesn't work in 3rd Ed. FP2 and newer.
         """
         if appuifw.query(u"Reboot phone", 'query'):
             try:
