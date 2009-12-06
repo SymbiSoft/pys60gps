@@ -47,25 +47,34 @@ class TestView(Base.View):
             (u"Close", self.parent.activate),
         ]
         appuifw.app.body = self.text
+        self.text.add(u"Select from the menu\nValitse menusta\n'Export Tracks'\n")
 
     def export_tracks(self):
+        """
+        Show select dialog for tracks to export and then convert
+        selected tracks to KML format. Finally zip KML->KMZ file and save
+        it to the root of the memory card and try to send it using bluetooth.
+        """
         trackdir = os.path.join(self.Main.datadir, "track")
         trackfiles = []
         if os.path.isdir(trackdir):
             for file in os.listdir(trackdir):
                 if file.endswith(".json"):
                     trackfiles.append(os.path.join(trackdir, file))
-        items = [t[-13:-5] for t in trackfiles]
+        items = [t[-13:-5] for t in trackfiles] # Get YYYYmmdd part from filename
         selected = appuifw.multi_selection_list(items, style="checkbox", search_field=1)
         if not selected:
             appuifw.note(u"None selected", 'info')
+            return
         kmlexporter = UglyAndHackyKMLExporterButHeyItWorks()
+        self.text.add(u"%d files selected. Processing may take a few minutes if you selected many files.\n")
         for i in selected:
             kmlexporter.filepaths.append(trackfiles[i])
         for f in kmlexporter.readfiles():
-            self.text.add(f + u"\n")
+            self.text.add(u"Processing: " + f + u"\n")
             e32.ao_sleep(0.1)
             e32.ao_yield()
+        self.text.add(u"Files converted, trying to send via bluetooth.\n")
         if len(selected) > 1:
             zipfile = u"E:\\track-%s-%s.kmz" % (items[selected[0]], items[selected[-1]])
         else:
@@ -73,3 +82,5 @@ class TestView(Base.View):
         kmlexporter.get_zip(zipfile)
         if self.Main.send_file_over_bluetooth(zipfile) is False:
             appuifw.note(u"Sending failed. File is saved here: %s" % zipfile, 'error')
+        self.text.add(u"Google Earth file is saved in phone's memorycard:\n%s\n" % zipfile)
+        self.text.add(u"You you have GoogleMaps for S60 installed in your phone, you can use phone's file manager to open saved file in it.")
