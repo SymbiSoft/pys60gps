@@ -270,37 +270,37 @@ if __name__ == '__main__':
     sys.stderr.write('TRACKLOG2 len: %d\n' % len(TRACKLOG2))
     
     # print "<!--Tracklog len %d-->" % len(TRACKLOG)
-    import track2kml
-    print track2kml.header()
-    print track2kml.start_placemark("All", 'ffffffff')
+    import UglyKML
+    print UglyKML.header()
+    print UglyKML.start_placemark("All", 'ffffffff')
     for POS in _get_poslist():
         if pys60gpstools.has_fix(POS):
             print "%(lon).6f,%(lat).6f <!-- %(sat)d/%(satinview)d %(hdop).1f-->" % POS
     PLACEMARKS = []
-    print track2kml.end_placemark()
-    print track2kml.start_placemark("Red", 'ff0000ff')
+    print UglyKML.end_placemark()
+    print UglyKML.start_placemark("Red", 'ff0000ff')
     for POS in TRACKLOG:
         print "%(lon).6f,%(lat).6f" % POS
         #print POS
         des = time.strftime(u"%H:%M:%S ", time.localtime(POS['gpstime']))
         des += u"%(speed).1f m/s %(course).1f° %(hdop).1f" % POS
-        PLACEMARKS.append(track2kml.placemark({
+        PLACEMARKS.append(UglyKML.placemark({
             'name': "%s" % POS['reason'][:1],
             'description': des,
             'coordinates': "%(lon).6f,%(lat).6f" % POS,
         }))
-    print track2kml.end_placemark()
-    print track2kml.start_placemark("Blue", 'ffff0000')
+    print UglyKML.end_placemark()
+    print UglyKML.start_placemark("Blue", 'ffff0000')
     for POS in TRACKLOG2:
         print "%(lon).6f,%(lat).6f" % POS
         #print POS
         des = time.strftime(u"%H:%M:%S ", time.localtime(POS['gpstime']))
         des += u"%(speed).1f m/s %(course).1f° %(hdop).1f" % POS
-        PLACEMARKS.append(track2kml.placemark({
+        PLACEMARKS.append(UglyKML.placemark({
             'name': "%s" % POS['reason'][:1],
             'description': des,
             'coordinates': "%(lon).6f,%(lat).6f" % POS,
         }))
-    print track2kml.end_placemark()
+    print UglyKML.end_placemark()
     print "\n".join(PLACEMARKS).encode("utf8")
-    print track2kml.footer()
+    print UglyKML.footer()
