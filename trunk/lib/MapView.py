@@ -1,4 +1,4 @@
-# $Id: pys60gps.py 167 2009-03-28 05:35:32Z aapris $
+# $Id$
 
 # DO NOT remove this
 SIS_VERSION = "0.3.13"
@@ -68,7 +68,7 @@ def distance_from_line(x0, y0, x1, y1, x, y):
 
 
 class GpsApp:
-    __id__ = u'$Id: pys60gps.py 167 2009-03-28 05:35:32Z aapris $'
+    __id__ = u'$Id$'
 
     def __init__(self):
         self.startgmtime = time.time() + time.altzone # Startup time

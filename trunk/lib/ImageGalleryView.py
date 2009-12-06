@@ -349,6 +349,8 @@ class ImageGalleryView(Base.View):
         for dir in self.directories:
             if os.path.isdir(dir):
                 os.path.walk(dir, self.store_filenames_cb, None)
+        e32.ao_yield()
+        self.update()
 
     def _get_thumbnail_path_components(self, imagefilename):
         # Path and filename settings
