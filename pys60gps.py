@@ -1264,17 +1264,19 @@ class GpsApp:
         # Experimental speed history, to be rewritten
         speed_key = (u'%d'%time.time())[:-1]
          # If speed_history is empty add the first item or key has changed (every 10th second)
-        if len(self.speed_history) == 0 or self.speed_history[-1]["key"] != speed_key:
+        if (len(self.speed_history) == 0
+            or self.speed_history[-1]["key"] != speed_key) \
+            and 'speed' in simple_pos:
             self.speed_history.append({"key":speed_key, 
                                        "speedmax":simple_pos["speed"],
                                        "speedmin":simple_pos["speed"],
                                        "time":pos["satellites"]["time"],
                                        })
-        else:
-            if pos["course"]["speed"] < self.speed_history[-1]["speedmin"]:
-                self.speed_history[-1]["speedmin"] = pos["course"]["speed"]
-            if pos["course"]["speed"] > self.speed_history[-1]["speedmax"]:
-                self.speed_history[-1]["speedmax"] = pos["course"]["speed"]
+        elif 'speed' in simple_pos:
+            if simple_pos["speed"] < self.speed_history[-1]["speedmin"]:
+                self.speed_history[-1]["speedmin"] = simple_pos["speed"]
+            if simple_pos["speed"] > self.speed_history[-1]["speedmax"]:
+                self.speed_history[-1]["speedmax"] = simple_pos["speed"]
         if len(self.speed_history) >= self.config["max_speed_history_points"]:
             x = self.speed_history.pop(0)
 
