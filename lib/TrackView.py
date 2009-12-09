@@ -11,6 +11,7 @@ import time
 import copy
 import key_codes
 import graphics
+import sysinfo
 import simplejson
 import PositionHelper
 import pys60gpstools
@@ -216,6 +217,7 @@ class GpsTrackTab(BaseInfoTab):
         
 
     def activate(self):
+        self.init_ram = sysinfo.free_ram()
         self.active = True
         appuifw.app.exit_key_handler = self.handle_close
         self.canvas = appuifw.Canvas(redraw_callback=self.update,
@@ -564,36 +566,54 @@ class GpsTrackTab(BaseInfoTab):
     def draw_statusbar(self, pos):
         """Draw a red, yellow or green colored dot depending GPS state."""
         # FIXME: do this better
+        x1 = self.canvas.size[0] - 55    # x location
+        y1 = 35     # y location
+        
         if self.Main.read_position_running:
             if pys60gpstools.has_fix(pos):
-                self.ui.point([10, 10], outline=0x00ff00, width=10)
+                self.ui.point((x1, y1), outline=0x00ff00, width=10)
             else:
-                self.ui.point([10, 10], outline=0xffff00, width=10)
+                self.ui.point((x1, y1), outline=0xffff00, width=10)
         else:
-            self.ui.point([10, 10], outline=0xff0000, width=10)
+            self.ui.point((x1, y1), outline=0xff0000, width=10)
         if self.Main.downloading_pois_test:
-            self.ui.point([20, 10], outline=0xffff00, width=10)
+            self.ui.point((x1+10, y1), outline=0xffff00, width=10)
+        font = (u"Series 60 Sans", 12)
+        self.ui.text((x1, y1+20), u"%s" % (time.strftime("%H:%M:%S")), 
+                        font=font, fill=0x999999)
 
 
     def draw_texts(self, pos):
         """Draw some informative texts on the Track canvas."""
         helpfont_size = 12
+        text_x = 105
         text_y = 3
         helpfont = (u"Series 60 Sans", helpfont_size)
 
         text_y += helpfont_size
-        self.ui.text((105, text_y), u"Track: %d/%d" % (
+        self.ui.text((text_x, text_y), u"Track: %d/%d" % (
                         len(self.Main.data["track_new"]), 
                         len(self.Main.data["position_debug"]), 
                         ), 
                         font=helpfont, fill=0x999999)
-
         try:
             e_text = u"E %.2f" % self.simple_center_pos["e"]
             text_y += helpfont_size
-            self.ui.text((2,text_y), e_text, font=helpfont, fill=0x999999)
+            self.ui.text((text_x,text_y), e_text, font=helpfont, fill=0x999999)
         except:
             pass
+        #text_y = self.canvas.size[0] - 50
+        ram = sysinfo.free_ram()
+        text_y += helpfont_size
+        self.ui.text((text_x, text_y), u"Mem %d kB" % (ram/1024), 
+                        font=helpfont, fill=0x999999)
+        text_y += helpfont_size
+        self.ui.text((text_x, text_y), u"Diff %d kB" % ((ram-self.init_ram)/1024), 
+                        font=helpfont, fill=0x999999)
+        text_y += helpfont_size
+        self.ui.text((text_x, text_y), u"%d B" % (ram), 
+                        font=helpfont, fill=0x999999)
+        
 
     def draw_tracklogbars(self, pos):
         helpfont_size = 12
