@@ -557,14 +557,14 @@ class GpsTrackTab(BaseInfoTab):
                and (-self.center_x < p["x"] < self.center_x or -self.center_x < p1["x"] < self.center_x) 
                and (-self.center_y < p["y"] < self.center_y or -self.center_y < p1["y"] < self.center_y) 
                and timediff <= max_timediff):
-                self.ui.point([p["x"]+self.center_x, p["y"]+self.center_y], outline=0x888800, width=5)
                 self.ui.line([p["x"]+self.center_x, p["y"]+self.center_y,
-                              p1["x"]+self.center_x, p1["y"]+self.center_y], outline=0x008888, width=3)
+                              p1["x"]+self.center_x, p1["y"]+self.center_y], outline=0x00ff88, width=2)
+                self.ui.point([p["x"]+self.center_x, p["y"]+self.center_y], outline=0x880000, width=5)
                 lines_drawn = lines_drawn + 1
             p1 = p
 
     def draw_statusbar(self, pos):
-        """Draw a red, yellow or green colored dot depending GPS state."""
+        """Draw a red, yellow or green dot depending GPS state."""
         # FIXME: do this better
         x1 = self.canvas.size[0] - 55    # x location
         y1 = 35     # y location
@@ -755,7 +755,7 @@ class GpsTrackTab(BaseInfoTab):
             j = j + 1
             if j > 60: break # draw only last x debug points
             p = pys60gpstools.simplify_position(pd[i])
-            if pys60gpstools.has_fix(p):
+            if pys60gpstools.has_fix(p) and 'e' not in p:
                 locationtools.set_fake_utm(p, self.Main.LongOrigin)
             self._calculate_canvas_xy_new(self.ui, self.meters_per_px, 
                                           self.simple_pc, p)
