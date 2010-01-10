@@ -77,9 +77,6 @@ class ImageGalleryView(Base.View):
         appuifw.app.screen = "large"
         self.canvas = appuifw.Canvas(redraw_callback=self.update)
         appuifw.app.body = self.canvas
-        self.canvas.bind(key_codes.EKeyLeftArrow,lambda: self.next_image(-1))
-        self.canvas.bind(key_codes.EKeyRightArrow,lambda: self.next_image(1))
-        self.canvas.bind(key_codes.EKeyUpArrow,lambda: self.next_image(0))
         self.canvas.bind(key_codes.EKey0,lambda: self.sync_server())
         self.imagemenu.append((u"0. Synchronize", lambda: self.sync_server()))
         self.canvas.bind(key_codes.EKey1,lambda: self.ask_caption())
@@ -89,9 +86,14 @@ class ImageGalleryView(Base.View):
         if self.visibilities:
             self.canvas.bind(key_codes.EKey3,lambda: self.toggle_visibility())
             self.imagemenu.append((u"3. Visibility", lambda: self.toggle_visibility()))
+        self.canvas.bind(key_codes.EKeySelect,lambda: self.show_current())
+        self.canvas.bind(key_codes.EKeyLeftArrow,lambda: self.next_image(-1))
+        self.imagemenu.append((u"<- Older ", lambda: self.next_image(-1)))
+        self.canvas.bind(key_codes.EKeyRightArrow,lambda: self.next_image(1))
+        self.imagemenu.append((u"-> Newer ", lambda: self.next_image(1)))
         self.canvas.bind(key_codes.EKeyBackspace,lambda: self.delete_current())
         self.imagemenu.append((u"C. Delete", lambda: self.delete_current()))
-        self.canvas.bind(key_codes.EKeySelect,lambda: self.show_current())
+        self.canvas.bind(key_codes.EKeyUpArrow,lambda: self.next_image(0))
         self.imagemenu.append((u"Show", lambda: self.show_current()))
         self.ip.show(u"Loading image data. This may take a while", 
                 (50, 50), 180000, 10, appuifw.EHLeftVTop)
@@ -113,6 +115,8 @@ class ImageGalleryView(Base.View):
                 (u"filesize",lambda:self.sort_filelist("filesize")),
             ))
             appuifw.app.menu = [(u"Update images", self.update_filelist),
+                                (u"<- Older ", lambda: self.next_image(-1)),
+                                (u"-> Newer ", lambda: self.next_image(1)),
                                 sort_menu,
                                 (u"Search images", self.search_filelist),
                                 (u"Close", self.handle_close),
