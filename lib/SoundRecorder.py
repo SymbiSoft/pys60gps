@@ -6,7 +6,7 @@ import audio
 import key_codes
 
 class SoundRecorder():
-    __id__ = u'$Id: p2pfusion-mobile.py 1455 2009-04-23 13:29:17Z 08rista $'
+    __id__ = u'$Id$'
 
     def __init__(self, soundfile = u"E:\\testsound.wav"):
         self.lock = e32.Ao_lock()
