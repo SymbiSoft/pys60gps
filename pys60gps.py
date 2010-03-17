@@ -2,7 +2,7 @@
 # $Id$
 
 # DO NOT remove this
-SIS_VERSION = "0.3.18"
+SIS_VERSION = "0.3.19"
 APP_TITLE = u"PyS60GPS"
 
 import appuifw
@@ -82,7 +82,7 @@ draw_startup_screen(canvas, u"Comm")
 import Comm
 
 draw_startup_screen(canvas, u"TrackView")
-import TrackView; reload(TrackView)
+import TrackView;# reload(TrackView)
 
 draw_startup_screen(canvas, u"SimpleChatView")
 from SimpleChatView import SimpleChatView
@@ -91,7 +91,7 @@ from SimpleChatView import SimpleChatView
 #from TwitterView import TwitterView
 
 draw_startup_screen(canvas, u"ImageGalleryView")
-import ImageGalleryView; reload(ImageGalleryView)
+import ImageGalleryView;# reload(ImageGalleryView)
 
 draw_startup_screen(canvas, u"PlokView")
 from PlokView import PlokView
@@ -491,7 +491,7 @@ class GpsApp:
         """
         self.downloading_pois_test = True
         self.key = appuifw.query(u"Keyword", "text", self.key)
-        if self.key is None: 
+        if self.key is None:
             self.downloading_pois_test = False
             return
         # if self.key == 'loctest':

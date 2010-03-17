@@ -144,6 +144,8 @@ class UglyAndHackyKMLExporterButHeyItWorks:
         if "hdop" in linedata and linedata["hdop"] > 3:
             print linedata["hdop"]
             return
+        if "gpstime" not in linedata:
+            linedata["gpstime"] = linedata["time"]
         tt, tzone = self.parse_isotime(linedata["gpstime"])
         currenttime = time.mktime(tt);
         ts = time.strftime("%Y%m%dT%H%M%SZ", tt)
