@@ -6,6 +6,7 @@ import key_codes
 import e32
 import time
 import os
+import simplejson
 from HelpView import HelpView
 from CommWrapper import CommWrapper
 from UglyKML import UglyAndHackyKMLExporterButHeyItWorks
@@ -42,12 +43,84 @@ class TestView(Base.View):
         """Set main menu to app.body and left menu entries."""
         Base.View.activate(self)
         appuifw.app.menu = [
+            (u"Memo",self.create_memo),
             (u"Export Tracks",self.export_tracks),
             (u"Help",self.help.activate),
             (u"Close", self.parent.activate),
         ]
         appuifw.app.body = self.text
         self.text.add(u"Select from the menu\nValitse menusta\n'Export Tracks'\n")
+
+    def create_memo(self):
+        """
+        Create an object which contains all possible information
+        of user's current environment and may contain 
+        one (audio, video or photo) file attachment.
+        """
+        memotypes = [
+            u'NOTE',
+            u'TODO',
+            u'MEMO',
+        ]
+        privacy = [
+            u'PRIVATE',
+            u'PUBLIC',
+        ]
+        attachmenttypes = [
+            u'AUDIO',
+            u'PHOTO',
+            u'VIDEO',
+        ]
+        data = {}
+        current_time = time.time()
+        data['time'] = current_time
+        data['timestring'] = time.strftime("%Y%m%dT%H%M%S", 
+                                           time.localtime(current_time))
+        # Do not use, if there is ongoing positioning request, it will be killed
+#        try:
+#            import positioning
+#            positioning.select_module(positioning.default_module())
+#            positioning.set_requestors([{"type":"service",
+#                                         "format":"application",
+#                                         "data":"test_app"}])
+#            data['position'] = positioning.last_position()
+#        except:
+#            data['position'] = {}
+        data['position'] = self.Main.last_fix.copy()
+        try:
+            import wlantools
+            data['wlan_devices'] = wlantools.scan(False)
+        except Exception, error:
+            data['wlan_devices'] = {}
+        try:
+            import location
+            data['gsm_location'] = location.gsm_location()
+            import sysinfo
+            data['gsm_signal_dbm'] = sysinfo.signal_dbm()
+        except Exception, error:
+            data['gsm_location'] = {}
+            data['gsm_signal_dbm'] = None
+        choice = appuifw.popup_menu(memotypes, u"Select type (or cancel)")
+        if choice is None:
+            appuifw.note(u"Cancelled", 'info')
+            return
+        data['type'] = memotypes[choice]
+        data['text'] = appuifw.query(u"New %s:" % (memotypes[choice]), "text", u"")
+        data['keywords'] = appuifw.query(u"Addidional keywords:", "text", u"")
+        choice = appuifw.popup_menu(privacy, u"Select privacy")
+        if choice is not None:
+            data['privacy'] = privacy[choice]
+        choice = appuifw.popup_menu(attachmenttypes, u"Attach something (or cancel)")
+        if choice is None:
+            appuifw.note(u"Cancelled", 'info')
+        else:
+            appuifw.note(u"Not implemented", 'info')
+        filename = time.strftime("note-%Y%m%dT%H%M%S.json")
+        filename = os.path.join(self.Main.datadir, filename)
+        f = open(filename, "wt")
+        f.write(simplejson.dumps(data))
+        f.close()
+
 
     def export_tracks(self):
         """
