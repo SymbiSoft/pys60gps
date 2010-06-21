@@ -149,9 +149,10 @@ class TestView(Base.View):
             e32.ao_yield()
         self.text.add(u"Files converted, trying to send via bluetooth.\n")
         if len(selected) > 1:
-            zipfile = u"E:\\track-%s-%s.kmz" % (items[selected[0]], items[selected[-1]])
+            zipfile = u"track-%s-%s.kmz" % (items[selected[0]], items[selected[-1]])
         else:
-            zipfile = u"E:\\track-%s.kmz" % (items[selected[0]])
+            zipfile = u"track-%s.kmz" % (items[selected[0]])
+        zipfile = os.path.join(self.Main.datadir, zipfile)
         kmlexporter.get_zip(zipfile)
         if self.Main.send_file_over_bluetooth(zipfile) is False:
             appuifw.note(u"Sending failed. File is saved here: %s" % zipfile, 'error')
