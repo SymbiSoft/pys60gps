@@ -8,6 +8,7 @@ Supports
 - browsing images
 - adding and editing some basic metadata
 - sending image to a web server
+- updating image metadata
 
 NOTE:
 Functions in os-module return plain str objects but
@@ -70,13 +71,13 @@ class ImageGalleryView(Base.View):
 
     def activate(self):
         #Base.View.activate(self)
-        appuifw.app.screen = "large"
-        self.canvas = appuifw.Canvas(redraw_callback=self.update)
-        appuifw.app.body = self.canvas
         self.timer = e32.Ao_timer()
         self.current_img = -1
         appuifw.app.exit_key_handler = self.handle_close
         self.imagemenu = []
+        appuifw.app.screen = "large"
+        self.canvas = appuifw.Canvas(redraw_callback=self.update)
+        appuifw.app.body = self.canvas
         self.canvas.bind(key_codes.EKey0,lambda: self.sync_server())
         self.imagemenu.append((u"0. Synchronize", lambda: self.sync_server()))
         self.canvas.bind(key_codes.EKey1,lambda: self.ask_caption())
@@ -235,11 +236,7 @@ class ImageGalleryView(Base.View):
         self.updating = True
         lheight = 16
         font = (u"Series 60 Sans", 14)
-        try: # Sometimes right after activate() canvas is not ready
-            self.canvas.clear(0x000000)
-        except:
-            self.updating = False
-            return
+        self.canvas.clear(0x000000)
         #self.canvas.text((5, 20), u"PyS60 Image gallery", font=(u"Series 60 Sans", 20))
         #self.canvas.text((5, 200), u"Free RAM: %d kB" % (sysinfo.free_ram()/1024), font=font)
         if self.current_img < 0:
