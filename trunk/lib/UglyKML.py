@@ -10,10 +10,15 @@ from __future__ import generators
 
 import os
 import sys
-import time
 import re
 import zipfile
 import simplejson
+
+import e32
+if e32.pys60_version_info[:2] >= (1, 9):
+    import mktimefix as time
+else:
+    import time
 
 def header():
     return """<?xml version="1.0" encoding="UTF-8"?>
@@ -137,6 +142,7 @@ class UglyAndHackyKMLExporterButHeyItWorks:
         for line in f.readlines():
             linedata = simplejson.loads(line)
             self.handle_trackpoint(linedata)
+        f.close()
 
     def handle_trackpoint(self, linedata):
         """
@@ -153,7 +159,7 @@ class UglyAndHackyKMLExporterButHeyItWorks:
             tt, tzone = self.parse_isotime(linedata["gpstime"])
         elif 'time' in linedata:
             tt, tzone = self.parse_isotime(linedata["time"])
-        currenttime = time.mktime(tt);
+        currenttime = time.mktime(tt)
         ts = time.strftime("%Y%m%dT%H%M%SZ", tt)
         # Start new placemark if there is too much delay between 2 trackpoints
         if currenttime - self.splittrack_sec > self.lasttime and \
