@@ -142,7 +142,9 @@ class TestView(Base.View):
         kmlexporter = UglyAndHackyKMLExporterButHeyItWorks()
         self.text.add(u"%d files selected. Processing may take a few minutes if you selected many files.\n")
         for i in selected:
+            self.text.add(u"Adding %s\n" % trackfiles[i])
             kmlexporter.filepaths.append(trackfiles[i])
+        e32.ao_sleep(1.0)
         for f in kmlexporter.readfiles():
             self.text.add(u"Processing: " + f + u"\n")
             e32.ao_sleep(0.1)
