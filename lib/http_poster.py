@@ -90,7 +90,7 @@ if __name__ == "__main__":
         script = "/%s" % "/".join(urlparts[3:])
     # Read file
     filename = sys.argv[2]
-    f=open(filename, 'r')
+    f=open(filename, 'rb')
     filedata = f.read()
     f.close()
     # Create "files"-list which contains all files to send
