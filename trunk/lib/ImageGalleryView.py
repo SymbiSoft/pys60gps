@@ -488,7 +488,7 @@ class ImageGalleryView(Base.View):
                 return
             current_img["status"] = u"synchronizing"
             filename = current_img['path']
-            f=open(filename, 'r')
+            f=open(filename, 'rb')
             filedata = f.read()
             f.close()
             # Create "files"-list which contains all files to send
