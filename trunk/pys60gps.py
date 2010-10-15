@@ -40,6 +40,8 @@ canvas = appuifw.Canvas(redraw_callback=startup_screen)
 appuifw.app.body = canvas
 draw_startup_screen(canvas, u"sys, os, btsocket, sysinfo, re")
 import sys
+sys.path.append('C:\\Data\\python\\lib')
+sys.path.append('E:\\python\\lib')
 
 my_log = Logger()
 #sys.stderr = sys.stdout = my_log
