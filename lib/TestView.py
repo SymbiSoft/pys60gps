@@ -4,12 +4,21 @@ import Base
 import appuifw
 import key_codes
 import e32
-import time
 import os
 import simplejson
 from HelpView import HelpView
 from CommWrapper import CommWrapper
+
+import e32
+if e32.pys60_version_info[:2] >= (1, 9):
+    import mktimefix as time
+else:
+    import time
+
 from UglyKML import UglyAndHackyKMLExporterButHeyItWorks
+
+
+QUICKNOTE_PREFIX = u'quicknote-'
 
 class TestView(Base.View):
     """
@@ -26,7 +35,8 @@ class TestView(Base.View):
         self.delimiter = u">>> "
         self.text = appuifw.Text(u"")
         #self.text.bind(key_codes.EKeySelect, self.send_chatmessage)
-        self.help = HelpView(self, 
+        self.quicknotedir = os.path.join(self.Main.datadir, u'quicknote')
+        self.help = HelpView(self,
             u"""Check what is in the menu""")
 
     def add_text(self, textarea, timestamp, user, text):
@@ -38,23 +48,110 @@ class TestView(Base.View):
         textarea.add(u"%s\n" % (timestamp)) # NOTE: must be unicode here
         textarea.color = (0,0,0)
         textarea.add(u">> %s\n" % (text))
-    
+
     def activate(self):
         """Set main menu to app.body and left menu entries."""
         Base.View.activate(self)
         appuifw.app.menu = [
-            (u"Memo",self.create_memo),
+            (u"Quick note",self.create_simple_memo),
             (u"Export Tracks",self.export_tracks),
+            (u"Send notes",self.send_notes),
             (u"Help",self.help.activate),
             (u"Close", self.parent.activate),
         ]
         appuifw.app.body = self.text
         self.text.add(u"Select from the menu\nValitse menusta\n'Export Tracks'\n")
 
+    def create_simple_memo(self):
+        """
+        Create an object which contains all possible information
+        of user's current environment and may contain
+        one (audio, video or photo) file attachment.
+        """
+        data = {}
+        # Create timestamps:
+        # TODO: to a function
+        current_time = time.time() # -> epoch timestamp
+        current_gmtime = time.mktime(time.gmtime()) # -> epoch timestamp
+        timezone_offset = abs(int(current_time - current_gmtime)) # e.g. EET -> 7200
+        if (current_time - current_gmtime) < 0:
+            prefix = '-'
+        else:
+            prefix = '+'
+        timezone_offset_hours = timezone_offset / 60 / 60
+        timezone_offset_minutes = (timezone_offset / 60) % 60
+        tz_str = u'%s%02d' % (prefix, timezone_offset_hours)
+        if timezone_offset_minutes != 0:
+            tz_str += u':%02d' % timezone_offset_minutes
+
+        data['localtime'] = time.strftime("%Y-%m-%dT%H:%M:%S" + tz_str,
+                                          time.localtime(current_time))
+        data['gmtime'] = time.strftime("%Y-%m-%dT%H:%M:%SZ",
+                                          time.localtime(current_gmtime))
+        if self.Main.last_fix:
+            data['position'] = self.Main.last_fix.copy()
+        else:
+            data['position'] = None
+        try:
+            import wlantools
+            data['wlan_devices'] = wlantools.scan(False)
+        except Exception, error:
+            data['wlan_devices'] = {}
+        try:
+            import location
+            data['gsm_location'] = location.gsm_location()
+            import sysinfo
+            data['gsm_signal_dbm'] = sysinfo.signal_dbm()
+        except Exception, error:
+            data['gsm_location'] = {}
+            data['gsm_signal_dbm'] = None
+        data['text'] = appuifw.query(u"New quick note:", "text", u"")
+        if data['text']:
+            filename = QUICKNOTE_PREFIX + time.strftime("%Y%m%dT%H%M%S.json")
+            filename = os.path.join(self.Main.datadir, filename)
+            f = open(filename, "wt")
+            f.write(simplejson.dumps(data))
+            f.close()
+        else:
+            appuifw.note(u"Cancelled", 'info')
+
+    def send_notes(self):
+        quicknote_files = []
+        i = 0
+        # Create dir for sent quicknotes
+        if not os.path.exists(self.quicknotedir):
+            os.makedirs(self.quicknotedir)
+        for file in os.listdir(self.Main.datadir):
+            if file.startswith(QUICKNOTE_PREFIX):
+                filename = os.path.join(self.Main.datadir, file)
+                f = open(filename, 'rb')
+                filedata = f.read()
+                f.close()
+                # Create "files"-list which contains all files to send
+                quicknote_files.append(("quicknote_file%d" % i, file, filedata))
+                i += 1
+                newfilename = os.path.join(self.quicknotedir, file)
+                os.rename(filename, newfilename)
+
+        #appuifw.note(u'%d' % len(quicknote_files), 'info')
+        if quicknote_files:
+            params = {"operation" : "send_quicknote_files",
+                      "sender" : self.Main.config["username"].encode("utf-8"),
+                      }
+            data, response = self.cw.send_request("send_quicknote_files",
+                                                  params = params,
+                                                  files = quicknote_files,
+                                                  infotext = u"Uploading quick notes...")
+            if "status" in data and data["status"] == "ok":
+                notetype = "info"
+            else:
+                notetype = "error"
+            appuifw.note(data["message"], notetype)
+
     def create_memo(self):
         """
         Create an object which contains all possible information
-        of user's current environment and may contain 
+        of user's current environment and may contain
         one (audio, video or photo) file attachment.
         """
         memotypes = [
@@ -74,7 +171,7 @@ class TestView(Base.View):
         data = {}
         current_time = time.time()
         data['time'] = current_time
-        data['timestring'] = time.strftime("%Y%m%dT%H%M%S", 
+        data['timestring'] = time.strftime("%Y%m%dT%H%M%S",
                                            time.localtime(current_time))
         # Do not use, if there is ongoing positioning request, it will be killed
 #        try:

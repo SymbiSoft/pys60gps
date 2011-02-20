@@ -4,10 +4,10 @@
 import httplib
 
 """
-A scripted web client that will post data to a site as if from a 
-form using ENCTYPE="multipart/form-data". This is typically used 
-to upload files, but also gets around a server's (e.g. ASP's) 
-limitation on the amount of data that can be accepted via a 
+A scripted web client that will post data to a site as if from a
+form using ENCTYPE="multipart/form-data". This is typically used
+to upload files, but also gets around a server's (e.g. ASP's)
+limitation on the amount of data that can be accepted via a
 standard POST (application/x-www-form-urlencoded).
 http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/146306
 """
@@ -15,7 +15,7 @@ http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/146306
 __version__ = u'$Id$'
 user_agent = "http_poster.py/$Rev: 104 $"
 
-def post_multipart(host, selector, params, files, headers={}):
+def post_multipart(host, selector, params, files, headers={}, https = False):
     """
     Post params and files to an http host as multipart/form-data.
     params is a dictionary of elements for regular form fields.
@@ -23,7 +23,10 @@ def post_multipart(host, selector, params, files, headers={}):
     Return a HTTPResponse.
     """
     content_type, body = encode_multipart_formdata(params, files)
-    conn = httplib.HTTPConnection(host)
+    if https:
+        conn = httplib.HTTPSConnection(host)
+    else:
+        conn = httplib.HTTPConnection(host)
     if 'User-Agent' not in headers:
         headers['User-Agent'] = user_agent
     if 'Content-Type' not in headers:
@@ -32,13 +35,13 @@ def post_multipart(host, selector, params, files, headers={}):
     response = conn.getresponse()
     # conn can't be closed here, because response in not read()able after it
     # in some situations?
-    # conn.close() 
+    # conn.close()
     return response
 
 def encode_multipart_formdata(params, files):
     """
     params is a dictionary of elements for regular form fields.
-    Value must be supported by plain %s conversion so ensure to 
+    Value must be supported by plain %s conversion so ensure to
     encode unicode values to string-type.
     files is a sequence of (name, filename, value) elements for data to be uploaded as files.
     Return (content_type, body) ready for httplib.HTTP instance.
@@ -95,7 +98,7 @@ if __name__ == "__main__":
     f.close()
     # Create "files"-list which contains all files to send
     files = [("file1", filename, filedata)]
-    params = {"param1":"foo", 
+    params = {"param1":"foo",
               "param2":"bar",
               }
     try:
