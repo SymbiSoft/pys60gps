@@ -2,7 +2,7 @@
 # $Id$
 
 # DO NOT remove this
-SIS_VERSION = "0.3.19"
+SIS_VERSION = "0.3.20"
 APP_TITLE = u"PyS60GPS"
 
 import appuifw
@@ -27,7 +27,7 @@ class Logger:
 #### STARTUP "splash screen"
 def startup_screen(dummy=(0, 0, 0, 0)):
     pass
-    
+
 def draw_startup_screen(canvas, text):
     canvas.clear()
     canvas.text((10, 50), u"Starting up", font=(u"Series 60 Sans", 30), fill=0x333333)
@@ -98,13 +98,13 @@ import ImageGalleryView;# reload(ImageGalleryView)
 draw_startup_screen(canvas, u"PlokView")
 from PlokView import PlokView
 
-draw_startup_screen(canvas, u"ListdataView")
-from ListdataView import ListdataView
+#draw_startup_screen(canvas, u"ListdataView")
+#from ListdataView import ListdataView
 
 draw_startup_screen(canvas, u"TestView")
 import TestView; reload(TestView)
 
-draw_startup_screen(canvas, u"MiscView")
+#draw_startup_screen(canvas, u"MiscView")
 #from MiscView import SysinfoView, SysInfoTab, E32InfoTab, MemTab, GsmTab, \
 #                     WlanTab, GpsView, GpsInfoTab, GpsSpeedTab, WlanView
 from MiscView import GpsView# , GpsInfoTab, GpsSpeedTab, WlanView
@@ -139,7 +139,7 @@ class GpsApp:
         self.config_file = os.path.join(self.datadir, "settings.ini")
         self.config = {} # TODO: read these from a configuration file
         self.apid = None # Default access point id
-        self.apo = None # Default access point 
+        self.apo = None # Default access point
         self.read_config()
         #if self.config.has_key("apid"):
         #    self._select_access_point(self.config["apid"])
@@ -166,7 +166,7 @@ class GpsApp:
             'min_time': 0.0, # seconds
             'max_time': 60.0, # seconds
             'max_anglediff': 30.0, # degrees
-            'max_dist_estimate': 50.0, # meters        
+            'max_dist_estimate': 50.0, # meters
         }
 
         # Data-repository
@@ -187,7 +187,7 @@ class GpsApp:
         self.trackcalc = {} # Contains handle_trkpt()'s result dict
         self.data["position"] = [] # Position history list (positioning.position())
         self.pos_estimate = {} # Contains estimated location, calculated from the latest history point
-        self.data["position_debug"] = [] # latest "max_debugpoints" 
+        self.data["position_debug"] = [] # latest "max_debugpoints"
         # POIs
         self.data["pois_private"] = []
         self.data["pois_downloaded"] = []
@@ -199,25 +199,26 @@ class GpsApp:
         self.comm = Comm.Comm(self.config["host"],
                               self.config["script"],
                               username=self.config["username"],
-                              password=self.config["password"])
+                              password=self.config["password"],
+                              https=self.config["https"])
         # temporary solution to handle speed data (to be removed/changed)
         self.speed_history = []
         # Put all menu entries and views as tuples into a sequence
         self.menu_entries = []
         self.menu_entries.append(((u"Track"), TrackView.TrackView(self)))
         self.menu_entries.append(((u"GPS Info"), GpsView(self)))
-        plokcomm = Comm.Comm(self.config["plokhost"], 
-                             self.config["plokscript"],
-                             username=self.config["username"],
-                             password=self.config["plokpassword"])
-        self.menu_entries.append(((u"Images"), ImageGalleryView.ImageGalleryView(self, plokcomm)))
-        self.menu_entries.append(((u"Plok.in chat"), SimpleChatView(self, plokcomm)))
-        self.menu_entries.append(((u"Latest Ploks"), PlokView(self, plokcomm)))
-        self.menu_entries.append(((u"Nearby"), ListdataView(self)))
-        self.menu_entries.append(((u"Opennetmap.org chat"), SimpleChatView(self, self.comm)))
+        #plokcomm = Comm.Comm(self.config["plokhost"],
+        #                     self.config["plokscript"],
+        #                     username=self.config["username"],
+        #                     password=self.config["plokpassword"])
+        self.menu_entries.append(((u"Images"), ImageGalleryView.ImageGalleryView(self, self.comm)))
+        self.menu_entries.append(((u"Plok.in chat"), SimpleChatView(self, self.comm)))
+        #self.menu_entries.append(((u"Latest Ploks"), PlokView(self, plokcomm)))
+        #self.menu_entries.append(((u"Nearby"), ListdataView(self)))
+        #self.menu_entries.append(((u"Opennetmap.org chat"), SimpleChatView(self, self.comm)))
         # self.menu_entries.append(((u"Twitter"), TwitterView(self)))
         #self.menu_entries.append(((u"Sysinfo"), SysinfoView(self)))
-        self.menu_entries.append(((u"Tests"), TestView.TestView(self)))
+        self.menu_entries.append(((u"Tests"), TestView.TestView(self, self.comm)))
         self.menu_entries.append(((u"WLAN"), WlanView(self)))
         # Create main menu from that sequence
         self.main_menu = [item[0] for item in self.menu_entries]
@@ -247,14 +248,14 @@ class GpsApp:
                                       u"Select network to use")
         if sel_item != None:    # != Cancel
             if self.apo:
-                self.apo.stop()      
+                self.apo.stop()
             self.apid = ap_dict[sel_item]['iapid']
             self.apo = btsocket.access_point(self.apid)
             btsocket.set_default_access_point(self.apo)
 
     def _select_access_point(self, apid = None):
         """
-        Shortcut for btsocket.select_access_point() 
+        Shortcut for btsocket.select_access_point()
         TODO: save selected access point to the config
         TODO: allow user to change access point later
         """
@@ -292,49 +293,50 @@ class GpsApp:
             # raise
         # List here ALL POSSIBLE configuration keys, so they will be initialized
         defaults = {
-            "max_speed_history_points" : 200,
-            "min_trackpoint_distance" : 1000, # meters
-            "estimated_error_radius" : 50, # meters
-            "max_estimation_vector_distance" : 10, # meters
-            "max_trackpoints" : 300,
-            "max_debugpoints" : 120,
-            "min_cellid_time" : 20,
-            "max_cellid_time" : 600,
-            "max_cellid_dist" : 500,
-            "min_wlan_time" : 6,
-            "max_wlan_time" : 600,
-            "max_wlan_dist" : 100,
-            "max_wlan_speed" : 60,
-            "track_debug" : False,
-            "username" : None,
-            "password" : u"",
-            "group" : None,
-            "apid" : None,
-            "host" : u"opennetmap.org",
-            "script" : u"/api/",
-            "plokhost" : u"www.plok.in", # Temporary solution to handle 2 different Comm-servers
-            "plokscript" : u"/api/",
-            "plokpassword" : u"",
+            "max_speed_history_points": 200,
+            "min_trackpoint_distance": 1000, # meters
+            "estimated_error_radius": 50, # meters
+            "max_estimation_vector_distance": 10, # meters
+            "max_trackpoints": 300,
+            "max_debugpoints": 120,
+            "min_cellid_time": 20,
+            "max_cellid_time": 600,
+            "max_cellid_dist": 500,
+            "min_wlan_time": 6,
+            "max_wlan_time": 600,
+            "max_wlan_dist": 100,
+            "max_wlan_speed": 60,
+            "track_debug": False,
+            "username": None,
+            "password": u"",
+            "group": None,
+            "apid": None,
+            "host": u"www.plok.in",
+            "script": u"/api/",
+            "https": 0,
+            #"plokhost": u"www.plok.in", # Temporary solution to handle 2 different Comm-servers
+            #"plokscript": u"/api/",
+            #"plokpassword": u"",
         }
         # List here all configuration keys, which must be defined before use
         # If a config key has key "function", it's called to define value
         # TODO: make some order for these
         mandatory = {
-            "username" : {"querytext" : u"Give nickname", 
-                          "valuetype" : "text", 
-                          "default" : u'',
-                          "canceltext" : u'Nickname is mandatory',
+            "username": {"querytext": u"Give nickname",
+                          "valuetype": "text",
+                          "default": u'',
+                          "canceltext": u'Nickname is mandatory',
                           },
-            "group"    : {"querytext" : u"Give group name (cancel for default group)", 
-                          "valuetype" : "text", 
-                          "default" : u'',
-                          "canceltext" : None,
+            "group"    : {"querytext": u"Give group name (cancel for default group)",
+                          "valuetype": "text",
+                          "default": u'',
+                          "canceltext": None,
                           },
-#            "apid"    : {"querytext" : u"Select default access point (cancel for no default access point)", 
-#                          "valuetype" : "function",
-#                          "default" : u'',
-#                          "canceltext" : None,
-#                          "function" : self._select_access_point,
+#            "apid"    : {"querytext": u"Select default access point (cancel for no default access point)",
+#                          "valuetype": "function",
+#                          "default": u'',
+#                          "canceltext": None,
+#                          "function": self._select_access_point,
 #                          },
         }
         # Loop all possible keys (found from defaults)
@@ -348,17 +350,17 @@ class GpsApp:
                     value = mandatory[key]["function"]() # "function" must return a value
                 else:
                     while value is None:
-                        value = appuifw.query(mandatory[key]["querytext"], 
-                                              mandatory[key]["valuetype"], 
+                        value = appuifw.query(mandatory[key]["querytext"],
+                                              mandatory[key]["valuetype"],
                                               mandatory[key]["default"])
-                        if value is None and mandatory[key]["canceltext"]: 
+                        if value is None and mandatory[key]["canceltext"]:
                             appuifw.note(mandatory[key]["canceltext"], 'error')
                         elif value is None: # If canceltext is u"", change value None to u""
                             value = u""
                 defaults[key] = value
         self.config = defaults
         self.save_config()
-        
+
     def save_config(self):
         f = open(self.config_file, "wt")
         f.write(repr(self.config))
@@ -369,8 +371,8 @@ class GpsApp:
             os.remove(self.config_file)
             # TODO: create combined exit handler
             self.save_log_cache("track")
-            self.save_log_cache("cellid") 
-            self.save_log_cache("wlan") 
+            self.save_log_cache("cellid")
+            self.save_log_cache("wlan")
             appuifw.note(u"You need to restart program now.", 'info')
             self.running = False
             self.lock.signal()
@@ -380,22 +382,22 @@ class GpsApp:
     def set_scan_config(self, profile):
         """
         First attempt to make more easily changeable scanning profile.
-        TODO: a form to create and manage profiles (for advanged users) 
+        TODO: a form to create and manage profiles (for advanged users)
         """
         profiles = {}
         profiles["lazy"] = {
-            "max_cellid_time" : 600,
-            "max_cellid_dist" : 500,
-            "min_wlan_time" : 6,
-            "max_wlan_time" : 3600,
-            "max_wlan_dist" : 10000,
+            "max_cellid_time": 600,
+            "max_cellid_dist": 500,
+            "min_wlan_time": 6,
+            "max_wlan_time": 3600,
+            "max_wlan_dist": 10000,
         }
         profiles["turbo"] = {
-            "max_cellid_time" : 180,
-            "max_cellid_dist" : 100,
-            "min_wlan_time" : 6,
-            "max_wlan_time" : 60,
-            "max_wlan_dist" : 50,
+            "max_cellid_time": 180,
+            "max_cellid_dist": 100,
+            "min_wlan_time": 6,
+            "max_wlan_time": 60,
+            "max_wlan_dist": 50,
         }
         for key in profiles[profile]:
             self.config[key] = profiles[profile][key]
@@ -407,7 +409,7 @@ class GpsApp:
         """
         Find all gps, gsm and wlan signals currently available.
         """
-        geolocation = {"version" : "0.0.2"}
+        geolocation = {"version": "0.0.2"}
         # Try to get gps location
         simple_pos = self.simple_pos
         if pys60gpstools.has_fix(simple_pos):
@@ -423,11 +425,11 @@ class GpsApp:
                 time.sleep(1)
                 import random
                 wlan_devices = [
-                    {'Capability': 1, 'BeaconInterval': 100, 'SecurityMode': 'Open', 
-                     'SSID': u'MyWLAN', 'BSSID': u'00:02:72:43:57:E1', 'ConnectionMode': 'Infrastructure', 
-                     'SupportedRates': u'82848B96', 'Channel': 11, 'RxLevel': random.randint(-100, -50)}, 
-                    {'Capability': 17, 'BeaconInterval': 100, 'SecurityMode': 'WpaPsk', 
-                     'SSID': u'RMWLAN', 'BSSID': u'00:02:72:43:56:87', 'ConnectionMode': 'Infrastructure', 
+                    {'Capability': 1, 'BeaconInterval': 100, 'SecurityMode': 'Open',
+                     'SSID': u'MyWLAN', 'BSSID': u'00:02:72:43:57:E1', 'ConnectionMode': 'Infrastructure',
+                     'SupportedRates': u'82848B96', 'Channel': 11, 'RxLevel': random.randint(-100, -50)},
+                    {'Capability': 17, 'BeaconInterval': 100, 'SecurityMode': 'WpaPsk',
+                     'SSID': u'RMWLAN', 'BSSID': u'00:02:72:43:56:87', 'ConnectionMode': 'Infrastructure',
                      'SupportedRates': u'82848B96', 'Channel': 11, 'RxLevel': random.randint(-100, -50)},
                 ]
         # DSU-sort by RxLevel
@@ -437,7 +439,7 @@ class GpsApp:
         wlan_devices = [item for (name, item) in decorated]
         wlan_list = ["%(BSSID)s,%(RxLevel)s" % (w) for w in wlan_devices]
         geolocation["wlanids"] = ";".join(wlan_list)
-        # Try to get cellid (note the symbian bug, 
+        # Try to get cellid (note the symbian bug,
         # cellid is not available when the radio is on!)
         # TODO: use cached gsm_location
         gsm_location = location.gsm_location()
@@ -454,17 +456,17 @@ class GpsApp:
             time.sleep(1)
             import random
             wlan_devices = [
-                {'Capability': 1025, 'BeaconInterval': 100, 'SecurityMode': 'Open', 
-                 'SSID': u'linksys', 'BSSID': u'00:14:BF:A5:1D:4B', 'ConnectionMode': 'Infrastructure', 
-                 'SupportedRates': u'82848B9624B0486C', 'Channel': 8, 'RxLevel': random.randint(-100, -50)}, 
-                {'Capability': 1, 'BeaconInterval': 100, 'SecurityMode': 'Open', 
-                 'SSID': u'MyWLAN', 'BSSID': u'00:02:72:43:57:E1', 'ConnectionMode': 'Infrastructure', 
-                 'SupportedRates': u'82848B96', 'Channel': 11, 'RxLevel': random.randint(-100, -50)}, 
-                {'Capability': 17, 'BeaconInterval': 100, 'SecurityMode': 'WpaPsk', 
-                 'SSID': u'RMWLAN', 'BSSID': u'00:02:72:43:56:87', 'ConnectionMode': 'Infrastructure', 
+                {'Capability': 1025, 'BeaconInterval': 100, 'SecurityMode': 'Open',
+                 'SSID': u'linksys', 'BSSID': u'00:14:BF:A5:1D:4B', 'ConnectionMode': 'Infrastructure',
+                 'SupportedRates': u'82848B9624B0486C', 'Channel': 8, 'RxLevel': random.randint(-100, -50)},
+                {'Capability': 1, 'BeaconInterval': 100, 'SecurityMode': 'Open',
+                 'SSID': u'MyWLAN', 'BSSID': u'00:02:72:43:57:E1', 'ConnectionMode': 'Infrastructure',
                  'SupportedRates': u'82848B96', 'Channel': 11, 'RxLevel': random.randint(-100, -50)},
-                {'Capability': 1041, 'BeaconInterval': 100, 'SecurityMode': 'WpaPsk', 
-                 'SSID': u'', 'BSSID': u'00:13:D3:79:99:8F', 'ConnectionMode': 'Infrastructure', 
+                {'Capability': 17, 'BeaconInterval': 100, 'SecurityMode': 'WpaPsk',
+                 'SSID': u'RMWLAN', 'BSSID': u'00:02:72:43:56:87', 'ConnectionMode': 'Infrastructure',
+                 'SupportedRates': u'82848B96', 'Channel': 11, 'RxLevel': random.randint(-100, -50)},
+                {'Capability': 1041, 'BeaconInterval': 100, 'SecurityMode': 'WpaPsk',
+                 'SSID': u'', 'BSSID': u'00:13:D3:79:99:8F', 'ConnectionMode': 'Infrastructure',
                  'SupportedRates': u'82848B96', 'Channel': 11, 'RxLevel': random.randint(-100, -50)}
                  ]
         else:
@@ -480,7 +482,7 @@ class GpsApp:
         decorated.reverse()
         wlan_devices = [item for (name, item) in decorated]
         wlan_list = [w['BSSID'] for w in wlan_devices]
-        params = {"wlan_ids" : ",".join(wlan_list)}
+        params = {"wlan_ids": ",".join(wlan_list)}
         gsm_location = location.gsm_location()
         if gsm_location and len(gsm_location) > 0:
             params["cellid"] = ",".join([str(x) for x in gsm_location])
@@ -499,10 +501,10 @@ class GpsApp:
         # if self.key == 'loctest':
         #     wlan_ids = ",".join([x['SSID'] for x in wlantools.scan()]) # or something
         params = self.temp_get_radio_params()
-        params.update({"key" : self.key,
-                  "username" : str(self.config["username"]),
-                  "group" : str(self.config["group"]),
-                  "pys60gps_version" : self.get_sis_version(),
+        params.update({"key": self.key,
+                  "username": str(self.config["username"]),
+                  "group": str(self.config["group"]),
+                  "pys60gps_version": self.get_sis_version(),
                   })
         if simple_pos == None:
             # Try current pos
@@ -525,7 +527,7 @@ class GpsApp:
         data, response = self.comm._send_request("get_pois", params)
         self.ip.hide()
         geometries = []
-        if data["status"].startswith("error"): 
+        if data["status"].startswith("error"):
             appuifw.note(u"Error occurred: %s" % data["message"], 'error')
         elif "geojson" in data:
             if "type" in data["geojson"] and data["geojson"]["type"] ==  "GeometryCollection":
@@ -561,87 +563,88 @@ class GpsApp:
             (u"Lazy", lambda:self.set_scan_config("lazy")),
             (u"Turbo", lambda:self.set_scan_config("turbo")),
         ))
-        
+
         set_scan_params_menu = (u"Set scan params", (
             # CELL ID settings
-            (u"max_cellid_time (%d)" % self.config["max_cellid_time"], 
+            (u"max_cellid_time (%d)" % self.config["max_cellid_time"],
                 lambda:self.set_config_var(u"max_cellid_time", "number", "max_cellid_time")),
-                
-            (u"min_cellid_time (%d)" % self.config["min_cellid_time"], 
+
+            (u"min_cellid_time (%d)" % self.config["min_cellid_time"],
                 lambda:self.set_config_var(u"min_cellid_time", "number", "min_cellid_time")),
-                
-            (u"max_cellid_dist (%d)" % self.config["max_cellid_dist"], 
+
+            (u"max_cellid_dist (%d)" % self.config["max_cellid_dist"],
                 lambda:self.set_config_var(u"max_cellid_dist ", "number", "max_cellid_dist")),
-                
-            (u"max_wlan_time (%d)" % self.config["max_wlan_time"], 
+
+            (u"max_wlan_time (%d)" % self.config["max_wlan_time"],
                 lambda:self.set_config_var(u"max_wlan_time ", "number", "max_wlan_time")),
-                
-            (u"min_wlan_time (%d)" % self.config["min_wlan_time"], 
+
+            (u"min_wlan_time (%d)" % self.config["min_wlan_time"],
                 lambda:self.set_config_var(u"Estimation ", "number", "estimated_error_radius")),
-                
-            (u"max_wlan_dist (%d)" % self.config["max_wlan_dist"], 
+
+            (u"max_wlan_dist (%d)" % self.config["max_wlan_dist"],
                 lambda:self.set_config_var(u"max_wlan_dist ", "number", "max_wlan_dist")),
 
-            (u"max_wlan_speed (%d) km/h" % self.config["max_wlan_speed"], 
+            (u"max_wlan_speed (%d) km/h" % self.config["max_wlan_speed"],
                 lambda:self.set_config_var(u"max_wlan_speed ", "number", "max_wlan_speed")),
 
         ))
 
         set_menu = (u"Set", (
 #            (u"Toggle debug", self.toggle_debug),
-            (u"Max trackpoints (%d)" % self.config["max_trackpoints"], 
-                lambda:self.set_config_var(u"Max points", "number", "max_trackpoints")),
-            (u"Trackpoint dist (%d)" % self.config["min_trackpoint_distance"], 
-                lambda:self.set_config_var(u"Trackpoint dist", "number", "min_trackpoint_distance")),
-            (u"Est.vector dist (%d)" % self.config["max_estimation_vector_distance"], 
-                lambda:self.set_config_var(u"Trackpoint dist", "number", "max_estimation_vector_distance")),
-#            (u"Estimation circle (%d)" % self.config["estimated_error_radius"], 
-#                lambda:self.set_config_var(u"Estimation circle", "number", "estimated_error_radius")),
-
-            (u"Username (%s)" % self.config["username"], 
-                lambda:self.set_config_var(u"Nickname", "text", "username")),
-            (u"Password (%s)" % u"*****", 
-                lambda:self.set_config_var(u"Password", "code", "password")),
-#            (u"Group (%s)" % self.config["group"], 
-#                lambda:self.set_config_var(u"Group", "text", "group")),
-            (u"Host (%s)" % self.config["host"], 
-                lambda:self.set_config_var(u"Host[:port]", "text", "host")),
-            #(u"Script (%s)" % self.config["script"], 
-            #    lambda:self.set_config_var(u"Script", "text", "script")),
-            (u"Access point" , # TODO: show the name instead of apid 
+            (u"Access point" , # TODO: show the name instead of apid
                 lambda:self.ask_accesspoint()),
-            #(u"Access point (%s)" % self.config["apid"], # TODO: show the name instead of apid 
+            (u"Username (%s)" % self.config["username"],
+                lambda:self.set_config_var(u"Nickname", "text", "username")),
+            (u"Password (%s)" % u"*****",
+                lambda:self.set_config_var(u"Password", "code", "password")),
+#            (u"Group (%s)" % self.config["group"],
+#                lambda:self.set_config_var(u"Group", "text", "group")),
+            (u"Host (%s)" % self.config["host"],
+                lambda:self.set_config_var(u"Host[:port]", "text", "host")),
+            (u"Script (%s)" % self.config["script"],
+                lambda:self.set_config_var(u"Script", "text", "script")),
+            (u"HTTP/HTTPS (0/1: %s)" % self.config["https"],
+                lambda:self.set_config_var(u"HTTP=0/HTTPS=1", "number", "https")),
+            (u"Max trackpoints (%d)" % self.config["max_trackpoints"],
+                lambda:self.set_config_var(u"Max points", "number", "max_trackpoints")),
+            (u"Trackpoint dist (%d)" % self.config["min_trackpoint_distance"],
+                lambda:self.set_config_var(u"Trackpoint dist", "number", "min_trackpoint_distance")),
+            (u"Est.vector dist (%d)" % self.config["max_estimation_vector_distance"],
+                lambda:self.set_config_var(u"Trackpoint dist", "number", "max_estimation_vector_distance")),
+#            (u"Estimation circle (%d)" % self.config["estimated_error_radius"],
+#                lambda:self.set_config_var(u"Estimation circle", "number", "estimated_error_radius")),
+            #(u"Access point (%s)" % self.config["apid"], # TODO: show the name instead of apid
             #    lambda:self._select_access_point()),
         ))
-            
-        plok_menu = (u"Plok", (
-            (u"PlokHost (%s)" % self.config["plokhost"], 
-                lambda:self.set_config_var(u"PlokHost[:port]", "text", "plokhost")),
-            #(u"PlokScript (%s)" % self.config["plokscript"], 
-            #    lambda:self.set_config_var(u"PlokScript", "text", "plokscript")),
-            (u"Plok Password (*****)", 
-                lambda:self.set_config_var(u"Plok Password", "code", "plokpassword")),
-        ))
-            
+
+        #plok_menu = (u"Plok", (
+        #    (u"PlokHost (%s)" % self.config["plokhost"],
+        #        lambda:self.set_config_var(u"PlokHost[:port]", "text", "plokhost")),
+        #    #(u"PlokScript (%s)" % self.config["plokscript"],
+        #    #    lambda:self.set_config_var(u"PlokScript", "text", "plokscript")),
+        #    (u"Plok Password (*****)",
+        #        lambda:self.set_config_var(u"Plok Password", "code", "plokpassword")),
+        #))
+
 
         # Remember 30 menu items totally at MOST!
         appuifw.app.menu = [
             (u"Select",self.handle_select),
             (u"GPS %s" % (gps_onoff),self.start_read_position),
+            set_menu,
             profile_menu,
             set_scan_params_menu,
-            set_menu,
-            plok_menu,
+            # plok_menu,
             (u"Reset config", self.reset_config),
             (u"Send data",self.send_delivery_data),
             (u"Reboot",self.reboot),
-            (u"Version", lambda:appuifw.note("Version: " + self.get_sis_version() + 
+            (u"Version", lambda:appuifw.note("Version: " + self.get_sis_version() +
                                              "\n" + self.__version__, 'info')),
             (u"Exit", self.lock.signal),
             ]
         if not self.comm.sessionid:
-            appuifw.app.menu.insert(2, (u"Login",self.login))
-            
+            appuifw.app.menu.insert(2, (u"Login", self.login))
+
     def activate(self):
         """Set main menu to app.body and left menu entries."""
         # Use exit_key_handler of current class
@@ -671,7 +674,7 @@ class GpsApp:
             self.config[key] = value
             self.save_config()
             self._update_menu()
-        else: 
+        else:
             # TODO: Instead ASK here if user wants to reset this configuration parameter.
             # defaults need to be global then?
             appuifw.note(u"Setting configutation key '%s' cancelled" % (key), 'info')
@@ -682,7 +685,7 @@ class GpsApp:
 
     def send_file_over_bluetooth(self, filename):
         """
-        Send a file over bluetooth. 
+        Send a file over bluetooth.
         filename is the full path to the file.
         """
         if e32.in_emulator():
@@ -722,10 +725,10 @@ class GpsApp:
             return
         self.read_position_running = True
         self.data["trip_distance"] = 0.0 # TODO: set this up in __init__ and give change to reset this
-        positioning.set_requestors([{"type":"service", 
-                                     "format":"application", 
+        positioning.set_requestors([{"type":"service",
+                                     "format":"application",
                                      "data":"test_app"}])
-        positioning.position(course=1,satellites=1, callback=self.read_position, interval=500000, partial=1) 
+        positioning.position(course=1,satellites=1, callback=self.read_position, interval=500000, partial=1)
         self._update_menu() # NOTE: this messes up the menu if this function is called from outside of the main view!
         self.ip.show(u"Starting GPS...", (50, 50), 3000, 100, appuifw.EHLeftVTop)
 
@@ -738,7 +741,7 @@ class GpsApp:
         Append json'ized data to named log cache file.
         If "delivery" is True, append data also to list which contents
         will be flushed to a file and sent to the server (if sending is
-        enabled. 
+        enabled.
         """
         if delivery:
             self.append_delivery_data(data)
@@ -761,14 +764,14 @@ class GpsApp:
 
     def clear_all_data(self):
         """
-        Flush all pending delivery data objects to files and 
-        then clear self.data. 
+        Flush all pending delivery data objects to files and
+        then clear self.data.
         """
         self.flush_delivery_data()
         for key in self.data.keys():
             if isinstance(self.data[key], list):
                 self.data[key] = []
-        
+
     def flush_delivery_data(self):
         # FIXME: docstring
         # FIXME: errorhandling
@@ -781,7 +784,7 @@ class GpsApp:
                 mode = "w"
             current_time = time.time()
             now = time.localtime(current_time)[:6]
-            name = time.strftime("delivery-%Y%m%d-%H%M%S.json", 
+            name = time.strftime("delivery-%Y%m%d-%H%M%S.json",
                                  time.localtime(current_time))
             file = zipfile.ZipFile(filename, mode)
             info = zipfile.ZipInfo(name)
@@ -796,13 +799,13 @@ class GpsApp:
 
     def send_delivery_data(self, ask_first = False, ask_login = False):
         """
-        Send all delivery data to the server using 
+        Send all delivery data to the server using
         Comm-module's _send_multipart_request().
         If ask_first is True, ask user first.
         """
         # TODO: errorhandling
         # FIXME: this is messy
-        self.flush_delivery_data() 
+        self.flush_delivery_data()
         filename = os.path.join(self.datadir, "delivery.zip")
         if os.path.isfile(filename):
             # FIXME: this asking should be in another function
@@ -830,8 +833,8 @@ class GpsApp:
                 # and data["md5"] == md5(temppath)
                 # TODO: create function which handles it
                 os.remove(temppath)
-                # Successfully sent, check if there are any old files 
-                # laying in deliverydir 
+                # Successfully sent, check if there are any old files
+                # laying in deliverydir
                 unsent_files = os.listdir(deliverydir)
                 if len(unsent_files) == 0:
                     message = u"Send status %s %s" % (response.status, data["message"])
@@ -845,7 +848,7 @@ class GpsApp:
                             self.ip.show(u"Sending %s" % (temppath), (50, 50), 60000, 100, appuifw.EHLeftVTop)
                             data, response = self.temp_fileupload(temppath)
                             if response.status == 200:
-                                os.remove(temppath) 
+                                os.remove(temppath)
                             else:
                                 break
                             self.ip.hide()
@@ -858,10 +861,10 @@ class GpsApp:
 
     def login(self):
         """
-        Perform login using Comm-module. 
+        Perform login using Comm-module.
         Query password if is not found in settings.
         """
-        if ("password" not in self.config or 
+        if ("password" not in self.config or
             not self.config["password"]): # is "", False, None
             if appuifw.query(u"Password is not set! Would you like to set it now?", 'query'):
                 self.set_config_var(u"Password", "code", "password")
@@ -871,7 +874,7 @@ class GpsApp:
         else:
             self.ip = appuifw.InfoPopup()
             self.ip.show(u"Logging in...", (50, 50), 60000, 100, appuifw.EHLeftVTop)
-            data, response = self.comm.login(self.config["username"], 
+            data, response = self.comm.login(self.config["username"],
                                              self.config["password"])
             # Check we got valid response
             if isinstance(data, dict) is False:
@@ -886,7 +889,7 @@ class GpsApp:
     # TODO: check is this relevant
     def check_for_unsent_delivery_data(self):
         """
-        Check if there is any unsent data laying around 
+        Check if there is any unsent data laying around
         and send it if user wants to
         """
         pass
@@ -898,13 +901,13 @@ class GpsApp:
         f.close()
         # Create "files"-list which contains all files to send
         files = [("file1", "delivery.zip", filedata)]
-        params = {"username" : str(self.config["username"]),
-                  "group" : str(self.config["group"]),
-                  "pys60gps_version" : self.get_sis_version(),
+        params = {"username": str(self.config["username"]),
+                  "group": str(self.config["group"]),
+                  "pys60gps_version": self.get_sis_version(),
                   }
         # if "md5" in data and data["md5"] == md5.new(filedata
         self.ip.show(u"Uploading file...", (50, 50), 60000, 10, appuifw.EHLeftVTop)
-        data, response = self.comm._send_multipart_request("fileupload", 
+        data, response = self.comm._send_multipart_request("fileupload",
                                                            params, files)
         self.ip.hide()
         # FIXME: temporary testing solution
@@ -948,10 +951,10 @@ class GpsApp:
     # TODO: put this into some generic tool module
     def get_iso_systime(self):
         """
-        Return current system time in ISO format, 
+        Return current system time in ISO format,
         e.g. 2008-10-08T16:29:30+03
         """
-        return time.strftime(u"%Y-%m-%dT%H:%M:%S", 
+        return time.strftime(u"%Y-%m-%dT%H:%M:%S",
                              time.localtime(time.time())) + self._get_timezone()
 
     # TODO: put this into some generic tool module
@@ -973,7 +976,7 @@ class GpsApp:
         # Return immediately if there is not good and fresh position info
         if not self.simple_pos or \
            pys60gpstools.has_fix(self.simple_pos) is False or \
-           (time.time() - self.simple_pos['systime']) > 3: 
+           (time.time() - self.simple_pos['systime']) > 3:
             return
         # Take the latest position and append gsm data into it if necessary
         simple_pos = copy.deepcopy(self.simple_pos)
@@ -987,7 +990,7 @@ class GpsApp:
             data = {}
             gsm_location = {'cellid': l}
             # Add new gsm_location if it differs from the previous one (or there is not previous)
-            # TODO: if the distance to the latest point exceeds 
+            # TODO: if the distance to the latest point exceeds
             # some configurable limit (e.g. 1000 meters), then append a new point too
             dist_time_flag = False
             dist = 0
@@ -1007,19 +1010,19 @@ class GpsApp:
                 # NaN > 500 is False in Python 2.2!!!
                 # Check that at least min_cellid_time secods have passed
                 # and distance is greater than max_cellid_dist meters
-                #  or max_cellid_time has passed from the latest point 
+                #  or max_cellid_time has passed from the latest point
                 # to save new point
                 if ((timediff > self.config["min_cellid_time"]) and
                      (dist > self.config["max_cellid_dist"]) or
                      (timediff > self.config["max_cellid_time"])):
                     dist_time_flag = True
-            
+
             if (len(self.data["gsm_location"]) == 0
-                or (len(self.data["gsm_location"]) > 0 and 
+                or (len(self.data["gsm_location"]) > 0 and
                    (l != self.data["gsm_location"][-1]['gsm']['cellid']))
                 or dist_time_flag):
                 data = self.archive_simple_pos(simple_pos)
-                cell = {"cellid" : "%s,%s,%s,%s" % (l)}
+                cell = {"cellid": "%s,%s,%s,%s" % (l)}
                 try: # This needs some capability (ReadDeviceData?)
                     cell["signal_bars"] = sysinfo.signal_bars()
                     cell["signal_dbm"] = sysinfo.signal_dbm()
@@ -1066,7 +1069,7 @@ class GpsApp:
             # NOTE: pos["lat"] may be a NaN!
             # NaN >= 500 is True
             # NaN > 500 is False in Python 2.2!!!
-            if ((dist > self.config["max_wlan_dist"] 
+            if ((dist > self.config["max_wlan_dist"]
                 or timediff > self.config["max_wlan_time"])
                 and timediff > 6
                 and simple_pos["speed"]*3.6 < self.config["max_wlan_speed"]):
@@ -1086,7 +1089,7 @@ class GpsApp:
         except Exception, error:
             return {"error":unicode(error)}
         if self.scanning["wlan"]:
-            return {"error" : u"WLAN scan already running!"}
+            return {"error": u"WLAN scan already running!"}
         self.scanning["wlan"] = True
         starttime = time.clock()
         wlan_devices = wlantools.scan(False)
@@ -1097,11 +1100,11 @@ class GpsApp:
             for k,v in w.items():
                 del w[k]
                 w[k.lower()] = (u"%s" % v).replace('\x00', '')
-        # s60 seems to cache wlan scans so do not save 
+        # s60 seems to cache wlan scans so do not save
         # new scan point if previous scan resulted exactly the same wlan list
         try:  self.wlan_devices_latest # First test if "latest" exists
         except: self.wlan_devices_latest = None # TODO: this should be done in init
-        # Save new scan point always if latest's result was empty  
+        # Save new scan point always if latest's result was empty
         if (wlan_devices != []):
             if (self.wlan_devices_latest == wlan_devices):
                 self.scanning["wlan"] = False
@@ -1137,7 +1140,7 @@ class GpsApp:
             return {}
         if not pys60gpstools.has_fix(self.simple_pos): # TODO: move this interaction to some other function, e.g in tracktab
             data["comment"] = appuifw.query(u"No GPS fix, add text comment", "text", u"")
-        return data            
+        return data
 
 
     def bluetoothscan(self):
@@ -1191,7 +1194,7 @@ class GpsApp:
         to ISO-time.
         """
         data = simple_pos.copy()
-        data['time'] = time.strftime(u"%Y-%m-%dT%H:%M:%SZ", 
+        data['time'] = time.strftime(u"%Y-%m-%dT%H:%M:%SZ",
                                      time.localtime(data['gpstime']))
         for key in ['systime', 'gpstime', 'x', 'y', 'e', 'n', 'z']:
             if key in data:
@@ -1201,7 +1204,7 @@ class GpsApp:
     def append_simple_pos(self, simple_pos):
         data = self.archive_simple_pos(simple_pos)
         self.append_log_cache("track", data)
-        if self.counters["track"] % 3 == 0: 
+        if self.counters["track"] % 3 == 0:
             self.save_log_cache("track")
 
     def read_position(self, pos):
@@ -1219,16 +1222,16 @@ class GpsApp:
             self.last_fix = simple_pos
             if not self.LongOrigin: # Set center meridian
                 self.LongOrigin = simple_pos['lon']
-            # Saving all pos dicts takes a lot of storage, 
+            # Saving all pos dicts takes a lot of storage,
             # let handle_trkpt() decide should this pos be saved in tracklog
             self.trackcalc = \
-                locationtools.handle_trkpt(simple_pos, 
-                                           self.data["track_new"], 
+                locationtools.handle_trkpt(simple_pos,
+                                           self.data["track_new"],
                                            self.LIMITS, self.LongOrigin)
             # If trackpoint was saved, put it into log file too
-            if 'reason' in simple_pos: 
+            if 'reason' in simple_pos:
                 self.append_simple_pos(simple_pos)
-        
+
         # Save original pos object for debugging purposes
         #if self.config["track_debug"]:
         if True:
@@ -1237,7 +1240,7 @@ class GpsApp:
             # FIXME: Using trackpoint limit here too (there is no room for extra settings in menu)
             if len(self.data["position_debug"]) > self.config["max_trackpoints"]:
                 self.data["position_debug"].pop(0)
-        # Calculate the distance between the newest and 
+        # Calculate the distance between the newest and
         # the previous pos and add it to trip_distance
         try:
             if simple_pos['gpstime'] - self.simple_pos['gpstime'] < 120:
@@ -1269,7 +1272,7 @@ class GpsApp:
         if (len(self.speed_history) == 0
             or self.speed_history[-1]["key"] != speed_key) \
             and 'speed' in simple_pos:
-            self.speed_history.append({"key":speed_key, 
+            self.speed_history.append({"key":speed_key,
                                        "speedmax":simple_pos["speed"],
                                        "speedmin":simple_pos["speed"],
                                        "time":pos["satellites"]["time"],
@@ -1310,11 +1313,11 @@ class GpsApp:
 
     def flush_all(self):
         self.save_log_cache("track")
-        self.save_log_cache("cellid") 
+        self.save_log_cache("cellid")
         self.save_log_cache("wlan")
         self.flush_delivery_data()
-        
-        
+
+
     def close(self):
         self.stop_read_position()
         #appuifw.note(u"Saving debug", 'info')
@@ -1357,7 +1360,7 @@ except:
         pass
         #body.set(unicode("\n".join(traceback.format_exception(*sys.exc_info()))))
     exitlock.wait()                             # Wait for exit key press.
-    
+
 positioning.stop_position()
 e32.ao_sleep(1)
 # For SIS-packaged version uncomment this:

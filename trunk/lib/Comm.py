@@ -8,7 +8,7 @@ Generic session handling and communication module.
 Comm offers two internal POST-request functions: plain and multipart, latter
 allows posting file attachments.
 
-In addition login() and logout() calls are provided. After successful login() 
+In addition login() and logout() calls are provided. After successful login()
 Comm keeps sessionid and uses it until logout is performed.
 
 All other functions should be defined in deriving class.
@@ -17,7 +17,7 @@ All API functions should return decoded data (dict) and HTTPResponse object.
 Data should have at least keys
 
 data = {
-    "status" : 'ok' | 'error[:errortype[:subtype]]', 
+    "status" : 'ok' | 'error[:errortype[:subtype]]',
     "message" : 'Clear text explanation',
 }
 
@@ -66,11 +66,12 @@ def parse_json_response(json_data, response):
 
 class Comm:
     """Base class for all HTTP-communication classes."""
-    
+
     __id__ = u'$Id$'
 
-    def __init__(self, host, script, 
-                 useragent = None, username = None, password = None):
+    def __init__(self, host, script,
+                 useragent = None, username = None, password = None,
+                 https = 0):
         try: # Parse revision and last change date
             ida = self.__id__.split(u" ")
             self.revision = ida[2]
@@ -79,12 +80,17 @@ class Comm:
             self.revision = u'undefined'
             self.lastchangeddate = u'undefined'
         if useragent is None:
-            self.useragent = 'Comm.py/%s/%s' % (self.revision, 
+            self.useragent = 'Comm.py/%s/%s' % (self.revision,
                                                 self.lastchangeddate)
         self.host = host
         self.script = script
         self.username = username
         self.password = password
+
+        if https == 0:
+            self.https = False
+        else:
+            self.https = True
         self.session_cookie_name = "sessionid"
         self.sessionid = None
         # Not in use currently
@@ -103,7 +109,7 @@ class Comm:
 
     def _get_default_headers(self):
         """
-        Create and return headers dictionary with common default values. 
+        Create and return headers dictionary with common default values.
         """
         headers = {
            "Accept-Encoding" : "deflate",
@@ -126,20 +132,20 @@ class Comm:
     def _decode_content(self, data, response):
         """"
         Pass data first to decompression function, then to JSON decoder.
-        Return content in decoded format. 
+        Return content in decoded format.
         """
         try:
             data = self._decompress_content(data, response)
             data = parse_json_response(data, response)
         except zlib.error, error:
             message = csetconv.to_unicode(str(error))
-            data = {"status" : "error:decode:zlib", 
+            data = {"status" : "error:decode:zlib",
                     "message" : message}
         return data
-        
+
     def _send_request(self, operation, params, filename = None):
         """
-        Send HTTP POST request to the server using httplib, 
+        Send HTTP POST request to the server using httplib,
         return decoded data and a HTTPResponse object.
         """
         params['operation'] = operation
@@ -153,9 +159,12 @@ class Comm:
         # Send session id in headers as a cookie
         #if self.sessionid != None:
         #    headers["Cookie"] = "%s=%s;" % (self.session_cookie_name, self.sessionid)
-        conn = httplib.HTTPConnection(self.host)
+        if self.https:
+            conn = httplib.HTTPSConnection(self.host)
+        else:
+            conn = httplib.HTTPConnection(self.host)
         # This is nested because Python 2.2 doesn't support try/except/finally
-        try: 
+        try:
             try:
                 conn.request("POST", self.script, params, headers)
                 response = conn.getresponse()
@@ -170,39 +179,39 @@ class Comm:
                         datafile.write(data)
                         datafile.close()
                 else:
-                    data = {"status" : "error:server", 
+                    data = {"status" : "error:server",
                             "message" : u"Server responded: %s %s" % (
                                         response.status, reason)}
             except socket.gaierror, error:
                 message = u"Server not found. '%s'" % csetconv.to_unicode(error[1])
-                data = {"status" : "error:communication:gaierror", 
+                data = {"status" : "error:communication:gaierror",
                         "message" : message}
                 response = None
             except socket.error, error:
                 message = u"Service not available. '%s'" % csetconv.to_unicode(error[1])
-                data = {"status" : "error:communication:error", 
+                data = {"status" : "error:communication:error",
                         "message" : message}
                 response = None
             except RuntimeError, error:
                 message = u"Network not available. '%s'" % csetconv.to_unicode(str(error))
-                data = {"status" : "error:communication:network", 
+                data = {"status" : "error:communication:network",
                         "message" : message}
                 response = None
             except httplib.CannotSendRequest:
                 message = u"Network not available. (CannotSendRequest)"
-                data = {"status" : "error:communication:network", 
+                data = {"status" : "error:communication:network",
                         "message" : message}
                 response = None
-            # These are raised if server is connected but it does return 
-            # a single byte (e.g in Segmentation fault -case) 
+            # These are raised if server is connected but it does return
+            # a single byte (e.g in Segmentation fault -case)
             except httplib.BadStatusLine: # Python 2.5
                 message = u"Service not available. (BadStatusLine)"
-                data = {"status" : "error:server", 
+                data = {"status" : "error:server",
                         "message" : message}
                 response = None
             except AssertionError, error: # Python 2.2 (pys60)
                 message = u"Service not available. (Empty response)"
-                data = {"status" : "error:server", 
+                data = {"status" : "error:server",
                         "message" : message}
                 response = None
         finally:
@@ -218,39 +227,39 @@ class Comm:
         """
         params['operation'] = operation
         param_list = []
-        # convert all params keys and values to utf-8, 
+        # convert all params keys and values to utf-8,
         # post_multipart expects a list of tuples
         for key in params.keys():
             params[key] = csetconv.to_utf8(params[key])
         headers = self._get_default_headers()
         # error handling is missing here
         try:
-            #data, response  = http_poster.post_multipart(self.host, self.script, 
-            response  = http_poster.post_multipart(self.host, self.script, 
-                                                         params, files, headers)
+            #data, response  = http_poster.post_multipart(self.host, self.script,
+            response  = http_poster.post_multipart(self.host, self.script,
+                                                   params, files, headers, self.https)
             if response.status == 200:
                 #if response.isclosed():
-                #    data = {"status" : "error:connection", 
+                #    data = {"status" : "error:connection",
                 #            "message" : u"HTTP Connection already closed"}
                 data = response.read()
                 data = self._decode_content(data, response)
             else:
                 reason = csetconv.to_unicode(response.reason)
-                data = {"status" : "error:server", 
+                data = {"status" : "error:server",
                         "message" : u"Server responded: %s %s" % (
                                     response.status, reason)}
         except socket.gaierror, error:
             message = u"Server not found. '%s'" % csetconv.to_unicode(error[1])
-            data = {"status" : "error:communication:gaierror", 
+            data = {"status" : "error:communication:gaierror",
                     "message" : message}
             response = None
         except socket.error, error:
             message = u"Service not available. '%s'" % csetconv.to_unicode(error[1])
-            data = {"status" : "error:communication:error", 
+            data = {"status" : "error:communication:error",
                     "message" : message}
             response = None
         return data, response
- 
+
     def login(self, username=None, password=None):
         """
         Do login with given username and password.
@@ -265,20 +274,20 @@ class Comm:
         if isinstance(data, dict) is False: # Make sure data is a dict
             if isinstance(data, (str, unicode)): sample = data[:50]
             else: sample = u""
-            data = {"status" : "error", 
+            data = {"status" : "error",
                     "message" : u"Not valid response: '%s'" % sample}
-        elif ("status" in data 
-            and data["status"] == "ok" 
+        elif ("status" in data
+            and data["status"] == "ok"
             and "message" in data
             and self.session_cookie_name in data):
             self.sessionid = data[self.session_cookie_name]
-        elif ("status" in data 
-            and data["status"].startswith("error") 
+        elif ("status" in data
+            and data["status"].startswith("error")
             and "message" in data):
                 pass # pass errors "as is"
         else:
             self.sessionid = None
-            data = {"status" : "error", 
+            data = {"status" : "error",
                     "message" : u"Invalid response from the server"}
         return data, response
 
@@ -297,7 +306,7 @@ class Comm:
         Return decoded response data and a HTTPResponse object.
         """
         if self.sessionid is None:
-            return {"status" : "error", 
+            return {"status" : "error",
                     "message" : u"Session is not active"}, None
         params = {} # No params, Session id is in cookie
         data, response = self._send_request(rpc_name(), params)
