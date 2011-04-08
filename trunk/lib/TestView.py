@@ -8,15 +8,15 @@ import os
 import simplejson
 from HelpView import HelpView
 from CommWrapper import CommWrapper
+import codecs
+import inbox
 
-import e32
 if e32.pys60_version_info[:2] >= (1, 9):
     import mktimefix as time
 else:
     import time
 
 from UglyKML import UglyAndHackyKMLExporterButHeyItWorks
-
 
 QUICKNOTE_PREFIX = u'quicknote-'
 
@@ -56,11 +56,12 @@ class TestView(Base.View):
             (u"Quick note",self.create_simple_memo),
             (u"Export Tracks",self.export_tracks),
             (u"Send notes",self.send_notes),
+            (u"Export SMS",self.export_sms),
             (u"Help",self.help.activate),
             (u"Close", self.parent.activate),
         ]
         appuifw.app.body = self.text
-        self.text.add(u"Select from the menu\nValitse menusta\n'Export Tracks'\n")
+        self.text.add(u"Select action from the menu\nValitse menusta toiminto\n")
 
     def create_simple_memo(self):
         """
@@ -148,6 +149,43 @@ class TestView(Base.View):
                 notetype = "error"
             appuifw.note(data["message"], notetype)
 
+
+    def export_sms(self):
+        """
+        Dump all messages from inbox and sent messages to 2 files.
+        Don't know what happens if there are binaries (MMS, bluetooth files).
+        """
+        def _jsonize_msg(box, i):
+            j = {
+                'address': box.address(i),
+                'time': box.time(i),
+                'isotime': time.strftime('%Y%m%dT%H%M%S', time.localtime(box.time(i))),
+                'content': box.content(i),
+            }
+            return simplejson.dumps(j)
+        # Dump sent sms
+        box = inbox.Inbox(inbox.ESent)
+        msg = box.sms_messages()
+        filename = 'sms_sent_' + time.strftime("%Y%m%dT%H%M%S.json")
+        filename = os.path.join(self.Main.datadir, filename)
+        appuifw.note(u"Dumping sent SMS to %s" % filename, 'info')
+        f = codecs.open(filename, 'w', 'utf8')
+        for i in msg:
+            f.write(_jsonize_msg(box, i) + '\n')
+        f.close()
+
+        # Dump recieved sms
+        box = inbox.Inbox()
+        msg = box.sms_messages()
+        filename = 'sms_in_' + time.strftime("%Y%m%dT%H%M%S.json")
+        filename = os.path.join(self.Main.datadir, filename)
+        appuifw.note(u"Dumping recieved SMS to %s" % filename, 'info')
+        f = codecs.open(filename, 'w', 'utf8')
+        for i in msg:
+            f.write(_jsonize_msg(box, i) + '\n')
+        f.close()
+        appuifw.note(u"Done", 'info')
+
     def create_memo(self):
         """
         Create an object which contains all possible information
@@ -173,16 +211,6 @@ class TestView(Base.View):
         data['time'] = current_time
         data['timestring'] = time.strftime("%Y%m%dT%H%M%S",
                                            time.localtime(current_time))
-        # Do not use, if there is ongoing positioning request, it will be killed
-#        try:
-#            import positioning
-#            positioning.select_module(positioning.default_module())
-#            positioning.set_requestors([{"type":"service",
-#                                         "format":"application",
-#                                         "data":"test_app"}])
-#            data['position'] = positioning.last_position()
-#        except:
-#            data['position'] = {}
         data['position'] = self.Main.last_fix.copy()
         try:
             import wlantools
