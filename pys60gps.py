@@ -168,6 +168,10 @@ class GpsApp:
             'max_anglediff': 30.0, # degrees
             'max_dist_estimate': 50.0, # meters
         }
+        if 'max_estimation_vector_distance' in self.config:
+            self.LIMITS['max_linediff'] = self.config['max_estimation_vector_distance']
+        if 'min_trackpoint_distance' in self.config:
+            self.LIMITS['max_dist'] = self.config['min_trackpoint_distance']
 
         # Data-repository
         self.data = {}
@@ -294,7 +298,7 @@ class GpsApp:
         # List here ALL POSSIBLE configuration keys, so they will be initialized
         defaults = {
             "max_speed_history_points": 200,
-            "min_trackpoint_distance": 1000, # meters
+            "min_trackpoint_distance": 1000, # meters, FIXME: wrong name, should be max
             "estimated_error_radius": 50, # meters
             "max_estimation_vector_distance": 10, # meters
             "max_trackpoints": 300,
@@ -605,8 +609,8 @@ class GpsApp:
                 lambda:self.set_config_var(u"Script", "text", "script")),
             (u"HTTP/HTTPS (0/1: %s)" % self.config["https"],
                 lambda:self.set_config_var(u"HTTP=0/HTTPS=1", "number", "https")),
-            (u"Max trackpoints (%d)" % self.config["max_trackpoints"],
-                lambda:self.set_config_var(u"Max points", "number", "max_trackpoints")),
+            #(u"Max trackpoints (%d)" % self.config["max_trackpoints"],
+            #    lambda:self.set_config_var(u"Max points", "number", "max_trackpoints")),
             (u"Trackpoint dist (%d)" % self.config["min_trackpoint_distance"],
                 lambda:self.set_config_var(u"Trackpoint dist", "number", "min_trackpoint_distance")),
             (u"Est.vector dist (%d)" % self.config["max_estimation_vector_distance"],
