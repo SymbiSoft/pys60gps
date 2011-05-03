@@ -71,7 +71,7 @@ then
 fi
 
 # Create signed version
-python2.5 ${ENSYMBLE} py2sis --heapsize=4k,5M --uid=0x200184F0 --appname=Pys60Gps --lang=EN --textfile=CHANGELOG.txt --shortcaption="Pys60Gps" --caption="PyS60 GPS (opennetmap.org)"  --drive=C --caps=ALL-TCB-DRM-AllFiles --vendor="Plokaus Oy" --runinstall --verbose --cert=$1.cer  --privkey=$1.key sis $1-pys60gps${SIS_VERSION}-signed.sis
+python2.5 ${ENSYMBLE} py2sis --heapsize=4k,5M --uid=0x200184F0 --appname=Pys60Gps  --icon="${APP}.svg" --lang=EN --textfile=CHANGELOG.txt --shortcaption="Pys60Gps" --caption="PyS60 GPS (opennetmap.org)"  --drive=C --caps=ALL-TCB-DRM-AllFiles --vendor="Plokaus Oy" --runinstall --verbose --cert=$1.cer  --privkey=$1.key sis $1-pys60gps${SIS_VERSION}-signed.sis
 
 # Create selfsigned version
 #python2.5 ${ENSYMBLE} py2sis --appname=${APP} --icon="${APP}.svg" --lang=EN --textfile=CHANGELOG.txt --shortcaption="${SHORTCAPTION}" --caption="${CAPTION}" --drive=C --caps=LocalServices+UserEnvironment+NetworkServices+ReadUserData+WriteUserData --vendor="TaiK MediaLab Arki" --runinstall --verbose sis ${APP}${SIS_VERSION}-selfsigned.sis
