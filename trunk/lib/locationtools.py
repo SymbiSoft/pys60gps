@@ -134,7 +134,7 @@ def handle_trkpt(pos, tracklog, limits, long_origin):
     if certain conditions are met.
     """
     res = {}
-    # Calculate fake n and e values (fake because we don't use 
+    # Calculate fake n and e values (fake because we don't use
     # valid long_origin but first pos' long)
     set_fake_utm(pos, long_origin)
     # New trackpoint if tracklog is empty or has only 1 point yet
@@ -144,6 +144,13 @@ def handle_trkpt(pos, tracklog, limits, long_origin):
         return res
     # If only 3 satellites are used, increase limits a lot
     if 'sat' in pos and pos['sat'] == 3:
+        limits = limits.copy() # Create local copy which will be altered
+        limits['max_dist'] = limits['max_dist'] * 5
+        limits['max_linediff'] = limits['max_linediff'] * 5
+        limits['max_anglediff'] = 361
+        limits['max_dist_estimate'] = limits['max_dist_estimate'] * 10
+    # If the speed is very high (e.g. in an aeroplane), increase max_dist etc.
+    if 'speed' in pos and pos['speed'] > 100: # m/s == 360 km/h
         limits = limits.copy() # Create local copy which will be altered
         limits['max_dist'] = limits['max_dist'] * 5
         limits['max_linediff'] = limits['max_linediff'] * 5
@@ -173,7 +180,7 @@ def handle_trkpt(pos, tracklog, limits, long_origin):
         #return res
     # New trackpoint if turning
     if 'course' in pos_last and 'course' in pos:
-        res['coursediff'] = Calculate.anglediff(pos_last['course'], 
+        res['coursediff'] = Calculate.anglediff(pos_last['course'],
                                                 pos["course"])
         if res['coursediff'] > limits['max_anglediff'] and \
            res['lastdist'] > limits['min_dist'] and \
@@ -189,16 +196,16 @@ def handle_trkpt(pos, tracklog, limits, long_origin):
        'reason' not in pos:
         # speed * seconds = distance in meters
         dist_project = pos_last['speed'] * res['timediff']
-        lat, lon = Calculate.newlatlon(pos_last["lat"], pos_last["lon"], 
+        lat, lon = Calculate.newlatlon(pos_last["lat"], pos_last["lon"],
                                        dist_project, pos_last["course"])
         pos_estimate = {'lat': lat, 'lon': lon}
         set_fake_utm(pos_estimate, long_origin)
-        res['estimatedist'] = Calculate.distance(pos_estimate['lat'], 
+        res['estimatedist'] = Calculate.distance(pos_estimate['lat'],
                                                  pos_estimate['lon'],
                                                  pos['lat'], pos['lon'])
         res['pos_estimate'] = pos_estimate
         if res['estimatedist'] > limits['max_dist_estimate']:
-            pos['reason'] = u"Estimate %2.1f>%.2f" % (res['estimatedist'], 
+            pos['reason'] = u"Estimate %2.1f>%.2f" % (res['estimatedist'],
                                                   limits['max_dist_estimate'])
             tracklog.append(pos)
             #return res
@@ -246,7 +253,7 @@ if __name__ == '__main__':
         'min_time': 0.0, # seconds
         'max_time': 60.0, # seconds
         'max_anglediff': 30.0, # degrees
-        'max_dist_estimate': 50.0, # meters        
+        'max_dist_estimate': 50.0, # meters
     }
     # TRACK1
     TRACKLOG = []
@@ -261,14 +268,14 @@ if __name__ == '__main__':
         'min_time': 0.0, # seconds
         'max_time': 60.0, # seconds
         'max_anglediff': 30.0, # degrees
-        'max_dist_estimate': 20.0, # meters        
+        'max_dist_estimate': 20.0, # meters
     }
     # TRACK1
     TRACKLOG2 = []
     for POS in POSLOG:
         handle_trkpt(POS, TRACKLOG2, LIMITS, LONG_ORIGIN)
     sys.stderr.write('TRACKLOG2 len: %d\n' % len(TRACKLOG2))
-    
+
     # print "<!--Tracklog len %d-->" % len(TRACKLOG)
     import UglyKML
     print UglyKML.header()
