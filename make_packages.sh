@@ -14,7 +14,7 @@ svn up
 REVISION=-rev$(svn info|grep Revision:|cut -d' ' -f2) # Revision: 156
 
 APP="plokin"
-SHORTCAPTION="Plok.in" 
+SHORTCAPTION="Plok.in"
 CAPTION="Plok.in mobile"
 
 
@@ -63,8 +63,8 @@ fi;
 python2.5 ${ENSYMBLE} py2sis --heapsize=4k,5M --uid=0xE00184F0 --appname=Pys60Gps --lang=EN --textfile=CHANGELOG.txt --shortcaption="Pys60Gps" --caption="PyS60 GPS (opennetmap.org)"  --drive=C --caps=ALL-TCB-DRM-AllFiles-CommDD-MultimediaDD-NetworkControl-DiskAdmin --vendor="Plokaus Oy" --runinstall --verbose sis pys60gps${SIS_VERSION}_unsigned_testrange.sis
 
 if [ -z $1 ];
-then 
-  echo NOTE: If you want to create signed version, 
+then
+  echo NOTE: If you want to create signed version,
   echo give the file body of your cers as an argument.
   echo sh $0 mycert # you must have mycert.cer and mycert.key
   exit 0
@@ -76,4 +76,3 @@ python2.5 ${ENSYMBLE} py2sis --heapsize=4k,5M --uid=0x200184F0 --appname=Pys60Gp
 # Create selfsigned version
 #python2.5 ${ENSYMBLE} py2sis --appname=${APP} --icon="${APP}.svg" --lang=EN --textfile=CHANGELOG.txt --shortcaption="${SHORTCAPTION}" --caption="${CAPTION}" --drive=C --caps=LocalServices+UserEnvironment+NetworkServices+ReadUserData+WriteUserData --vendor="TaiK MediaLab Arki" --runinstall --verbose sis ${APP}${SIS_VERSION}-selfsigned.sis
 python2.5 ${ENSYMBLE} py2sis --appname=${APP} --icon="${APP}.svg" --lang=EN --textfile=CHANGELOG.txt --shortcaption="${SHORTCAPTION}" --caption="${CAPTION}" --drive=C --caps=Location+LocalServices+UserEnvironment+NetworkServices+ReadUserData+WriteUserData --vendor="Plokaus" --runinstall --verbose sis ${APP}${SIS_VERSION}-selfsigned.sis
-
